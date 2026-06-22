@@ -1,0 +1,103 @@
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { BillingService } from './billing.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+@UseGuards(JwtAuthGuard)
+@Controller('billing')
+export class BillingController {
+  constructor(private billingService: BillingService) {}
+
+  @Post('invoices')
+  async create(
+    @Body('opportunityId') opportunityId: string,
+    @Body('studentId') studentId: string,
+    @Body('items') items: { oliId: string; productId: string; amount: number }[],
+    @Body('paymentMethod') paymentMethod: string,
+    @Body('bankDetails') bankDetails?: any,
+  ) {
+    return this.billingService.createInvoice(opportunityId, studentId, items, paymentMethod, bankDetails);
+  }
+
+  @Get('invoices/recent')
+  async getRecent(@Query('studentId') studentId?: string) {
+    return this.billingService.getRecentInvoices(studentId);
+  }
+
+  @Get('invoices/:id/pdf')
+  async getPdfData(@Param('id') id: string) {
+    return this.billingService.getInvoicePDFData(id);
+  }
+
+  @Post('invoices/:id/void')
+  async void(@Param('id') id: string) {
+    return this.billingService.voidInvoice(id);
+  }
+
+  @Get('products/active')
+  async getActiveProducts(
+    @Query('classId') classId: string,
+    @Query('academicYearId') academicYearId?: string,
+  ) {
+    return this.billingService.getActiveProducts(classId, academicYearId);
+  }
+
+  @Post('admissions')
+  async createAdmission(
+    @Body('studentData') studentData: any,
+    @Body('selectedPricebookEntryIds') selectedPricebookEntryIds: string[],
+    @Body('concessionAmount') concessionAmount: number,
+  ) {
+    return this.billingService.createAdmission(studentData, selectedPricebookEntryIds, concessionAmount);
+  }
+
+  @Get('options/years')
+  async getYears() {
+    return this.billingService.getAcademicYearOptions();
+  }
+
+  @Get('options/classes')
+  async getClasses() {
+    return this.billingService.getClassOptions();
+  }
+
+  @Get('options/sections')
+  async getSections(@Query('classId') classId?: string) {
+    return this.billingService.getSectionOptions(classId);
+  }
+
+  @Get('students/search')
+  async search(@Query('searchTerm') searchTerm: string) {
+    return this.billingService.searchStudents(searchTerm || '');
+  }
+
+  @Get('students/:id')
+  async getStudent(@Param('id') id: string) {
+    return this.billingService.getStudentById(id);
+  }
+
+  @Get('unpaid-fees/:opportunityId')
+  async getUnpaidFees(@Param('opportunityId') opportunityId: string) {
+    return this.billingService.getUnpaidFees(opportunityId);
+  }
+
+  @Post('discounts')
+  async updateDiscount(
+    @Body('oliId') oliId: string,
+    @Body('discountPercent') discountPercent: number,
+  ) {
+    return this.billingService.updateLineItemDiscount(oliId, discountPercent);
+  }
+
+  @Post('discounts/bulk')
+  async updateDiscountsBulk(
+    @Body('oliIds') oliIds: string[],
+    @Body('discountPercent') discountPercent: number,
+  ) {
+    return this.billingService.updateBulkLineItemDiscounts(oliIds, discountPercent);
+  }
+
+  @Post('students/import')
+  async importStudents(@Body('studentDataList') studentDataList: any[]) {
+    return this.billingService.importStudentsBulk(studentDataList);
+  }
+}

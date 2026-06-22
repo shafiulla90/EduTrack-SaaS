@@ -1,0 +1,675 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+  STAFF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PARTIALLY_PAID
+  VOIDED
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum BookCopyStatus {
+  AVAILABLE
+  ISSUED
+  LOST
+  DAMAGED
+}
+
+model Tenant {
+  id              String   @id @default(uuid())
+  name            String
+  subDomain       String   @unique
+  logoUrl         String?
+  address         String?
+  email           String?
+  phone           String?
+  subtitle        String?
+  setupCompleted  Boolean  @default(false)
+  
+  // Banking / UPI Setup
+  bankName        String?
+  bankBranch      String?
+  bankIFSC        String?
+  bankAccountNo   String?
+  googlePayId     String?
+  phonePeId       String?
+  upiQrId         String?
+
+  users           User[]
+  academicYears   AcademicYear[]
+  classes         Class[]
+  sections        Section[]
+  classSections   ClassSection[]
+  subjects        Subject[]
+  classSubjects   ClassSubject[]
+  teacherAssigns  TeacherAssignment[]
+  attendances     Attendance[]
+  attendanceSess  AttendanceSession[]
+  exams           Exam[]
+  examMarks       ExamMark[]
+  invoices        Invoice[]
+  invoiceItems    InvoiceItem[]
+  expenses        Expense[]
+  periodTimings   PeriodTiming[]
+  periods         Period[]
+  teacherSkills   TeacherSkill[]
+  complaints      Complaint[]
+  
+  // Library items
+  books           Book[]
+  bookCopies      BookCopy[]
+  bookIssues      BookIssue[]
+  
+  // Audits & Logs
+  activityLogs    ActivityLog[]
+
+  // Fees & Invoices
+  products         Product[]
+  pricebooks       Pricebook[]
+  pricebookEntries PricebookEntry[]
+  opportunities    Opportunity[]
+  opportunityLineItems OpportunityLineItem[]
+
+  // New relation for BehaviorCase
+  behaviorCases   BehaviorCase[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model User {
+  id             String         @id @default(uuid())
+  email          String         @unique
+  passwordHash   String
+  name           String
+  role           Role
+  phone          String?
+  isActive       Boolean        @default(true)
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Profiles for specific roles
+  studentProfile StudentProfile?
+  staffProfile   StaffProfile?
+  parentProfile  ParentProfile?
+  
+  complaints     Complaint[]
+  activityLogs   ActivityLog[]
+  bookIssues     BookIssue[]
+  notifications  Notification[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model StaffProfile {
+  id                 String              @id @default(uuid())
+  userId             String              @unique
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeId         String?
+  designation        String?
+  basicSalary        Decimal?            @db.Decimal(12, 2)
+  allowances         Decimal?            @db.Decimal(12, 2)
+  deductions         Decimal?            @db.Decimal(12, 2)
+  pfDeduction        Decimal?            @db.Decimal(12, 2)
+  joiningDate        DateTime?
+  status             String?             // Active, Suspended, Resigned
+  qualification      String?
+  subjectsTaught     String[]
+
+  classSections      ClassSection[]      // Classes where they are the class teacher (Advisor)
+  teacherAssignments TeacherAssignment[]
+  attendanceSessions AttendanceSession[]
+  periods            Period[]            @relation("AssignedTeacher")
+  substitutePeriods  Period[]            @relation("SubstituteTeacher")
+  teacherSkills      TeacherSkill[]
+  
+  // New relation for BehaviorCase
+  behaviorCases      BehaviorCase[]
+}
+
+model ParentProfile {
+  id               String           @id @default(uuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emergencyContact String?
+  students         StudentProfile[]
+}
+
+model StudentProfile {
+  id              String           @id @default(uuid())
+  userId          String           @unique
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rollNo          String?
+  fatherName      String?
+  motherName      String?
+  aadharNo        String?
+  
+  parentProfileId String?
+  parentProfile   ParentProfile?   @relation(fields: [parentProfileId], references: [id], onDelete: SetNull)
+
+  classSectionId  String?
+  classSection    ClassSection?    @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+
+  attendances     Attendance[]
+  examMarks       ExamMark[]
+  invoices        Invoice[]
+  opportunities   Opportunity[]
+  
+  // New relation for BehaviorCase
+  behaviorCases   BehaviorCase[]
+}
+
+model AcademicYear {
+  id        String    @id @default(uuid())
+  name      String    // e.g. "2026-2027"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean   @default(false)
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  classes     Class[]
+  complaints  Complaint[]
+  pricebooks  Pricebook[]
+  opportunities Opportunity[]
+}
+
+model Class {
+  id             String         @id @default(uuid())
+  name           String         // e.g. "Grade 10"
+  isActive       Boolean        @default(true)
+  academicYearId String
+  academicYear   AcademicYear   @relation(fields: [academicYearId], references: [id])
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  classSections  ClassSection[]
+  opportunities  Opportunity[]
+}
+
+model Section {
+  id        String   @id @default(uuid())
+  name      String   // e.g. "Section A"
+  isActive  Boolean  @default(true)
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  classSections ClassSection[]
+  opportunities Opportunity[]
+}
+
+model ClassSection {
+  id         String   @id @default(uuid())
+  classId    String
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  sectionId  String
+  section    Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  strength   Int      @default(0)
+  
+  // Class Advisor / Class Teacher (optional)
+  teacherId  String?
+  teacher    StaffProfile? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  students   StudentProfile[]
+  classSubjects ClassSubject[]
+  teacherAssigns TeacherAssignment[]
+  attendanceSessions AttendanceSession[]
+  periods    Period[]
+  exams      Exam[]
+  complaints Complaint[]
+
+  @@unique([classId, sectionId])
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  name      String   // e.g. "Mathematics"
+  isActive  Boolean  @default(true)
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  classSubjects  ClassSubject[]
+  teacherAssigns TeacherAssignment[]
+  examMarks      ExamMark[]
+  periods        Period[]
+  teacherSkills  TeacherSkill[]
+}
+
+model ClassSubject {
+  id             String       @id @default(uuid())
+  classSectionId String
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([classSectionId, subjectId])
+}
+
+model TeacherAssignment {
+  id             String       @id @default(uuid())
+  teacherId      String
+  teacher        StaffProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classSectionId String
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  periodsPerWeek Int          @default(0)
+  
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, classSectionId, subjectId])
+}
+
+model AttendanceSession {
+  id             String       @id @default(uuid())
+  date           DateTime     @db.Date
+  classSectionId String
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  takenById      String
+  takenBy        StaffProfile @relation(fields: [takenById], references: [id])
+  presentCount   Int          @default(0)
+  absentCount    Int          @default(0)
+  totalStudents  Int          @default(0)
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  attendances    Attendance[]
+}
+
+model Attendance {
+  id                  String            @id @default(uuid())
+  attendanceSessionId String
+  attendanceSession   AttendanceSession @relation(fields: [attendanceSessionId], references: [id], onDelete: Cascade)
+  studentId           String
+  student             StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status              AttendanceStatus
+  reason              String?           @db.Text
+  tenantId            String
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Exam {
+  id             String       @id @default(uuid())
+  name           String       // e.g. "Term 1 Mid-Term"
+  type           String
+  classSectionId String
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  date           DateTime     @db.Date
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  examMarks      ExamMark[]
+}
+
+model ExamMark {
+  id             String         @id @default(uuid())
+  examId         String
+  exam           Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  marksObtained  Decimal        @db.Decimal(5, 2)
+  remarks        String?
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId, subjectId])
+}
+
+model Invoice {
+  id               String        @id @default(uuid())
+  studentId        String
+  student          StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invoiceDate      DateTime      @db.Date
+  dueDate          DateTime      @db.Date
+  totalAmount      Decimal       @db.Decimal(12, 2)
+  paidAmount       Decimal       @db.Decimal(12, 2) @default(0)
+  remainingBalance Decimal       @db.Decimal(12, 2)
+  status           PaymentStatus
+  paymentMethod    PaymentMethod?
+  description      String?       @db.Text
+  tenantId         String
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  invoiceItems     InvoiceItem[]
+
+  opportunityId    String?
+  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  bankName         String?
+  bankIFSC         String?
+  bankAccountNumber String?
+  bankBranch       String?
+}
+
+model InvoiceItem {
+  id        String   @id @default(uuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "Admission Fee", "Computer Lab Fee"
+  amount    Decimal  @db.Decimal(12, 2)
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  opportunityLineItemId String?
+  opportunityLineItem   OpportunityLineItem? @relation(fields: [opportunityLineItemId], references: [id], onDelete: SetNull)
+  productId             String?
+  product               Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+}
+
+model Expense {
+  id          String        @id @default(uuid())
+  amount      Decimal       @db.Decimal(12, 2)
+  category    String
+  date        DateTime      @db.Date
+  description String?       @db.Text
+  paymentMode String
+  status      ExpenseStatus @default(PENDING)
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model PeriodTiming {
+  id           String   @id @default(uuid())
+  periodNumber Int
+  startTime    String   // e.g. "08:30"
+  endTime      String   // e.g. "09:15"
+  isActive     Boolean  @default(true)
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  periods      Period[]
+}
+
+model Period {
+  id             String       @id @default(uuid())
+  classSectionId String
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  
+  teacherId      String
+  teacher        StaffProfile @relation("AssignedTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  substituteTeacherId String?
+  substituteTeacher   StaffProfile? @relation("SubstituteTeacher", fields: [substituteTeacherId], references: [id], onDelete: SetNull)
+
+  periodTimingId String
+  periodTiming   PeriodTiming @relation(fields: [periodTimingId], references: [id], onDelete: Cascade)
+
+  dayOfWeek      String       // Monday, Tuesday, etc.
+  
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model TeacherSkill {
+  id                 String       @id @default(uuid())
+  teacherId          String
+  teacher            StaffProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectId          String
+  subject            Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  skillLevel         String?      // Beginner, Intermediate, Expert
+  yearsOfExperience  Int?
+  tenantId           String
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Complaint {
+  id             String       @id @default(uuid())
+  title          String
+  description    String       @db.Text
+  status         String       @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED
+  category       String
+  
+  submittedById  String
+  submittedBy    User         @relation(fields: [submittedById], references: [id], onDelete: Cascade)
+  
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  
+  classSectionId String?
+  classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+  
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// ── Library Models ───────────────────────────────────────────────────────────
+
+model Book {
+  id             String       @id @default(uuid())
+  title          String
+  author         String
+  isbn           String?
+  category       String?
+  totalCopies    Int          @default(0)
+  availableCopies Int         @default(0)
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  copies         BookCopy[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model BookCopy {
+  id             String         @id @default(uuid())
+  bookId         String
+  book           Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  barcode        String         @unique
+  status         BookCopyStatus @default(AVAILABLE)
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  issues         BookIssue[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model BookIssue {
+  id             String       @id @default(uuid())
+  bookCopyId     String
+  bookCopy       BookCopy     @relation(fields: [bookCopyId], references: [id], onDelete: Cascade)
+  borrowerId     String
+  borrower       User         @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  issueDate      DateTime     @default(now())
+  dueDate        DateTime
+  returnDate     DateTime?
+  fineAmount     Decimal      @default(0) @db.Decimal(8, 2)
+  finePaid       Boolean      @default(false)
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// ── Communications Models ──────────────────────────────────────────────────────
+
+model Notification {
+  id             String       @id @default(uuid())
+  title          String
+  message        String       @db.Text
+  type           String       // IN_APP, EMAIL, SMS
+  recipientId    String
+  recipient      User         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+// ── Audit & Activity Logging Models ───────────────────────────────────────────
+
+model ActivityLog {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action         String       // USER_LOGIN, RECORD_CREATE, RECORD_UPDATE, RECORD_DELETE, FEE_PAYMENT, MARKS_CHANGE
+  entityName     String       // e.g., "Attendance", "ExamMark", "Invoice"
+  entityId       String?
+  details        String?      @db.Text // JSON modifications string
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  productCode String?
+  isActive    Boolean  @default(true)
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  pricebookEntries     PricebookEntry[]
+  opportunityLineItems OpportunityLineItem[]
+  invoiceItems         InvoiceItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Pricebook {
+  id             String        @id @default(uuid())
+  name           String
+  isActive       Boolean       @default(true)
+  academicYearId String?
+  academicYear   AcademicYear? @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  pricebookEntries PricebookEntry[]
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model PricebookEntry {
+  id          String    @id @default(uuid())
+  pricebookId String
+  pricebook   Pricebook @relation(fields: [pricebookId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unitPrice   Decimal   @db.Decimal(12, 2)
+  isActive    Boolean   @default(true)
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  opportunityLineItems OpportunityLineItem[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Opportunity {
+  id             String         @id @default(uuid())
+  name           String
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  stageName      String
+  closeDate      DateTime
+  classId        String?
+  class          Class?         @relation(fields: [classId], references: [id], onDelete: SetNull)
+  sectionId      String?
+  section        Section?       @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  academicYearId String?
+  academicYear   AcademicYear?  @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  totalPaidAmount Decimal       @db.Decimal(12, 2) @default(0)
+  tenantId       String
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  opportunityLineItems OpportunityLineItem[]
+  invoices             Invoice[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model OpportunityLineItem {
+  id               String         @id @default(uuid())
+  opportunityId    String
+  opportunity      Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  pricebookEntryId String
+  pricebookEntry   PricebookEntry @relation(fields: [pricebookEntryId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity         Decimal        @db.Decimal(12, 2) @default(1)
+  unitPrice        Decimal        @db.Decimal(12, 2)
+  discount         Decimal        @db.Decimal(5, 2) @default(0) // concession percentage
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  invoiceItems     InvoiceItem[]
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+model BehaviorCase {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId        String
+  student          StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId        String?
+  teacher          StaffProfile? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  behaviorType     String   // "Complaint" or "Praise"
+  category         String
+  academicYear     String
+  status           String   @default("New")
+  priority         String   // "High" for Complaint, "Medium" for Praise
+  description      String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+}
+

@@ -1,0 +1,748 @@
+'use client';
+
+import React, { useState } from 'react';
+import { 
+  Building2, Landmark, CheckCircle, Save, QrCode, 
+  Plus, Trash2, Calendar, ShieldAlert, Globe, Link as LinkIcon 
+} from 'lucide-react';
+
+interface BankAccount {
+  id: string;
+  name: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  branch: string;
+  isPrimary: boolean;
+}
+
+interface AcademicTerm {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
+export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<'profile' | 'banking' | 'upi' | 'terms'>('profile');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [alertText, setAlertText] = useState('');
+
+  // 1. School Profile Metadata
+  const [schoolName, setSchoolName] = useState('Vikas Senior Secondary School');
+  const [schoolSubtitle, setSchoolSubtitle] = useState('Inspiring Excellence, Nurturing Values');
+  const [schoolEmail, setSchoolEmail] = useState('contact@vikasschool.edu.in');
+  const [schoolPhone, setSchoolPhone] = useState('+91-11-27453300');
+  const [schoolAddress, setSchoolAddress] = useState('Plot No. 24, Vikas Marg, Sector 9, Rohini, New Delhi, India');
+  const [schoolLogo, setSchoolLogo] = useState('https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=200');
+  const [subdomain, setSubdomain] = useState('vikas-edu');
+
+  // 2. UPI Gateway Keys
+  const [gpayId, setGpayId] = useState('gpay-vikas-edu@upi');
+  const [phonepeId, setPhonepeId] = useState('pe-vikas-edu@ybl');
+  const [upiQrId, setUpiQrId] = useState('upi-merchant-qr-code-payload-string-identifier');
+
+  // 3. Bank Accounts List (replicates School_Bank_Account__c)
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
+    {
+      id: 'bank-1',
+      name: 'Vikas School Trust Account',
+      bankName: 'State Bank of India',
+      accountNumber: '333444555666',
+      ifscCode: 'SBIN0001234',
+      branch: 'Rohini Sector 9 Branch',
+      isPrimary: true
+    },
+    {
+      id: 'bank-2',
+      name: 'Vikas School Operations Account',
+      bankName: 'HDFC Bank',
+      accountNumber: '5010042188992',
+      ifscCode: 'HDFC0000240',
+      branch: 'Pitampura Branch',
+      isPrimary: false
+    }
+  ]);
+
+  // 4. Academic Years List (replicates Academic_Year__c)
+  const [academicYears, setAcademicYears] = useState<AcademicTerm[]>([
+    {
+      id: 'ay-1',
+      name: '2026-2027',
+      startDate: '2026-06-01',
+      endDate: '2027-05-31',
+      isActive: true
+    },
+    {
+      id: 'ay-2',
+      name: '2025-2026',
+      startDate: '2025-06-01',
+      endDate: '2026-05-31',
+      isActive: false
+    }
+  ]);
+
+  // Form helper for adding a new bank account
+  const [newBank, setNewBank] = useState({
+    name: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    branch: '',
+    isPrimary: false
+  });
+
+  // Form helper for adding a new academic year
+  const [newYearRange, setNewYearRange] = useState('');
+
+  // Handle Save
+  const handleSaveSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAlertText('School Setup org defaults successfully updated.');
+    setSaveSuccess(true);
+    setTimeout(() => {
+      setSaveSuccess(false);
+    }, 4000);
+  };
+
+  // Add Bank Account Row
+  const handleAddBankAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBank.name || !newBank.bankName || !newBank.accountNumber || !newBank.ifscCode) {
+      alert('Please fill out all required bank fields.');
+      return;
+    }
+
+    const updatedAccounts = bankAccounts.map(b => 
+      newBank.isPrimary ? { ...b, isPrimary: false } : b
+    );
+
+    const newRow: BankAccount = {
+      id: `bank-${Date.now()}`,
+      ...newBank
+    };
+
+    setBankAccounts([...updatedAccounts, newRow]);
+    setNewBank({
+      name: '',
+      bankName: '',
+      accountNumber: '',
+      ifscCode: '',
+      branch: '',
+      isPrimary: false
+    });
+
+    setAlertText('New bank account added to listing.');
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  // Delete Bank Account Row
+  const handleDeleteBankAccount = (id: string) => {
+    const target = bankAccounts.find(b => b.id === id);
+    if (target?.isPrimary && bankAccounts.length > 1) {
+      alert('Cannot delete the primary bank account. Please set another account as primary first.');
+      return;
+    }
+    setBankAccounts(bankAccounts.filter(b => b.id !== id));
+  };
+
+  // Toggle Primary Bank Account
+  const handleSetPrimaryBank = (id: string) => {
+    setBankAccounts(bankAccounts.map(b => ({
+      ...b,
+      isPrimary: b.id === id
+    })));
+  };
+
+  // Add Academic Year
+  const handleAddAcademicYear = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanRange = newYearRange.replace('–', '-').trim();
+    const years = cleanRange.split('-');
+    if (years.length !== 2 || isNaN(Number(years[0])) || isNaN(Number(years[1]))) {
+      alert('Invalid year range format. Please use YYYY-YYYY (e.g. 2027-2028).');
+      return;
+    }
+
+    const startYear = Number(years[0]);
+    const endYear = Number(years[1]);
+
+    const newYear: AcademicTerm = {
+      id: `ay-${Date.now()}`,
+      name: cleanRange,
+      startDate: `${startYear}-06-01`,
+      endDate: `${endYear}-05-31`,
+      isActive: false
+    };
+
+    setAcademicYears([newYear, ...academicYears]);
+    setNewYearRange('');
+
+    setAlertText(`Academic year term ${cleanRange} configured.`);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  // Toggle Active Academic Year (limit active to 2, deactivating older active terms)
+  const handleToggleActiveYear = (id: string) => {
+    const updated = academicYears.map(ay => {
+      if (ay.id === id) {
+        return { ...ay, isActive: !ay.isActive };
+      }
+      return ay;
+    });
+
+    const activeCount = updated.filter(ay => ay.isActive).length;
+    if (activeCount > 2) {
+      alert('Maximum of 2 active academic years allowed. Deactivating oldest active year.');
+      // Find oldest active and deactivate it
+      let activeIndices: number[] = [];
+      updated.forEach((ay, idx) => {
+        if (ay.isActive && ay.id !== id) activeIndices.push(idx);
+      });
+      if (activeIndices.length > 0) {
+        updated[activeIndices[activeIndices.length - 1]].isActive = false;
+      }
+    }
+
+    setAcademicYears(updated);
+  };
+
+  return (
+    <div className="space-y-8 animate-in">
+      {/* Title Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <h1 className="text-[28px] font-bold text-slate-950 leading-none">
+            School Setup & Settings
+          </h1>
+          <p className="text-slate-500 text-[13px] font-medium mt-2">
+            Replicates `schoolSetup` LWC. Configure school profiles metadata, active terms, bank account indices, and UPI payments gateways.
+          </p>
+        </div>
+      </div>
+
+      {saveSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-3 text-[13px] shadow-xs">
+          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+          <span className="font-semibold">{alertText}</span>
+        </div>
+      )}
+
+      {/* Tabs Layout */}
+      <div className="flex border-b border-slate-200 gap-6">
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'profile'
+              ? 'border-[#2E5BFF] text-[#2E5BFF]'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Building2 className="w-4 h-4" />
+            School Profile
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('banking')}
+          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'banking'
+              ? 'border-[#2E5BFF] text-[#2E5BFF]'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Landmark className="w-4 h-4" />
+            Bank Registry
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('upi')}
+          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'upi'
+              ? 'border-[#2E5BFF] text-[#2E5BFF]'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <QrCode className="w-4 h-4" />
+            UPI Gateways
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('terms')}
+          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'terms'
+              ? 'border-[#2E5BFF] text-[#2E5BFF]'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            Academic Terms
+          </span>
+        </button>
+      </div>
+
+      {/* Tab Contents */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        {/* Left Side forms depending on tab */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* TAB 1: PROFILE SETUP */}
+          {activeTab === 'profile' && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+              <h3 className="text-[16px] font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-[#2E5BFF]" />
+                Organization Branding & Details
+              </h3>
+
+              <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">Organization Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={schoolName}
+                    onChange={(e) => setSchoolName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">School Subtitle / Motto</label>
+                  <input
+                    type="text"
+                    value={schoolSubtitle}
+                    onChange={(e) => setSchoolSubtitle(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">Tenant Subdomain *</label>
+                  <div className="flex">
+                    <input
+                      type="text"
+                      required
+                      value={subdomain}
+                      onChange={(e) => setSubdomain(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 border-r-0 rounded-l-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF] w-1/2"
+                    />
+                    <span className="bg-slate-100 border border-slate-200 border-l-0 rounded-r-xl px-4 py-2.5 text-[13px] text-slate-400 w-1/2 select-none truncate flex items-center justify-center">
+                      .edutrack.com
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">Contact Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={schoolEmail}
+                    onChange={(e) => setSchoolEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">Help Desk Phone</label>
+                  <input
+                    type="text"
+                    value={schoolPhone}
+                    onChange={(e) => setSchoolPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">School Logo URL</label>
+                  <input
+                    type="text"
+                    value={schoolLogo}
+                    onChange={(e) => setSchoolLogo(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">Mailing Address</label>
+                  <textarea
+                    rows={2}
+                    value={schoolAddress}
+                    onChange={(e) => setSchoolAddress(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF] resize-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2 pt-4">
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Organization Branding
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 2: BANKING REGISTRY */}
+          {activeTab === 'banking' && (
+            <div className="space-y-6">
+              {/* Add Bank Account row form */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+                <h3 className="text-[16px] font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
+                  <Landmark className="w-5 h-5 text-[#2E5BFF]" />
+                  Add School Bank Account
+                </h3>
+
+                <form onSubmit={handleAddBankAccount} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">Account Display Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Trust Account"
+                      value={newBank.name}
+                      onChange={(e) => setNewBank({ ...newBank, name: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">Bank Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. State Bank of India"
+                      value={newBank.bankName}
+                      onChange={(e) => setNewBank({ ...newBank, bankName: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">Account Number *</label>
+                    <input
+                      type="text"
+                      placeholder="Enter numbers only"
+                      value={newBank.accountNumber}
+                      onChange={(e) => setNewBank({ ...newBank, accountNumber: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">IFSC Routing Code *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SBIN0001234"
+                      value={newBank.ifscCode}
+                      onChange={(e) => setNewBank({ ...newBank, ifscCode: e.target.value.toUpperCase() })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">Branch Location</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Rohini Sec 9"
+                      value={newBank.branch}
+                      onChange={(e) => setNewBank({ ...newBank, branch: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      id="isPrimaryAcc"
+                      checked={newBank.isPrimary}
+                      onChange={(e) => setNewBank({ ...newBank, isPrimary: e.target.checked })}
+                      className="rounded border-slate-300 text-[#2E5BFF] focus:ring-[#2E5BFF] w-4 h-4 cursor-pointer"
+                    />
+                    <label htmlFor="isPrimaryAcc" className="text-[13px] text-slate-600 font-semibold select-none cursor-pointer">
+                      Mark Primary Account
+                    </label>
+                  </div>
+
+                  <div className="md:col-span-3 pt-2">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Bank Account Row
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Bank accounts ledger list */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                  <h4 className="text-[14px] font-bold text-slate-900">Active Merchant Bank Accounts</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/35 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3">Account Name</th>
+                        <th className="px-6 py-3">Bank details</th>
+                        <th className="px-6 py-3">Account Number</th>
+                        <th className="px-6 py-3">IFSC Code</th>
+                        <th className="px-6 py-3 text-center">Primary</th>
+                        <th className="px-6 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {bankAccounts.map(b => (
+                        <tr key={b.id} className="hover:bg-slate-50/50 text-[13px] text-slate-700">
+                          <td className="px-6 py-4 font-semibold text-slate-900">{b.name}</td>
+                          <td className="px-6 py-4">
+                            <div>{b.bankName}</div>
+                            <div className="text-[11px] text-slate-400 mt-0.5">{b.branch || 'Main Branch'}</div>
+                          </td>
+                          <td className="px-6 py-4 font-mono font-medium text-slate-800">{b.accountNumber}</td>
+                          <td className="px-6 py-4 font-mono text-slate-500">{b.ifscCode}</td>
+                          <td className="px-6 py-4 text-center">
+                            <input
+                              type="radio"
+                              name="primaryBankSel"
+                              checked={b.isPrimary}
+                              onChange={() => handleSetPrimaryBank(b.id)}
+                              className="w-4 h-4 text-[#2E5BFF] focus:ring-[#2E5BFF] cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBankAccount(b.id)}
+                              className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 cursor-pointer"
+                              title="Delete Row"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: UPI GATEWAYS */}
+          {activeTab === 'upi' && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+              <h3 className="text-[16px] font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-[#2E5BFF]" />
+                UPI Integration Gateways
+              </h3>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">GooglePay Business UPI ID</label>
+                    <input
+                      type="text"
+                      value={gpayId}
+                      onChange={(e) => setGpayId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">PhonePe Merchant UPI ID</label>
+                    <input
+                      type="text"
+                      value={phonepeId}
+                      onChange={(e) => setPhonepeId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">UPI Merchant Standee QR Payload ID</label>
+                  <input
+                    type="text"
+                    value={upiQrId}
+                    onChange={(e) => setUpiQrId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
+                  />
+                  <p className="text-[10px] text-slate-400 font-semibold mt-1">
+                    Used to generate customized UPI dynamic QR standees on the student fee billing pages.
+                  </p>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save UPI Integration Keys
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 4: ACADEMIC TERMS */}
+          {activeTab === 'terms' && (
+            <div className="space-y-6">
+              {/* Add Academic Year form */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+                <h3 className="text-[16px] font-bold text-slate-900 pb-3 border-b border-slate-100 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-[#2E5BFF]" />
+                  Configure Academic Year Term
+                </h3>
+
+                <form onSubmit={handleAddAcademicYear} className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    <label className="block text-[12px] text-slate-500 font-semibold mb-1">Academic Year Range *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 2027-2028"
+                      value={newYearRange}
+                      onChange={(e) => setNewYearRange(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold h-[38px] flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Configure Year
+                  </button>
+                </form>
+                <p className="text-[10px] text-slate-400 font-semibold">
+                  Note: Custom settings June 1st to May 31st boundaries will be automatically constructed for terms boundaries.
+                </p>
+              </div>
+
+              {/* Academic Terms table */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                  <h4 className="text-[14px] font-bold text-slate-900">Academic Year Calendars</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/35 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-3">Academic Term</th>
+                        <th className="px-6 py-3">Term Start Date</th>
+                        <th className="px-6 py-3">Term End Date</th>
+                        <th className="px-6 py-3 text-center">Status</th>
+                        <th className="px-6 py-3 text-center">Active Toggle</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {academicYears.map(ay => (
+                        <tr key={ay.id} className="hover:bg-slate-50/50 text-[13px] text-slate-700">
+                          <td className="px-6 py-4 font-bold text-slate-900">{ay.name}</td>
+                          <td className="px-6 py-4 font-mono text-slate-600">{ay.startDate}</td>
+                          <td className="px-6 py-4 font-mono text-slate-600">{ay.endDate}</td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                              ay.isActive 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                                : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {ay.isActive ? 'Active Term' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActiveYear(ay.id)}
+                              className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                                ay.isActive
+                                  ? 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'
+                                  : 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
+                              }`}
+                            >
+                              {ay.isActive ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Sidebar Widget */}
+        <div className="space-y-6">
+          {/* Logo Brand Box */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs text-center space-y-4">
+            <h4 className="text-[14px] font-bold text-slate-900 border-b border-slate-100 pb-2">Branding Preview</h4>
+            <div className="flex justify-center">
+              {schoolLogo ? (
+                <img 
+                  src={schoolLogo} 
+                  alt="School Logo" 
+                  className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=200';
+                  }}
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-300">
+                  No Logo
+                </div>
+              )}
+            </div>
+            <div>
+              <h5 className="font-extrabold text-[15px] text-slate-900">{schoolName}</h5>
+              <p className="text-[11px] text-slate-400 mt-1 italic">"{schoolSubtitle}"</p>
+            </div>
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-left text-[11px] space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Subdomain:</span>
+                <span className="text-slate-700 font-semibold">{subdomain}.edutrack.com</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Primary Bank:</span>
+                <span className="text-slate-700 font-semibold">
+                  {bankAccounts.find(b => b.isPrimary)?.bankName || 'None'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Active Term:</span>
+                <span className="text-slate-700 font-semibold">
+                  {academicYears.find(ay => ay.isActive)?.name || 'None'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Salesforce Org Default Alert info */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+            <h4 className="text-[12px] font-bold text-slate-700 flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+              Developer System Settings
+            </h4>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              These properties represent tenant configuration flags and map to Custom Settings hierarchy fields in the backplane database. Change modifications propagate dynamically across all modules.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

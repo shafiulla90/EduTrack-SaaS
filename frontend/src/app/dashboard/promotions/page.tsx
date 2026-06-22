@@ -1,0 +1,826 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, ArrowLeft, Check, CheckCircle, Plus, X, 
+  ChevronLeft, User, Calendar, DollarSign, AlertCircle, 
+  Award, Users, ArrowRight, Shield, RefreshCw
+} from 'lucide-react';
+import { mockStudents, MockStudent, mockAcademicYears } from '@/lib/mockData';
+import { api } from '@/lib/api';
+
+// Constants matching LWC CLASS_ORDER
+const CLASS_ORDER = [
+  'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+];
+
+function getNextClass(currentClass: string) {
+  if (!currentClass) return '';
+  const idx = CLASS_ORDER.indexOf(currentClass);
+  if (idx >= 0 && idx < CLASS_ORDER.length - 1) {
+    return CLASS_ORDER[idx + 1];
+  }
+  return '';
+}
+
+interface ClassSummary {
+  className: string;
+  section: string;
+  studentCount: number;
+}
+
+export default function StudentPromotionPage() {
+  const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [studentsState, setStudentsState] = useState<MockStudent[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Source Filters
+  const [sourceYear, setSourceYear] = useState('');
+  const [targetYear, setTargetYear] = useState('');
+  const [sourceClass, setSourceClass] = useState('ALL');
+  const [sourceSection, setSourceSection] = useState('');
+
+  // Target Config
+  const [targetClass, setTargetClass] = useState('');
+  const [targetSection, setTargetSection] = useState('');
+
+  // UI state
+  const [isDrilldown, setIsDrilldown] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Record<string, boolean>>({});
+  
+  // Custom Success Modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [promotedCount, setPromotedCount] = useState(0);
+
+  // Load Academic Years
+  useEffect(() => {
+    const fetchYears = async () => {
+      try {
+        const res = await api.get('/academics/academic-years');
+        setAcademicYears(res.data);
+        if (res.data.length > 0) {
+          const active = res.data.find((y: any) => y.isActive);
+          const inactive = res.data.find((y: any) => !y.isActive);
+          if (inactive) {
+            setSourceYear(inactive.id);
+          } else {
+            setSourceYear(res.data[0].id);
+          }
+          if (active) {
+            setTargetYear(active.id);
+          } else {
+            setTargetYear(res.data[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching academic years:', err);
+      }
+    };
+    fetchYears();
+  }, []);
+
+  // Fetch Candidates
+  const fetchCandidates = async () => {
+    if (!sourceYear) return;
+    setIsLoading(true);
+    try {
+      const res = await api.get('/students/promotion-candidates', {
+        params: {
+          sourceYearId: sourceYear,
+          className: sourceClass,
+          sectionName: sourceSection || undefined,
+        }
+      });
+      setStudentsState(res.data);
+    } catch (err) {
+      console.error('Error fetching candidates:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCandidates();
+  }, [sourceYear, sourceClass, sourceSection]);
+
+  // Sync target year when source year changes
+  useEffect(() => {
+    if (sourceYear && academicYears.length > 0) {
+      const active = academicYears.find((y: any) => y.isActive && y.id !== sourceYear);
+      if (active) {
+        setTargetYear(active.id);
+      } else {
+        const other = academicYears.find((y: any) => y.id !== sourceYear);
+        if (other) setTargetYear(other.id);
+      }
+    }
+  }, [sourceYear, academicYears]);
+
+  // Sync target class when source class changes
+  useEffect(() => {
+    if (sourceClass === 'ALL') {
+      setIsDrilldown(false);
+      setTargetClass('');
+    } else if (sourceClass) {
+      const nextCls = getNextClass(sourceClass);
+      setTargetClass(nextCls);
+    } else {
+      setTargetClass('');
+    }
+  }, [sourceClass]);
+
+  // Calculate Class Summaries
+  const getClassSummaries = (): ClassSummary[] => {
+    const counts: Record<string, number> = {};
+    
+    studentsState.forEach(student => {
+      // For demo, we count students who match their current class
+      const key = `${student.class}:${student.section}`;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    return Object.entries(counts).map(([key, count]) => {
+      const [className, section] = key.split(':');
+      return { className, section, studentCount: count };
+    }).sort((a, b) => a.className.localeCompare(b.className));
+  };
+
+  const summaries = getClassSummaries();
+
+  // Filter summaries based on section chip selection
+  const filteredSourceSummary = sourceSection
+    ? summaries.filter(item => item.section === sourceSection)
+    : summaries;
+
+  // Projection Map for Right Card
+  const filteredTargetSummary = (() => {
+    const projectionMap = new Map<string, ClassSummary>();
+    
+    filteredSourceSummary.forEach(source => {
+      const nextClass = getNextClass(source.className);
+      if (!nextClass) return; // Graduating classes don't project
+
+      const key = `${nextClass}:${source.section}`;
+      const existing = projectionMap.get(key);
+      if (existing) {
+        existing.studentCount += source.studentCount;
+      } else {
+        projectionMap.set(key, {
+          className: nextClass,
+          section: source.section,
+          studentCount: source.studentCount
+        });
+      }
+    });
+
+    return Array.from(projectionMap.values());
+  })();
+
+  // Filtered Students for Drilldown view
+  const currentStudentsList = studentsState.filter(s => {
+    const matchesClass = s.class === sourceClass;
+    const matchesSection = !sourceSection || s.section === sourceSection;
+    const matchesSearch = !searchQuery || 
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      s.rollNo.includes(searchQuery);
+    return matchesClass && matchesSection && matchesSearch;
+  });
+
+  // Candidate Pool Count
+  const sourceTotalCount = (() => {
+    if (sourceClass !== 'ALL') return currentStudentsList.length;
+    
+    return filteredSourceSummary.reduce((sum, item) => {
+      const isPromotable = !!getNextClass(item.className);
+      return sum + (isPromotable ? item.studentCount : 0);
+    }, 0);
+  })();
+
+  // Vetted / Selected Students
+  const selectedStudents = currentStudentsList.filter(s => !!selectedStudentIds[s.id]);
+  const targetTotalCount = sourceClass === 'ALL' ? sourceTotalCount : selectedStudents.length;
+
+  // Initial selection of all students on drilldown
+  useEffect(() => {
+    if (isDrilldown) {
+      const initialSel: Record<string, boolean> = {};
+      currentStudentsList.forEach(s => {
+        initialSel[s.id] = true;
+      });
+      setSelectedStudentIds(initialSel);
+    }
+  }, [isDrilldown, sourceClass, sourceSection]);
+
+  const handleStudentToggle = (studentId: string) => {
+    setSelectedStudentIds(prev => ({
+      ...prev,
+      [studentId]: !prev[studentId]
+    }));
+  };
+
+  const handleSelectAll = () => {
+    const newSel: Record<string, boolean> = {};
+    currentStudentsList.forEach(s => {
+      newSel[s.id] = true;
+    });
+    setSelectedStudentIds(newSel);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedStudentIds({});
+  };
+
+  const handleSummaryClick = (className: string, section: string) => {
+    if (!getNextClass(className)) {
+      alert(`🎓 ${className} is the graduating class. These students are completing their term and cannot be promoted further.`);
+      return;
+    }
+    setSourceClass(className);
+    setSourceSection(section);
+    setIsDrilldown(true);
+  };
+
+  const handleBackToClasses = () => {
+    setSourceClass('ALL');
+    setSourceSection('');
+    setIsDrilldown(false);
+    setSearchQuery('');
+  };
+
+  // Perform promotion on backend
+  const handlePromote = async () => {
+    const targetYearLabel = academicYears.find(y => y.id === targetYear)?.name || 'Next Year';
+    
+    let confirmMsg = '';
+    let count = 0;
+
+    const candidateIds = sourceClass === 'ALL' 
+      ? studentsState.map(s => s.id)
+      : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
+
+    if (candidateIds.length === 0) {
+      alert('No students selected for promotion');
+      return;
+    }
+
+    if (sourceClass === 'ALL') {
+      count = sourceTotalCount;
+      confirmMsg = `PROMOTING ALL CLASSES:\nThis will promote all eligible classes (${count} students) to their next sequential grades for the Academic Year ${targetYearLabel}. Do you wish to proceed?`;
+    } else {
+      count = candidateIds.length;
+      confirmMsg = `Promote ${count} students from ${sourceClass} to ${targetClass} for ${targetYearLabel}?`;
+    }
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsLoading(true);
+    try {
+      await api.post('/students/promote', {
+        studentIds: candidateIds,
+        sourceYearId: sourceYear,
+        targetYearId: targetYear,
+        targetClassName: sourceClass === 'ALL' ? 'ALL' : targetClass,
+        targetSectionName: targetSection || undefined,
+      });
+
+      setPromotedCount(count);
+      setSuccessMessage(
+        sourceClass === 'ALL' 
+          ? `Successfully promoted ${count} students across classes to their next grades for Academic Year ${targetYearLabel}.`
+          : `Successfully promoted ${count} students from ${sourceClass} to ${targetClass} (${targetSection || sourceSection}) for ${targetYearLabel}.`
+      );
+      
+      setShowSuccessModal(true);
+      fetchCandidates();
+    } catch (err: any) {
+      console.error('Promotion failed:', err);
+      alert(`Promotion failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const closeSuccessModal = () => {
+    setShowSuccessModal(false);
+    handleBackToClasses();
+  };
+
+  const sourceYearLabel = academicYears.find(y => y.id === sourceYear)?.name || 'Current Year';
+  const targetYearLabel = academicYears.find(y => y.id === targetYear)?.name || 'Next Year';
+
+  const isPromoteDisabled = isLoading || 
+    (sourceClass === 'ALL' ? sourceTotalCount === 0 : targetTotalCount === 0);
+
+  return (
+    <div className="space-y-6 animate-in text-slate-800">
+      
+      {/* Dynamic Dot Flow Animation style injection */}
+      <style>{`
+        @keyframes dotFlow {
+          0% { opacity: 0; transform: translateY(-10px) scale(0.5); }
+          20% { opacity: 1; transform: translateY(0) scale(1); }
+          80% { opacity: 1; transform: translateY(120px) scale(1); }
+          100% { opacity: 0; transform: translateY(150px) scale(0.5); }
+        }
+        .cascade-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #2E5BFF, #10B981);
+          box-shadow: 0 0 6px rgba(46, 91, 255, 0.3);
+          opacity: 0;
+        }
+        .cascade-dot-1 { animation: dotFlow 1.2s 0s infinite ease-in-out; }
+        .cascade-dot-2 { animation: dotFlow 1.2s 0.2s infinite ease-in-out; }
+        .cascade-dot-3 { animation: dotFlow 1.2s 0.4s infinite ease-in-out; }
+        .cascade-dot-4 { animation: dotFlow 1.2s 0.6s infinite ease-in-out; }
+        .cascade-dot-5 { animation: dotFlow 1.2s 0.8s infinite ease-in-out; }
+      `}</style>
+
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <div className="flex items-center gap-3">
+            <h2 className="text-[28px] font-bold text-slate-900 leading-none">Student Promotion</h2>
+            <span className="px-2 py-0.5 rounded bg-blue-50 text-[#2E5BFF] text-[10px] font-bold uppercase tracking-wider border border-blue-100">
+              SCHOLARFLOW
+            </span>
+          </div>
+          <p className="text-slate-500 text-[13px] font-medium mt-2">
+            Reassign classes, sections, and reset fee ledgers for students entering the next academic year.
+          </p>
+        </div>
+      </div>
+
+      {/* Main Layout Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        
+        {/* Left Sidebar Filter Panel */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-6 flex flex-col justify-between">
+          <div className="space-y-5">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Promotion Filters</h3>
+            
+            {/* Source Year */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2E5BFF]" />
+                Current Academic Year
+              </label>
+              <select 
+                value={sourceYear} 
+                onChange={(e) => setSourceYear(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+              >
+                {academicYears.map(y => (
+                  <option key={y.id} value={y.id}>{y.name} {y.isActive ? '(Active)' : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Target Year */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Target Academic Year
+              </label>
+              <select 
+                value={targetYear} 
+                onChange={(e) => setTargetYear(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+              >
+                {academicYears.filter(y => y.id !== sourceYear).map(y => (
+                  <option key={y.id} value={y.id}>{y.name} {y.isActive ? '(Active)' : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="border-t border-slate-100" />
+
+            {/* Class Dropdown */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                Class Filter
+              </label>
+              <select 
+                value={sourceClass} 
+                onChange={(e) => setSourceClass(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+              >
+                <option value="ALL">ALL CLASSES (Bulk Promotion)</option>
+                {CLASS_ORDER.map(cls => (
+                  <option key={cls} value={cls}>{cls}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Section Filter Chips */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6]" />
+                Section Filter
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {['', 'Section A', 'Section B'].map((sec) => (
+                  <button
+                    key={sec}
+                    onClick={() => setSourceSection(sec)}
+                    className={`py-2 text-[11px] font-bold rounded-xl border text-center transition-all select-none cursor-pointer ${
+                      sourceSection === sec 
+                        ? 'bg-blue-50/70 border-blue-500 text-blue-600 shadow-sm' 
+                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-blue-500 hover:border-blue-200'
+                    }`}
+                  >
+                    {sec ? sec.replace('Section ', '') : 'ALL'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search Input when inside Drilldown */}
+            {isDrilldown && (
+              <div className="space-y-1.5 pt-2">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Search Students
+                </label>
+                <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 focus-within:border-blue-500 transition-all">
+                  <Search className="w-4.5 h-4.5 text-slate-400 mr-2" />
+                  <input
+                    type="text"
+                    placeholder="Search candidate..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-transparent text-xs text-slate-800 outline-none w-full placeholder-slate-400 font-medium"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Promotion Actions / Summary inside Sidebar */}
+          <div className="space-y-4 pt-6 border-t border-slate-100">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+              <div className="flex justify-between text-xs text-slate-500 font-semibold">
+                <span>Vetted Candidates</span>
+                <span className="font-extrabold text-slate-800">{targetTotalCount}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-500 font-semibold">
+                <span>Source Pool</span>
+                <span className="font-extrabold text-slate-800">{sourceTotalCount}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-500 font-semibold">
+                <span>Destination Grade</span>
+                <span className="font-extrabold text-blue-600">{sourceClass === 'ALL' ? 'Next Sequential' : targetClass || '—'}</span>
+              </div>
+            </div>
+
+            {/* Promote Button */}
+            <button
+              onClick={handlePromote}
+              disabled={isPromoteDisabled}
+              className={`w-full py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-indigo-600 hover:to-blue-600 shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                isPromoteDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-500/20'
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  {sourceClass === 'ALL' 
+                    ? `Promote All Batches (${sourceTotalCount})` 
+                    : `Promote ${targetTotalCount} Students`
+                  }
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Right Main Flow Area */}
+        <div className="lg:col-span-3 space-y-6 flex flex-col">
+          
+          {/* Main Title Row & Year Range Pill */}
+          <div className="flex justify-between items-center bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-sm">
+            <h3 className="font-bold text-slate-800 text-lg">Promotion Preview</h3>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5 text-xs font-bold text-slate-500 select-none">
+              <span className="text-[#2E5BFF]">{sourceYearLabel}</span>
+              <span className="text-slate-400">→</span>
+              <span className="text-emerald-600">{targetYearLabel}</span>
+            </div>
+          </div>
+
+          {/* Stats Bar */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm text-center">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Candidate Pool</span>
+              <span className="text-2xl font-extrabold text-blue-600 block mt-1">{sourceTotalCount}</span>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm text-center">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Vetted Students</span>
+              <span className="text-2xl font-extrabold text-emerald-600 block mt-1">{targetTotalCount}</span>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm text-center">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Classes Staged</span>
+              <span className="text-2xl font-extrabold text-slate-800 block mt-1">
+                {sourceClass === 'ALL' 
+                  ? `${filteredSourceSummary.filter(s => !!getNextClass(s.className)).length} / ${summaries.length}`
+                  : '1 / 1'
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* Cards Transfer Area */}
+          <div className="flex-1 flex items-stretch gap-0 border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white min-h-[480px]">
+            
+            {/* Left Card: Source Class Enrollment */}
+            <div className="flex-1 flex flex-col border-r border-slate-150">
+              <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  {isDrilldown && (
+                    <button 
+                      onClick={handleBackToClasses}
+                      className="p-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-[#2E5BFF] transition-all cursor-pointer mr-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">{sourceYearLabel}</h4>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Current Enrollment</p>
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-lg">
+                  {sourceTotalCount}
+                </span>
+              </div>
+
+              {/* Card List Body */}
+              <div className="p-4 overflow-y-auto flex-1 space-y-2.5 max-h-[380px]">
+                
+                {/* Summary View */}
+                {!isDrilldown && (
+                  <>
+                    {filteredSourceSummary.map(item => {
+                      const isPromotable = !!getNextClass(item.className);
+                      return (
+                        <div 
+                          key={`${item.className}-${item.section}`}
+                          onClick={() => handleSummaryClick(item.className, item.section)}
+                          className={`flex justify-between items-center p-3.5 border rounded-2xl transition-all select-none ${
+                            isPromotable 
+                              ? 'bg-slate-50 border-slate-200 hover:border-blue-300 hover:translate-x-1 cursor-pointer' 
+                              : 'bg-slate-50/40 border-slate-200 opacity-60 cursor-not-allowed'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold bg-gradient-to-tr ${
+                              isPromotable ? 'from-blue-500 to-indigo-500' : 'from-slate-400 to-slate-500'
+                            }`}>
+                              {item.className.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <h5 className="font-bold text-slate-800 text-sm">{item.className}</h5>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Section {item.section}</p>
+                            </div>
+                          </div>
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                            isPromotable 
+                              ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                              : 'bg-slate-100 text-slate-500 border-slate-200'
+                          }`}>
+                            {isPromotable ? `${item.studentCount} Students` : 'Graduating (Complete)'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {filteredSourceSummary.length === 0 && (
+                      <div className="h-full flex flex-col justify-center items-center text-center text-slate-400 py-12">
+                        <Users className="w-10 h-10 mb-2 opacity-30" />
+                        <p className="text-xs font-semibold">No staging classes found</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Drilldown view */}
+                {isDrilldown && (
+                  <>
+                    <div className="flex justify-between items-center mb-3">
+                      <h5 className="text-xs font-bold text-slate-500">{sourceClass} - {sourceSection} Enrollment</h5>
+                      <div className="flex gap-2">
+                        <button onClick={handleSelectAll} className="text-[10px] font-bold text-blue-600 hover:underline cursor-pointer">Select All</button>
+                        <span className="text-slate-300 text-[10px]">|</span>
+                        <button onClick={handleClearSelection} className="text-[10px] font-bold text-slate-500 hover:underline cursor-pointer">Clear All</button>
+                      </div>
+                    </div>
+                    {currentStudentsList.map(s => {
+                      const isSelected = !!selectedStudentIds[s.id];
+                      const hasDue = s.balanceDue > 0;
+                      return (
+                        <div 
+                          key={s.id}
+                          onClick={() => handleStudentToggle(s.id)}
+                          className={`flex justify-between items-center p-3 border rounded-2xl cursor-pointer transition-all select-none ${
+                            isSelected 
+                              ? 'bg-blue-50/40 border-blue-500 shadow-sm' 
+                              : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              readOnly
+                              className="accent-blue-600 cursor-pointer w-4 h-4 rounded-md"
+                            />
+                            <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center text-slate-700 text-xs font-extrabold">
+                              {s.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
+                            </div>
+                            <div>
+                              <h5 className="font-bold text-slate-800 text-xs">{s.name}</h5>
+                              <p className="text-[10px] text-slate-400 font-mono mt-0.5">{s.rollNo}</p>
+                            </div>
+                          </div>
+                          
+                          {/* Financial validation check */}
+                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border flex items-center gap-1.5 ${
+                            hasDue 
+                              ? 'bg-amber-50 text-amber-600 border-amber-200' 
+                              : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                          }`}>
+                            <span className={`w-1 h-1 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                            {hasDue ? `₹${s.balanceDue} Due` : 'Paid Clear'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {currentStudentsList.length === 0 && (
+                      <div className="h-full flex flex-col justify-center items-center text-center text-slate-400 py-12">
+                        <User className="w-10 h-10 mb-2 opacity-30" />
+                        <p className="text-xs font-semibold">No students match filter criteria</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Center: Cascade Dot flow Animation Zone */}
+            <div className="w-20 bg-slate-50/50 flex flex-col items-center justify-center relative overflow-hidden select-none border-r border-slate-150">
+              
+              {/* Central flow graphic */}
+              <div className="h-28 w-1 border-l border-dashed border-slate-200 relative">
+                <div className="absolute inset-y-0 left-[-3px] flex flex-col justify-between">
+                  <span className="cascade-dot cascade-dot-1" />
+                  <span className="cascade-dot cascade-dot-2" />
+                  <span className="cascade-dot cascade-dot-3" />
+                  <span className="cascade-dot cascade-dot-4" />
+                  <span className="cascade-dot cascade-dot-5" />
+                </div>
+              </div>
+
+              <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm text-lg text-slate-400 my-4">
+                →
+              </div>
+
+              <div className="h-28 w-1 border-l border-dashed border-slate-200 relative">
+                <div className="absolute inset-y-0 left-[-3px] flex flex-col justify-between" style={{ transform: 'scaleY(-1)' }}>
+                  <span className="cascade-dot cascade-dot-1" />
+                  <span className="cascade-dot cascade-dot-2" />
+                  <span className="cascade-dot cascade-dot-3" />
+                  <span className="cascade-dot cascade-dot-4" />
+                  <span className="cascade-dot cascade-dot-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Card: Target Class Enrollment */}
+            <div className="flex-1 flex flex-col bg-slate-50/10">
+              <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm">{targetYearLabel}</h4>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">After Promotion</p>
+                </div>
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-lg">
+                  {targetTotalCount}
+                </span>
+              </div>
+
+              {/* Card List Body */}
+              <div className="p-4 overflow-y-auto flex-1 space-y-2.5 max-h-[380px]">
+                
+                {/* Summary View Projected */}
+                {!isDrilldown && (
+                  <>
+                    {filteredTargetSummary.map(item => (
+                      <div 
+                        key={`${item.className}-${item.section}`}
+                        className="flex justify-between items-center p-3.5 border border-slate-200 bg-white rounded-2xl animate-fade-in"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold bg-gradient-to-tr from-emerald-500 to-cyan-500">
+                            {item.className.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <h5 className="font-bold text-slate-800 text-sm">{item.className}</h5>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Section {item.section}</p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
+                          {item.studentCount} Students
+                        </span>
+                      </div>
+                    ))}
+                    {filteredTargetSummary.length === 0 && (
+                      <div className="h-full flex flex-col justify-center items-center text-center text-slate-400 py-12">
+                        <Users className="w-10 h-10 mb-2 opacity-30" />
+                        <p className="text-xs font-semibold">Staged vetted summaries will show here</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Drilldown View Projected */}
+                {isDrilldown && (
+                  <>
+                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 block">Target Enrollment Staged</h5>
+                    {selectedStudents.map(s => (
+                      <div 
+                        key={s.id}
+                        className="flex justify-between items-center p-3 border border-slate-200 bg-white rounded-2xl animate-fade-in"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-extrabold">
+                            {s.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
+                          </div>
+                          <div>
+                            <h5 className="font-bold text-slate-800 text-xs">{s.name}</h5>
+                            <p className="text-[10px] text-slate-400 font-medium mt-0.5">Target: {targetClass} ({targetSection || s.section})</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100">
+                          Ready
+                        </span>
+                      </div>
+                    ))}
+                    {selectedStudents.length === 0 && (
+                      <div className="h-full flex flex-col justify-center items-center text-center text-slate-400 py-12">
+                        <User className="w-10 h-10 mb-2 opacity-30" />
+                        <p className="text-xs font-semibold">Select candidates to show stage result</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Success Modal Overlay */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-400 to-cyan-400 flex items-center justify-center text-white text-3xl shadow-lg shadow-emerald-500/20 mb-6 animate-bounce">
+              ✨
+            </div>
+            
+            <h3 className="text-2xl font-extrabold text-slate-900 leading-tight mb-2">
+              Promotion Successful!
+            </h3>
+            
+            <p className="text-sm text-slate-500 font-medium leading-relaxed mb-6">
+              {successMessage}
+            </p>
+
+            <div className="grid grid-cols-2 gap-4 w-full bg-slate-50 p-4 border border-slate-150 rounded-2xl mb-6 text-xs text-slate-600">
+              <div className="text-center border-r border-slate-200">
+                <span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-1">Source Session</span>
+                <strong className="text-sm font-extrabold text-blue-600">{sourceYearLabel}</strong>
+              </div>
+              <div className="text-center">
+                <span className="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-1">Target Session</span>
+                <strong className="text-sm font-extrabold text-emerald-600">{targetYearLabel}</strong>
+              </div>
+            </div>
+
+            <button
+              onClick={closeSuccessModal}
+              className="w-full py-3 rounded-xl font-bold bg-[#2E5BFF] hover:bg-[#1E3FCC] text-white shadow-lg shadow-blue-500/10 transition-all cursor-pointer hover:-translate-y-0.5"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

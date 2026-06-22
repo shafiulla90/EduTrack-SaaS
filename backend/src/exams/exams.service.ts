@@ -1,0 +1,332 @@
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../prisma.service';
+import { TenantContext } from '../tenants/tenant.context';
+
+@Injectable()
+export class ExamsService {
+  constructor(private prisma: PrismaService) {}
+
+  private getTenantId(): string {
+    const tenantId = TenantContext.getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('No active school tenant context found');
+    }
+    return tenantId;
+  }
+
+  // ── EXAM MANAGEMENT ─────────────────────────────────────────────────────────
+
+  async createExam(name: string, type: string, classSectionId: string, date: Date) {
+    const tenantId = this.getTenantId();
+    return this.prisma.exam.create({
+      data: {
+        name,
+        type,
+        classSectionId,
+        date: new Date(date),
+        tenantId,
+      },
+    });
+  }
+
+  async getExams(classSectionId?: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.exam.findMany({
+      where: {
+        tenantId,
+        ...(classSectionId ? { classSectionId } : {}),
+      },
+      include: {
+        classSection: {
+          include: {
+            class: true,
+            section: true,
+          },
+        },
+      },
+      orderBy: { date: 'desc' },
+    });
+  }
+
+  // ── CUSTOM API ENDPOINTS FOR FRONTEND PARITY WITH SALESFORCE ────────────────
+
+  async getClasses() {
+    const tenantId = this.getTenantId();
+    const sections = await this.prisma.classSection.findMany({
+      where: { tenantId },
+      include: {
+        class: true,
+        section: true,
+      },
+      orderBy: [
+        { class: { name: 'asc' } },
+        { section: { name: 'asc' } },
+      ],
+    });
+
+    return sections.map((s) => ({
+      value: s.id,
+      label: `${s.class.name} - ${s.section.name}`,
+      displayName: `${s.class.name} - ${s.section.name}`,
+      classId: s.classId,
+      sectionId: s.sectionId,
+    }));
+  }
+
+  async getSubjects() {
+    const tenantId = this.getTenantId();
+    const subjects = await this.prisma.subject.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { name: 'asc' },
+    });
+
+    return subjects.map(s => ({
+      id: s.id,
+      name: s.name,
+      maxMarks: 100,
+      icon: s.name.substring(0, 1).toUpperCase(),
+    }));
+  }
+
+  async getExamTypes() {
+    return [
+      'First Term Mid-Term',
+      'Quarterly Session Exams',
+      'Final Semester Evaluation',
+      'Unit Test',
+    ];
+  }
+
+  // ── MARKS ENTRY & PROCESSING ───────────────────────────────────────────────
+
+  async getStudentsForMarksEntry(
+    subjectId: string,
+    examName: string,
+    classSectionId?: string,
+    examId?: string,
+  ) {
+    const tenantId = this.getTenantId();
+    let resolvedExamId = examId;
+    let resolvedClassSectionId = classSectionId;
+
+    if (!resolvedExamId && resolvedClassSectionId) {
+      const exam = await this.prisma.exam.findFirst({
+        where: {
+          tenantId,
+          classSectionId: resolvedClassSectionId,
+          name: examName,
+        },
+      });
+      if (exam) {
+        resolvedExamId = exam.id;
+      }
+    } else if (resolvedExamId && !resolvedClassSectionId) {
+      const exam = await this.prisma.exam.findUnique({
+        where: { id: resolvedExamId },
+      });
+      if (exam) {
+        resolvedClassSectionId = exam.classSectionId;
+      }
+    }
+
+    if (!resolvedClassSectionId) {
+      throw new BadRequestException('Could not resolve Class Section');
+    }
+
+    // Get all active students in the section
+    const students = await this.prisma.studentProfile.findMany({
+      where: {
+        classSectionId: resolvedClassSectionId,
+        user: { tenantId, isActive: true },
+      },
+      include: {
+        user: {
+          select: { name: true },
+        },
+      },
+      orderBy: { user: { name: 'asc' } },
+    });
+
+    // If resolvedExamId exists, load current marks
+    const marksMap = new Map<string, any>();
+    if (resolvedExamId) {
+      const currentMarks = await this.prisma.examMark.findMany({
+        where: {
+          tenantId,
+          examId: resolvedExamId,
+          subjectId,
+        },
+      });
+      for (const m of currentMarks) {
+        marksMap.set(m.studentId, m);
+      }
+    }
+
+    return students.map(s => {
+      const markRecord = marksMap.get(s.id);
+      return {
+        studentId: s.id,
+        name: s.user.name,
+        rollNo: s.rollNo || 'N/A',
+        hasMarks: !!markRecord,
+        marksObtained: markRecord ? Number(markRecord.marksObtained) : null,
+        remarks: markRecord ? markRecord.remarks : '',
+      };
+    });
+  }
+
+  async saveMarks(
+    marksDataList: any[],
+    examName: string,
+    classSectionId: string,
+    subjectId: string,
+  ) {
+    const tenantId = this.getTenantId();
+
+    return this.prisma.$transaction(async (tx) => {
+      // Find or create Exam
+      let exam = await tx.exam.findFirst({
+        where: {
+          tenantId,
+          classSectionId,
+          name: examName,
+        },
+      });
+
+      if (!exam) {
+        exam = await tx.exam.create({
+          data: {
+            name: examName,
+            type: examName,
+            classSectionId,
+            date: new Date(),
+            tenantId,
+          },
+        });
+      }
+
+      const results = [];
+      for (const row of marksDataList) {
+        const mark = await tx.examMark.upsert({
+          where: {
+            examId_studentId_subjectId: {
+              examId: exam.id,
+              studentId: row.studentId,
+              subjectId,
+            },
+          },
+          create: {
+            examId: exam.id,
+            studentId: row.studentId,
+            subjectId,
+            marksObtained: row.marksObtained,
+            remarks: row.remarks || null,
+            tenantId,
+          },
+          update: {
+            marksObtained: row.marksObtained,
+            remarks: row.remarks || null,
+          },
+        });
+        results.push(mark);
+      }
+      return results;
+    });
+  }
+
+  // ── GRADES & REPORT CARD COMPILATION ────────────────────────────────────────
+
+  private calculateGradeAndGPA(percentage: number) {
+    if (percentage >= 90) return { grade: 'A+', gpa: 4.0 };
+    if (percentage >= 80) return { grade: 'A', gpa: 3.5 };
+    if (percentage >= 70) return { grade: 'B', gpa: 3.0 };
+    if (percentage >= 60) return { grade: 'C', gpa: 2.0 };
+    if (percentage >= 50) return { grade: 'D', gpa: 1.0 };
+    return { grade: 'F', gpa: 0.0 };
+  }
+
+  async getGradesReport(classSectionId: string, examName: string) {
+    const tenantId = this.getTenantId();
+
+    const exam = await this.prisma.exam.findFirst({
+      where: {
+        tenantId,
+        classSectionId,
+        name: examName,
+      },
+    });
+
+    if (!exam) return [];
+
+    const marks = await this.prisma.examMark.findMany({
+      where: {
+        tenantId,
+        examId: exam.id,
+      },
+      include: {
+        student: {
+          include: {
+            user: { select: { name: true } },
+          },
+        },
+        subject: true,
+      },
+    });
+
+    // Group marks by student ID
+    const studentGrades = new Map<string, {
+      studentId: string;
+      name: string;
+      rollNo: string;
+      classSectionId: string;
+      scores: { [subjectName: string]: number };
+      totalMarks: number;
+      subjectsCount: number;
+      subjectsList: { name: string; score: number; max: number }[];
+    }>();
+
+    for (const m of marks) {
+      if (!studentGrades.has(m.studentId)) {
+        studentGrades.set(m.studentId, {
+          studentId: m.studentId,
+          name: m.student.user.name,
+          rollNo: m.student.rollNo || 'N/A',
+          classSectionId,
+          scores: {},
+          totalMarks: 0,
+          subjectsCount: 0,
+          subjectsList: [],
+        });
+      }
+      const record = studentGrades.get(m.studentId)!;
+      const score = Number(m.marksObtained);
+      record.scores[m.subject.name] = score;
+      record.totalMarks += score;
+      record.subjectsCount += 1;
+      record.subjectsList.push({
+        name: m.subject.name,
+        score,
+        max: 100,
+      });
+    }
+
+    const reportRows = Array.from(studentGrades.values()).map(r => {
+      const avg = r.subjectsCount > 0 ? r.totalMarks / r.subjectsCount : 0;
+      const { grade, gpa } = this.calculateGradeAndGPA(avg);
+      return {
+        ...r,
+        score: Number(avg.toFixed(0)), // Overall average percentage score
+        average: Number(avg.toFixed(2)),
+        grade,
+        gpa,
+      };
+    });
+
+    // Calculate Ranks based on total marks
+    reportRows.sort((a, b) => b.totalMarks - a.totalMarks);
+    return reportRows.map((row, idx) => ({
+      ...row,
+      rank: idx + 1,
+    }));
+  }
+}

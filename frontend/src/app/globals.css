@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 15, 23, 42;
+  --background-start-rgb: 248, 250, 252;
+  --background-end-rgb: 241, 245, 249;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 11, 15, 25;
+    --background-end-rgb: 17, 24, 39;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  min-height: 100vh;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-panel-light {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Replicate icon-svg behavior from LWC CSS */
+.icon-svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  transition: stroke 0.2s ease;
+}
+
+/* ---------------------------------------------------------------
+   Design System – curated HSL palette, gradients, glass‑morphism utilities
+   and micro‑animations for the EduTrack SaaS UI.
+--------------------------------------------------------------- */
+
+/* Primary colour palette – rich, harmonious hues */
+:root {
+  --color-primary-h: 224;   /* blue */
+  --color-primary-s: 68%;
+  --color-primary-l: 45%;
+  --color-primary: hsl(var(--color-primary-h), var(--color-primary-s), var(--color-primary-l));
+  --color-primary-dark: hsl(var(--color-primary-h), var(--color-primary-s), 35%);
+  --color-primary-light: hsl(var(--color-primary-h), var(--color-primary-s), 55%);
+
+  /* Accent palette */
+  --color-accent-h: 340;   /* rose */
+  --color-accent-s: 70%;
+  --color-accent-l: 55%;
+  --color-accent: hsl(var(--color-accent-h), var(--color-accent-s), var(--color-accent-l));
+
+  /* Neutral greys */
+  --color-gray-900: hsl(210, 10%, 10%);
+  --color-gray-800: hsl(210, 10%, 20%);
+  --color-gray-700: hsl(210, 10%, 30%);
+  --color-gray-600: hsl(210, 10%, 40%);
+  --color-gray-500: hsl(210, 10%, 50%);
+  --color-gray-400: hsl(210, 10%, 60%);
+  --color-gray-300: hsl(210, 10%, 70%);
+  --color-gray-200: hsl(210, 10%, 80%);
+  --color-gray-100: hsl(210, 10%, 90%);
+}
+
+/* Dark mode overrides */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: hsl(var(--color-primary-h), var(--color-primary-s), 65%);
+    --color-primary-dark: hsl(var(--color-primary-h), var(--color-primary-s), 55%);
+    --color-gray-900: hsl(210, 10%, 95%);
+    --color-gray-800: hsl(210, 10%, 90%);
+    --color-gray-700: hsl(210, 10%, 80%);
+  }
+}
+
+/* Gradient utilities – reusable */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary-dark));
+}
+.bg-gradient-accent {
+  background: linear-gradient(135deg, var(--color-accent), hsl(var(--color-accent-h), var(--color-accent-s), 70%));
+}
+
+/* Glass‑morphism base class – can be combined with bg‑gradient‑* */
+.glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+.glass:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Micro‑animation helpers */
+.transition-fast {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scale-hover:hover {
+  transform: scale(1.03);
+}
+
+/* Icon helper – matches the SVG styling used throughout the app */
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  transition: stroke 0.2s ease;
+}
+
+@layer components {
+  /* Button base – premium look */
+  .btn-primary {
+    @apply px-4 py-2 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-fast;
+  }
+  .btn-outline {
+    @apply px-4 py-2 rounded-xl border border-gray-200 text-gray-800 hover:bg-gray-100 transition-fast;
+  }
+
+  /* Header utilities – left‑aligned branding */
+  .header-brand {
+    @apply flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-gray-100;
+  }
+
+  /* Sidebar utilities – unified icon colour */
+  .sidebar-item {
+    @apply flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-primary-600 hover:scale-105 transition-fast;
+  }
+}
