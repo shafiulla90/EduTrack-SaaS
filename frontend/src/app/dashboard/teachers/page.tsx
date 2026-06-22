@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
 import { 
   Plus, X, Search, ChevronDown, ChevronUp, Users, 
   BookOpen, Grid3X3, BarChart3, Clock, Upload, 
@@ -71,6 +72,49 @@ export default function TeacherClassManagement() {
   const [classSearch, setClassSearch] = useState('');
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [selectedClass, setSelectedClass] = useState<ClassSection | null>(null);
+
+  const fetchClassAndTeacherData = async () => {
+    try {
+      // 1. Fetch teachers
+      const teacherRes = await api.get('/teachers');
+      if (teacherRes.data && teacherRes.data.length > 0) {
+        const mappedTeachers: Teacher[] = teacherRes.data.map((t: any, idx: number) => ({
+          id: t.id,
+          name: t.user.name,
+          initials: t.user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+          subjects: t.subjectsTaught || [],
+          classCount: t._count?.teacherAssignments || 0,
+          loadPercent: Math.min(100, (t._count?.teacherAssignments || 0) * 15),
+          gradient: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]
+        }));
+        setTeachers(mappedTeachers);
+      } else {
+        setTeachers(initialTeachers);
+      }
+
+      // 2. Fetch ClassSections
+      const classSectionRes = await api.get('/academics/class-sections');
+      if (classSectionRes.data && classSectionRes.data.length > 0) {
+        const mappedClasses: ClassSection[] = classSectionRes.data.map((cs: any) => ({
+          id: cs.id,
+          name: `${cs.class.name} - ${cs.section.name}`,
+          academicYear: cs.class.academicYear?.name || '2026-2027',
+          subjectCount: cs._count?.classSubjects || 0,
+          staffedCount: cs._count?.teacherAssigns || 0,
+          loadPercent: cs._count?.classSubjects > 0 ? Math.round((cs._count?.teacherAssigns / cs._count?.classSubjects) * 100) : 0
+        }));
+        setClasses(mappedClasses);
+      } else {
+        setClasses(initialClasses);
+      }
+    } catch (err) {
+      console.error('Failed to fetch teachers or classes:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchClassAndTeacherData();
+  }, []);
 
   // Modals
   const [showAddTeacher, setShowAddTeacher] = useState(false);
@@ -156,26 +200,37 @@ export default function TeacherClassManagement() {
     ? Math.round(teachers.reduce((s, t) => s + t.loadPercent, 0) / teachers.length)
     : 0;
 
-  const handleSaveTeacher = (e: React.FormEvent) => {
+  const handleSaveTeacher = async (e: React.FormEvent) => {
     e.preventDefault();
-    const t: Teacher = {
-      id: `t-${Date.now()}`,
-      name: `${newTeacher.firstName} ${newTeacher.lastName}`.toUpperCase(),
-      initials: (newTeacher.firstName[0] || 'T') + (newTeacher.lastName[0] || 'E'),
-      subjects: newTeacher.skills.map(s => s.subject).filter(Boolean),
-      classCount: 0,
-      loadPercent: 0,
-      gradient: AVATAR_GRADIENTS[teachers.length % AVATAR_GRADIENTS.length]
-    };
-    setTeachers([...teachers, t]);
-    setShowAddTeacher(false);
-    setNewTeacher({
-      firstName: '', lastName: '', email: '', phone: '', gender: '',
-      dob: '', qualification: '', joiningDate: '', address: '',
-      basicSalary: 30000, hra: 3600, da: 2400, pf: 1500,
-      accountNumber: '', ifsc: '',
-      skills: [{ subject: '', level: 'Expert', exp: 0 }]
-    });
+    try {
+      const payload = {
+        name: `${newTeacher.firstName} ${newTeacher.lastName}`.toUpperCase(),
+        email: newTeacher.email,
+        phone: newTeacher.phone,
+        qualification: newTeacher.qualification,
+        basicSalary: Number(newTeacher.basicSalary),
+        subjectsTaught: newTeacher.skills.map(s => s.subject).filter(Boolean),
+      };
+      await api.post('/teachers', payload);
+
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+
+      // Reload items
+      await fetchClassAndTeacherData();
+
+      setShowAddTeacher(false);
+      setNewTeacher({
+        firstName: '', lastName: '', email: '', phone: '', gender: '',
+        dob: '', qualification: '', joiningDate: '', address: '',
+        basicSalary: 30000, hra: 3600, da: 2400, pf: 1500,
+        accountNumber: '', ifsc: '',
+        skills: [{ subject: '', level: 'Expert', exp: 0 }]
+      });
+    } catch (err: any) {
+      console.error('Error saving teacher:', err);
+      alert('Failed to save teacher: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   const handleSaveSubjects = () => {
@@ -184,11 +239,53 @@ export default function TeacherClassManagement() {
     setSubjects([{ id: 1, name: '' }]);
   };
 
-  const handleSaveClass = () => {
+  const handleSaveClass = async () => {
     if (!newClassName.trim()) { alert('Enter a class name'); return; }
-    alert(`✅ Class "${newClassName}" created successfully!`);
-    setShowCreateClass(false);
-    setNewClassName('');
+    try {
+      // 1. Fetch active academic year
+      const yearsRes = await api.get('/academics/academic-years');
+      const activeYear = yearsRes.data.find((y: any) => y.isActive) || yearsRes.data[0];
+      if (!activeYear) {
+        alert('No active academic year found. Please configure settings first.');
+        return;
+      }
+
+      // 2. Create the Class
+      const newClassRes = await api.post('/academics/classes', {
+        name: newClassName.trim(),
+        academicYearId: activeYear.id,
+      });
+      const newClass = newClassRes.data;
+
+      // 3. Find or create default section
+      const sectionRes = await api.get('/academics/sections');
+      let defaultSection = sectionRes.data.find((s: any) => s.name === 'Section A') || sectionRes.data[0];
+      
+      if (!defaultSection) {
+        const defaultSecRes = await api.post('/academics/sections', {
+          name: 'Section A',
+        });
+        defaultSection = defaultSecRes.data;
+      }
+
+      // 4. Create class section junction
+      await api.post('/academics/class-sections', {
+        classId: newClass.id,
+        sectionId: defaultSection.id,
+      });
+
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+
+      // Reload list
+      await fetchClassAndTeacherData();
+
+      setShowCreateClass(false);
+      setNewClassName('');
+    } catch (err: any) {
+      console.error('Error saving class:', err);
+      alert('Failed to save class: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   const handleSaveSection = () => {

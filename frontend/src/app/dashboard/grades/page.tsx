@@ -7,6 +7,7 @@ import {
   Download, Printer
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTenant } from '../../providers/TenantContext';
 
 interface GradeRecord {
   studentId: string;
@@ -30,6 +31,7 @@ type ClassSectionOption = {
 
 export default function GradesMarksPage() {
   const [search, setSearch] = useState('');
+  const { schoolName } = useTenant();
   
   // Metadata options
   const [classes, setClasses] = useState<ClassSectionOption[]>([]);
@@ -333,7 +335,7 @@ export default function GradesMarksPage() {
 
             {/* School details banner */}
             <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-2 text-xs">
-              <div className="text-center font-bold text-slate-700 text-sm">ST. ANNE'S HIGH SCHOOL</div>
+              <div className="text-center font-bold text-slate-700 text-sm">{schoolName}</div>
               <div className="grid grid-cols-2 gap-2 text-slate-600 font-semibold pt-2 border-t border-slate-200/50">
                 <div>Student Name: <strong className="text-slate-800 font-extrabold block">{activeReportStudent.name}</strong></div>
                 <div>Roll Number: <strong className="text-slate-800 font-mono font-extrabold block">{activeReportStudent.rollNo}</strong></div>

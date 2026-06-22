@@ -36,9 +36,20 @@ export class SchoolSetupController {
       }
     }
 
-    const setup = await this.prisma.schoolSetup.update({
+    const setup = await this.prisma.schoolSetup.upsert({
       where: { tenantId },
-      data: updateData,
+      update: updateData,
+      create: {
+        tenantId,
+        schoolName: updateData.schoolName || '',
+        schoolType: updateData.schoolType || 'School',
+        adminName: updateData.adminName || '',
+        mobileNumber: updateData.mobileNumber || '',
+        email: updateData.email || '',
+        address: updateData.address || '',
+        academicYear: updateData.academicYear || '',
+        ...updateData,
+      },
     });
 
     // Check if the setup is fully completed (all 13 profile fields are filled)
@@ -82,6 +93,19 @@ export class SchoolSetupController {
         logoUrl: setup.schoolLogo,
       },
     });
+
+    // Sync admin name to User table for SCHOOL_ADMIN
+    if (setup.adminName) {
+      await this.prisma.user.updateMany({
+        where: {
+          tenantId,
+          role: 'SCHOOL_ADMIN',
+        },
+        data: {
+          name: setup.adminName,
+        },
+      });
+    }
 
     return {
       success: true,

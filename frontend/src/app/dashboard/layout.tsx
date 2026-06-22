@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTenant } from '../providers/TenantContext';
 
 export default function DashboardLayout({
   children,
@@ -12,6 +13,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const { schoolName, adminName, logoUrl } = useTenant();
 
   // Categories as defined in eduProDashboard.html
   const navSections = [
@@ -266,15 +268,19 @@ export default function DashboardLayout({
 
           {/* Center: logo and school name (ST. ANNE'S HIGH SCHOOL) */}
           <div className="absolute left-[45%] lg:left-[43%] xl:left-[44%] top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 px-4 text-center">
-            <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0">
-              <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
-                <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
-                <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
-              </svg>
+            <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
+              {logoUrl ? (
+                <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
+              ) : (
+                <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
+                  <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
+                  <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
+                </svg>
+              )}
             </div>
             <div className="hidden md:block text-left">
               <h1 className="font-extrabold text-[14px] text-indigo-900 leading-none uppercase tracking-wide">
-                ST. ANNE'S HIGH SCHOOL
+                {schoolName}
               </h1>
               <p className="text-[9px] text-slate-400 font-bold tracking-wider uppercase mt-0.5">
                 Building Excellence for Futures
@@ -286,11 +292,11 @@ export default function DashboardLayout({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-slate-50 cursor-pointer">
               <div className="text-right">
-                <p className="text-[13px] font-semibold text-slate-800 leading-none">Sarah Jenkins</p>
+                <p className="text-[13px] font-semibold text-slate-800 leading-none">{adminName}</p>
                 <p className="text-[11px] text-slate-400 font-medium mt-1">Admin</p>
               </div>
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-sm">
-                SJ
+                {adminName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
             </div>
           </div>
@@ -311,15 +317,19 @@ export default function DashboardLayout({
           <div className="w-[280px] bg-white h-full py-6 select-none overflow-y-auto flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-3 px-6 mb-6">
-                <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0">
-                  <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
-                    <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
-                    <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
-                  </svg>
+                <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
+                  ) : (
+                    <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
+                      <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
+                      <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
+                    </svg>
+                  )}
                 </div>
                 <div>
                   <h1 className="font-extrabold text-[14px] text-indigo-900 leading-none uppercase tracking-wide">
-                    ST. ANNE'S HIGH SCHOOL
+                    {schoolName}
                   </h1>
                 </div>
               </div>

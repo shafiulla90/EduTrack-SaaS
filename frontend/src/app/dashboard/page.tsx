@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { mockStudents } from '@/lib/mockData';
+// Mock data removed – real data should be fetched via API
 import BulkImportModal from '@/components/BulkImportModal';
 import { api } from '@/lib/api';
 
@@ -26,13 +26,10 @@ export default function DashboardOverview() {
   }, []);
 
   // Dynamic calculations from database if loaded, otherwise mockData
-  const totalStudents = setupStatus !== null ? setupStatus.studentsCount : mockStudents.length;
-  
-  // Format revenue formatted in Lacs if > 100,000
-  const rawRevenue = mockStudents.reduce((sum, s) => sum + s.paidAmount, 0);
-  const totalRevenue = rawRevenue > 100000 
-    ? '₹' + (rawRevenue / 100000).toFixed(1) + 'L'
-    : '₹' + rawRevenue.toLocaleString();
+  const totalStudents = setupStatus?.studentsCount ?? 0;
+
+  // Placeholder total revenue – replace with actual revenue calculation when API available
+  const totalRevenue = '₹0';
 
   // Trends mapped exactly from LWC defaults
   const studentTrend = { value: '12.4%', isUp: true };
@@ -41,25 +38,10 @@ export default function DashboardOverview() {
   const scoreTrend = { value: '0.8%', isUp: false };
 
   // Recent Admissions List
-  const recentAdmissions = mockStudents.slice(0, 15).map((student, idx) => ({
-    id: student.id,
-    name: student.name,
-    avatar: student.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
-    class: student.class + ' - ' + student.section.replace('Section ', ''),
-    status: 'Active'
-  }));
+  const recentAdmissions: any[] = [];
 
   // Payment Overview List
-  const paymentOverview = mockStudents.filter(s => s.paidAmount > 0).slice(0, 15).map((student, idx) => {
-    const isFull = student.balanceDue === 0;
-    return {
-      id: `INV-2026-${String(idx + 1).padStart(3, '0')}`,
-      name: `${student.name} - Tuition Fees`,
-      amount: '₹' + student.paidAmount.toLocaleString(),
-      status: isFull ? 'Paid' : 'Partial',
-      statusClass: isFull ? 'badge-status badge-paid' : 'badge-status badge-partial'
-    };
-  });
+  const paymentOverview: any[] = [];
 
   const displayAdmissions = recentAdmissions.slice(0, admissionsLimit);
   const displayPayments = paymentOverview.slice(0, paymentsLimit);
@@ -129,7 +111,7 @@ export default function DashboardOverview() {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/dashboard/setup-checklist"
+              href="/dashboard/settings?tab=school-profile"
               className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-amber-500/10 transition-all"
             >
               Complete Setup
@@ -182,7 +164,7 @@ export default function DashboardOverview() {
                   {setupStatus.setupCompleted ? 'Completed' : 'Complete Profile'}
                 </div>
                 {!setupStatus.setupCompleted && (
-                  <Link href="/dashboard/setup-checklist" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                  <Link href="/dashboard/settings?tab=school-profile" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
                     Complete now
                   </Link>
                 )}
@@ -199,7 +181,7 @@ export default function DashboardOverview() {
                 <div className="text-xs font-semibold text-slate-800 mt-0.5">
                   {setupStatus.classesCount > 0 ? `${setupStatus.classesCount} Active Class(es)` : 'No classes added'}
                 </div>
-                <Link href="/dashboard/timetable" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                <Link href="/dashboard/teachers" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
                   Add Classes
                 </Link>
               </div>

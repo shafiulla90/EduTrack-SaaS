@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { api } from '@/lib/api';
 import { 
   Building2, Landmark, CheckCircle, Save, QrCode, 
   Plus, Trash2, Calendar, ShieldAlert, Globe, Link as LinkIcon 
@@ -25,7 +27,16 @@ interface AcademicTerm {
 }
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<'profile' | 'banking' | 'upi' | 'terms'>('profile');
+
+  useEffect(() => {
+    if (tabParam === 'school-profile') {
+      setActiveTab('profile');
+    }
+  }, [tabParam]);
+
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [alertText, setAlertText] = useState('');
 
@@ -37,6 +48,34 @@ export default function SettingsPage() {
   const [schoolAddress, setSchoolAddress] = useState('Plot No. 24, Vikas Marg, Sector 9, Rohini, New Delhi, India');
   const [schoolLogo, setSchoolLogo] = useState('https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=200');
   const [subdomain, setSubdomain] = useState('vikas-edu');
+
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [setupData, setSetupData] = useState<any>(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const response = await api.get('/tenant/setup-status');
+        const data = response.data;
+        setSetupData(data);
+        if (data.setup) {
+          setSchoolName(data.setup.schoolName || '');
+          setSchoolEmail(data.setup.email || '');
+          setSchoolPhone(data.setup.mobileNumber || '');
+          setSchoolAddress(data.setup.address || '');
+          setSchoolLogo(data.setup.schoolLogo || '');
+          if (data.setup.tenant) {
+            setSubdomain(data.setup.tenant.subDomain || '');
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching settings school profile:', err);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+    loadProfile();
+  }, []);
 
   // 2. UPI Gateway Keys
   const [gpayId, setGpayId] = useState('gpay-vikas-edu@upi');
@@ -97,13 +136,31 @@ export default function SettingsPage() {
   const [newYearRange, setNewYearRange] = useState('');
 
   // Handle Save
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAlertText('School Setup org defaults successfully updated.');
-    setSaveSuccess(true);
-    setTimeout(() => {
-      setSaveSuccess(false);
-    }, 4000);
+    try {
+      const payload = {
+        schoolName,
+        email: schoolEmail,
+        address: schoolAddress,
+        schoolLogo,
+        mobileNumber: schoolPhone,
+      };
+
+      await api.put('/school-setup', payload);
+      setAlertText('School Setup org defaults successfully updated.');
+      setSaveSuccess(true);
+
+      // Dispatch event to refresh branding instantly
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 4000);
+    } catch (err: any) {
+      console.error('Error saving settings profile:', err);
+      alert('Failed to save configuration settings: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   // Add Bank Account Row

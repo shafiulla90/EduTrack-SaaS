@@ -84,6 +84,9 @@ export default function SetupChecklistPage() {
       await api.put('/school-setup', formData);
       setSuccess('School setup updated successfully!');
       
+      // Dispatch custom event for real-time branding update
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+
       // Refresh status to update percentage/checklist status
       await fetchStatus();
 

@@ -51,6 +51,7 @@ export class TenantController {
 
     const setup = await this.prisma.schoolSetup.findUnique({
       where: { tenantId },
+      include: { tenant: true },
     });
 
     if (!setup) {
