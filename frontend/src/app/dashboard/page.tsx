@@ -1,17 +1,32 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { mockStudents } from '@/lib/mockData';
 import BulkImportModal from '@/components/BulkImportModal';
+import { api } from '@/lib/api';
 
 export default function DashboardOverview() {
   const [admissionsLimit, setAdmissionsLimit] = useState(5);
   const [paymentsLimit, setPaymentsLimit] = useState(5);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [setupStatus, setSetupStatus] = useState<any>(null);
+  const [showBanner, setShowBanner] = useState(true);
 
-  // Dynamic calculations from mockData
-  const totalStudents = mockStudents.length;
+  useEffect(() => {
+    const getStatus = async () => {
+      try {
+        const res = await api.get('/tenant/setup-status');
+        setSetupStatus(res.data);
+      } catch (err) {
+        console.error('Failed to load setup status', err);
+      }
+    };
+    getStatus();
+  }, []);
+
+  // Dynamic calculations from database if loaded, otherwise mockData
+  const totalStudents = setupStatus !== null ? setupStatus.studentsCount : mockStudents.length;
   
   // Format revenue formatted in Lacs if > 100,000
   const rawRevenue = mockStudents.reduce((sum, s) => sum + s.paidAmount, 0);
@@ -94,6 +109,136 @@ export default function DashboardOverview() {
           </button>
         </div>
       </div>
+
+      {setupStatus && !setupStatus.setupCompleted && showBanner && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm relative">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" strokeWidth="2"></circle>
+                <line x1="12" y1="8" x2="12" y2="12" strokeWidth="2"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="2"></line>
+              </svg>
+            </div>
+            <div>
+              <h4 className="font-bold text-amber-800 text-sm">School Setup Incomplete</h4>
+              <p className="text-amber-700 text-xs mt-0.5 font-light">
+                Complete the remaining school profile details to finish activation of your cloud instance.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/setup-checklist"
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-amber-500/10 transition-all"
+            >
+              Complete Setup
+            </Link>
+            <button
+              onClick={() => setShowBanner(false)}
+              className="text-amber-400 hover:text-amber-600 transition-colors p-1 cursor-pointer"
+            >
+              <svg className="w-4 h-4 stroke-current fill-none" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18" strokeWidth="2"></line>
+                <line x1="6" y1="6" x2="18" y2="18" strokeWidth="2"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {setupStatus && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4">
+            <svg className="w-5 h-5 stroke-blue-600 fill-none" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" strokeWidth="2"></circle>
+              <polyline points="12 6 12 12 16 14" strokeWidth="2"></polyline>
+            </svg>
+            Instance Setup Progress
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Completion Rate */}
+            <div className="bg-slate-50 border border-slate-200/50 p-4 rounded-xl flex items-center gap-4">
+              <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle cx="24" cy="24" r="20" stroke="#e2e8f0" strokeWidth="3.5" fill="transparent" />
+                  <circle
+                    cx="24"
+                    cy="24"
+                    r="20"
+                    stroke="#2563eb"
+                    strokeWidth="3.5"
+                    fill="transparent"
+                    strokeDasharray={`${2 * Math.PI * 20}`}
+                    strokeDashoffset={`${2 * Math.PI * 20 * (1 - setupStatus.completionPercentage / 100)}`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className="absolute text-[11px] font-bold text-slate-700">{setupStatus.completionPercentage}%</span>
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Profile Setup</div>
+                <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                  {setupStatus.setupCompleted ? 'Completed' : 'Complete Profile'}
+                </div>
+                {!setupStatus.setupCompleted && (
+                  <Link href="/dashboard/setup-checklist" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                    Complete now
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {/* Classes Created */}
+            <div className="bg-slate-50 border border-slate-200/50 p-4 rounded-xl flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-lg shrink-0">
+                {setupStatus.classesCount}
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Classes Created</div>
+                <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                  {setupStatus.classesCount > 0 ? `${setupStatus.classesCount} Active Class(es)` : 'No classes added'}
+                </div>
+                <Link href="/dashboard/timetable" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                  Add Classes
+                </Link>
+              </div>
+            </div>
+
+            {/* Teachers Added */}
+            <div className="bg-slate-50 border border-slate-200/50 p-4 rounded-xl flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-lg shrink-0">
+                {setupStatus.teachersCount}
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Teachers Added</div>
+                <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                  {setupStatus.teachersCount > 0 ? `${setupStatus.teachersCount} Faculty Registered` : 'No faculty added'}
+                </div>
+                <Link href="/dashboard/teachers" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                  Add Teachers
+                </Link>
+              </div>
+            </div>
+
+            {/* Students Added */}
+            <div className="bg-slate-50 border border-slate-200/50 p-4 rounded-xl flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg shrink-0">
+                {setupStatus.studentsCount}
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Students Added</div>
+                <div className="text-xs font-semibold text-slate-800 mt-0.5">
+                  {setupStatus.studentsCount > 0 ? `${setupStatus.studentsCount} Active Student(s)` : 'No students added'}
+                </div>
+                <Link href="/dashboard/admissions" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                  New Admission
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* STATS GRID - Replicates exactly the blue/green/purple/orange design cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

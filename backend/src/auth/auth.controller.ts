@@ -7,6 +7,22 @@ import { TenantContext } from '../tenants/tenant.context';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  @Post('send-otp')
+  async sendOtp(@Body('phone') phone: string) {
+    if (!phone) {
+      throw new BadRequestException('Phone number is required');
+    }
+    return this.authService.sendOtp(phone);
+  }
+
+  @Post('verify-otp')
+  async verifyOtp(@Body('phone') phone: string, @Body('otpCode') otpCode: string) {
+    if (!phone || !otpCode) {
+      throw new BadRequestException('Phone number and OTP code are required');
+    }
+    return this.authService.verifyOtp(phone, otpCode);
+  }
+
   @Post('login')
   async login(@Body() body: any) {
     const user = await this.authService.validateUser(body.email, body.password);

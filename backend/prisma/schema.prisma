@@ -108,6 +108,7 @@ model Tenant {
 
   // New relation for BehaviorCase
   behaviorCases   BehaviorCase[]
+  schoolSetup     SchoolSetup?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -115,11 +116,11 @@ model Tenant {
 
 model User {
   id             String         @id @default(uuid())
-  email          String         @unique
+  email          String?        @unique
   passwordHash   String
   name           String
   role           Role
-  phone          String?
+  phone          String?        @unique
   isActive       Boolean        @default(true)
   tenantId       String
   tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -672,4 +673,38 @@ model BehaviorCase {
 
   @@index([tenantId, studentId])
 }
+
+model OtpRequest {
+  id        String   @id @default(uuid())
+  phone     String
+  otpCode   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
+
+model SchoolSetup {
+  id                String   @id @default(uuid())
+  tenantId          String   @unique
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schoolName        String
+  schoolType        String   // "School", "College", "University"
+  adminName         String
+  mobileNumber      String
+  email             String
+  address           String
+  academicYear      String
+  principalName     String   @default("")
+  country           String   @default("")
+  state             String   @default("")
+  district          String   @default("")
+  city              String   @default("")
+  postalCode        String   @default("")
+  schoolLogo        String?
+  isCompleted       Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
 

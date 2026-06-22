@@ -75,7 +75,7 @@ export default function LandingPage() {
             return (
               <Link
                 key={idx}
-                href="/dashboard"
+                href="/auth/login"
                 className="glass-card p-6 rounded-2xl text-left flex gap-5 cursor-pointer relative group"
               >
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-tr ${role.color} flex items-center justify-center text-white shrink-0 shadow-md group-hover:scale-105 transition-transform`}>

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { Tenant } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class TenantsService {
@@ -53,4 +54,95 @@ export class TenantsService {
       data,
     });
   }
+
+  async registerTenant(data: any): Promise<any> {
+    const slug = data.schoolName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    let subDomain = slug;
+    let exists = await this.prisma.tenant.findUnique({ where: { subDomain } });
+    let counter = 1;
+    while (exists) {
+      subDomain = `${slug}-${counter}`;
+      exists = await this.prisma.tenant.findUnique({ where: { subDomain } });
+      counter++;
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Create Tenant
+      const tenant = await tx.tenant.create({
+        data: {
+          name: data.schoolName,
+          subDomain,
+          address: data.address,
+          email: data.email,
+          phone: data.mobileNumber,
+          setupCompleted: false,
+        },
+      });
+
+      // 2. Create SchoolSetup
+      const schoolSetup = await tx.schoolSetup.create({
+        data: {
+          tenantId: tenant.id,
+          schoolName: data.schoolName,
+          schoolType: data.schoolType,
+          adminName: data.adminName,
+          mobileNumber: data.mobileNumber,
+          email: data.email,
+          address: data.address,
+          academicYear: data.academicYear,
+        },
+      });
+
+      // 3. Create default active AcademicYear
+      const currentYear = new Date().getFullYear();
+      const startDate = new Date(`${currentYear}-06-01`);
+      const endDate = new Date(`${currentYear + 1}-05-31`);
+
+      const academicYear = await tx.academicYear.create({
+        data: {
+          name: data.academicYear,
+          startDate,
+          endDate,
+          isActive: true,
+          tenantId: tenant.id,
+        },
+      });
+
+      // 4. Create default Tenant Admin User (SCHOOL_ADMIN)
+      const randomPassword = Math.random().toString(36).slice(-10) + '!A1';
+      const passwordHash = await bcrypt.hash(randomPassword, 10);
+
+      const user = await tx.user.create({
+        data: {
+          name: data.adminName,
+          email: data.email,
+          phone: data.mobileNumber,
+          passwordHash,
+          role: 'SCHOOL_ADMIN',
+          tenantId: tenant.id,
+        },
+      });
+
+      // 5. Create default StaffProfile for the Admin user
+      await tx.staffProfile.create({
+        data: {
+          userId: user.id,
+          designation: 'Principal',
+          status: 'Active',
+        },
+      });
+
+      return {
+        tenant,
+        schoolSetup,
+        academicYear,
+        user,
+      };
+    });
+  }
 }
+

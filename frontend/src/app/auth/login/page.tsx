@@ -1,0 +1,118 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Phone, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { api } from '@/lib/api';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // Basic Indian/International mobile number validation
+    const cleanedPhone = phone.trim().replace(/[\s\-()]/g, '');
+    if (!cleanedPhone || cleanedPhone.length < 10) {
+      setError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await api.post('/auth/send-otp', { phone: cleanedPhone });
+      // In development, the API will return the OTP code for convenience
+      const otpCode = response.data?.otpCode;
+      
+      // Navigate to verification screen
+      router.push(`/auth/otp?phone=${encodeURIComponent(cleanedPhone)}${otpCode ? `&dev_otp=${otpCode}` : ''}`);
+    } catch (err: any) {
+      console.error('Send OTP error:', err);
+      setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+      {/* Background Ornaments */}
+      <div className="absolute top-[20%] left-[10%] w-[300px] h-[300px] rounded-full bg-brand-500/10 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[20%] right-[10%] w-[300px] h-[300px] rounded-full bg-indigo-500/10 blur-[100px] pointer-events-none" />
+
+      {/* Main Card */}
+      <div className="w-full max-w-md z-10">
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+              <span className="font-extrabold text-white text-xl tracking-tight">ET</span>
+            </div>
+            <span className="font-bold text-xl bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
+              EduTrack <span className="text-brand-400 font-medium text-xs px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20 ml-1">SaaS</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl relative">
+          <div className="mb-6 text-center">
+            <h2 className="text-2xl font-bold text-white tracking-tight">OTP Authentication</h2>
+            <p className="text-slate-400 text-sm mt-1.5 font-light">
+              Enter your mobile phone number to log in or register.
+            </p>
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2.5 p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs mb-5">
+              <AlertCircle className="w-4.5 h-4.5 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="phone" className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Mobile Number
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <Phone className="w-4.5 h-4.5" />
+                </div>
+                <input
+                  type="tel"
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. 9876543210"
+                  className="block w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500 text-sm transition-all font-light"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-slate-950 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sending OTP...
+                </>
+              ) : (
+                <>
+                  Get OTP Code
+                  <ArrowRight className="w-4.5 h-4.5" />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+  );
+}

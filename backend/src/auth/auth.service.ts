@@ -40,6 +40,68 @@ export class AuthService {
     };
   }
 
+  async sendOtp(phone: string): Promise<{ success: boolean; message: string; otpCode?: string }> {
+    const otpCode = process.env.NODE_ENV === 'production'
+      ? Math.floor(100000 + Math.random() * 900000).toString()
+      : '123456'; // Static fallback for dev/testing
+
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+    await this.prisma.otpRequest.create({
+      data: {
+        phone,
+        otpCode,
+        expiresAt,
+      },
+    });
+
+    console.log(`[OTP DISPATCH] Phone: ${phone} | Code: ${otpCode}`);
+
+    return {
+      success: true,
+      message: 'OTP sent successfully',
+      ...(process.env.NODE_ENV !== 'production' ? { otpCode } : {}),
+    };
+  }
+
+  async verifyOtp(phone: string, otpCode: string): Promise<any> {
+    const request = await this.prisma.otpRequest.findFirst({
+      where: {
+        phone,
+        otpCode,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!request) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+
+    // Clean up used OTP
+    await this.prisma.otpRequest.delete({
+      where: { id: request.id },
+    }).catch(() => {}); // ignore cleanup error if any
+
+    const user = await this.prisma.user.findUnique({
+      where: { phone },
+    });
+
+    if (!user) {
+      return {
+        registered: false,
+        phone,
+      };
+    }
+
+    const loginResult = await this.login(user);
+    return {
+      registered: true,
+      ...loginResult,
+    };
+  }
+
   async register(data: any, tenantId: string) {
     const emailLower = data.email.toLowerCase().trim();
     const existing = await this.prisma.user.findUnique({
