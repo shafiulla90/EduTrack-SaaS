@@ -29,28 +29,19 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor to handle 401 and auto-authenticate in dev mode
+// Interceptor to handle 401 and redirect to login
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      try {
-        // Auto login with seed credentials
-        const loginRes = await axios.post(`${BACKEND_URL}/auth/login`, {
-          email: 'admin@demoschool.com',
-          password: 'Password@123',
-        });
-        const token = loginRes.data.access_token || loginRes.data.accessToken;
-        if (token && typeof window !== 'undefined') {
-          localStorage.setItem('token', token);
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          originalRequest.headers['Authorization'] = `Bearer ${token}`;
-          return api(originalRequest);
+    if (error.response?.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('tenantId');
+        // Prevent redirect loop if already on login, otp, or onboarding pages
+        const path = window.location.pathname;
+        if (!path.includes('/auth/login') && !path.includes('/auth/otp') && !path.includes('/register-school')) {
+          window.location.href = '/auth/login';
         }
-      } catch (loginError) {
-        console.error('Auto login failed:', loginError);
       }
     }
     return Promise.reject(error);

@@ -1,148 +1,115 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, ArrowLeft, Plus, X, Phone, Mail, Award, Receipt, 
   CheckCircle, AlertTriangle, ChevronDown, ChevronUp, User, 
   MapPin, Calendar as CalendarIcon, DollarSign, BookOpen, ShieldAlert,
   Percent
 } from 'lucide-react';
-import { mockStudents, MockStudent, mockAcademicYears } from '@/lib/mockData';
+import { api } from '@/lib/api';
 
-// Dynamic mock details helper for students
-function getStudentDetails(student: MockStudent) {
-  // Determine if student has dues or discounts
-  const hasDues = student.balanceDue > 0;
-  const totalAllocated = student.paidAmount + student.balanceDue;
-  
-  // Custom mock data generated based on student id/info
-  const products = [
-    { id: 'prod-1', name: 'Tuition Fee (Annual)', price: totalAllocated * 0.7, grossTotal: totalAllocated * 0.7, discountPercent: 0, discountAmount: 0 },
-    { id: 'prod-2', name: 'Exam Fee', price: totalAllocated * 0.1, grossTotal: totalAllocated * 0.1, discountPercent: 0, discountAmount: 0 },
-    { id: 'prod-3', name: 'Lab & Computer Fees', price: totalAllocated * 0.15, grossTotal: totalAllocated * 0.15, discountPercent: 0, discountAmount: 0 },
-    { id: 'prod-4', name: 'Sports & Cultural Activities', price: totalAllocated * 0.05, grossTotal: totalAllocated * 0.05, discountPercent: 0, discountAmount: 0 },
-  ];
-
-  // Invoices list
-  const invoices = [
-    { 
-      id: `inv-${student.id}-1`, 
-      date: '2026-06-05', 
-      number: `INV-2026-${student.rollNo}-A`, 
-      mode: 'PhonePe UPI', 
-      amount: student.paidAmount, 
-      status: student.paidAmount > 0 ? 'Paid' : 'Pending', 
-      items: [
-        { name: 'Tuition Fee (Term 1)', amount: student.paidAmount * 0.8 },
-        { name: 'Exam Fee', amount: student.paidAmount * 0.2 }
-      ]
-    },
-    { 
-      id: `inv-${student.id}-2`, 
-      date: '2026-06-12', 
-      number: `INV-2026-${student.rollNo}-B`, 
-      mode: student.balanceDue === 0 ? 'GPay UPI' : '—', 
-      amount: student.balanceDue, 
-      status: student.balanceDue === 0 ? 'Paid' : 'Pending', 
-      items: [
-        { name: 'Tuition Fee (Term 2)', amount: student.balanceDue }
-      ]
-    }
-  ];
-
-  // Exams list
-  const exams = [
-    {
-      id: 'ex-1',
-      name: 'Unit Test I',
-      type: 'Unit Test',
-      score: '88%',
-      subjects: [
-        { name: 'Mathematics', score: 92, max: 100 },
-        { name: 'Physics', score: 85, max: 100 },
-        { name: 'Chemistry', score: 88, max: 100 },
-        { name: 'English', score: 87, max: 100 },
-      ]
-    },
-    {
-      id: 'ex-2',
-      name: 'Quarterly Evaluation',
-      type: 'Quarterly',
-      score: '84%',
-      subjects: [
-        { name: 'Mathematics', score: 88, max: 100 },
-        { name: 'Physics', score: 80, max: 100 },
-        { name: 'Chemistry', score: 82, max: 100 },
-        { name: 'English', score: 86, max: 100 },
-      ]
-    },
-    {
-      id: 'ex-3',
-      name: 'Final Semester Examination',
-      type: 'Final',
-      score: '86%',
-      subjects: [
-        { name: 'Mathematics', score: 90, max: 100 },
-        { name: 'Physics', score: 84, max: 100 },
-        { name: 'Chemistry', score: 85, max: 100 },
-        { name: 'English', score: 85, max: 100 },
-      ]
-    }
-  ];
-
-  // Disciplinary / Behavior Cases
-  const cases = student.id.charCodeAt(student.id.length - 1) % 2 === 0 ? [] : [
-    {
-      id: 'case-1',
-      type: 'Negative',
-      typeIcon: '⚠️',
-      subject: 'Late Submission of Physics Project',
-      priority: 'Medium',
-      status: 'Closed',
-      date: '2026-06-10',
-      description: 'Submitted term project 3 days past the final deadline. Deducted 5% marks and warned.'
-    },
-    {
-      id: 'case-2',
-      type: 'Positive',
-      typeIcon: '⭐',
-      subject: 'Outstanding Science Fair Coordinator',
-      priority: 'Low',
-      status: 'Open',
-      date: '2026-06-15',
-      description: 'Volunteered and excellently coordinated the class stalls for the science exposition.'
-    }
-  ];
-
-  return { products, invoices, exams, cases };
+interface Student {
+  id: string;
+  rollNo: string;
+  name: string;
+  email: string;
+  phone: string;
+  class: string;
+  section: string;
+  fatherName: string;
+  motherName: string;
+  aadharNo: string;
+  paidAmount: number;
+  balanceDue: number;
 }
 
 export default function StudentsDirectory() {
   const [search, setSearch] = useState('');
   const [selectedClass, setSelectedClass] = useState('All');
   const [selectedSection, setSelectedSection] = useState('All');
-  const [selectedYear, setSelectedYear] = useState('ay-1');
-  
+  const [selectedYear, setSelectedYear] = useState('');
+  const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [sections, setSections] = useState<any[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+
   // Selected student for Profile details (Full Page swap)
-  const [activeStudent, setActiveStudent] = useState<MockStudent | null>(null);
+  const [activeStudent, setActiveStudent] = useState<Student | null>(null);
+  const [activeStudentDetails, setActiveStudentDetails] = useState<any>(null);
   const [selectedExamTab, setSelectedExamTab] = useState<'Unit Test' | 'Quarterly' | 'Final'>('Unit Test');
   const [expandedInvoices, setExpandedInvoices] = useState<Record<string, boolean>>({});
   const [expandedExams, setExpandedExams] = useState<Record<string, boolean>>({});
   const [tempDiscount, setTempDiscount] = useState<number>(0);
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
 
-  // Filters calculation
-  const filteredStudents = mockStudents.filter((student) => {
-    const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase()) || 
-                          student.rollNo.includes(search) ||
-                          student.phone.includes(search) ||
-                          student.email.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesClass = selectedClass === 'All' || student.class === selectedClass;
-    const matchesSection = selectedSection === 'All' || student.section === selectedSection;
+  const loadFilterOptions = async () => {
+    try {
+      const [ayRes, classRes, secRes] = await Promise.all([
+        api.get('/academics/academic-years'),
+        api.get('/academics/classes'),
+        api.get('/academics/sections')
+      ]);
+      setAcademicYears(ayRes.data);
+      if (ayRes.data.length > 0) {
+        setSelectedYear(ayRes.data[0].id);
+      }
+      setClasses(classRes.data);
+      setSections(secRes.data);
+    } catch (err) {
+      console.error('Failed to load filter options:', err);
+    }
+  };
 
-    return matchesSearch && matchesClass && matchesSection;
-  });
+  const loadStudents = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/students');
+      setStudents(res.data.map((s: any) => {
+        const paid = s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount), 0) || 0;
+        const due = s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.remainingBalance), 0) || 0;
+        return {
+          id: s.id,
+          rollNo: s.rollNo || 'N/A',
+          name: s.user?.name || 'Unknown Student',
+          email: s.user?.email || 'N/A',
+          phone: s.user?.phone || 'N/A',
+          class: s.classSection?.class?.name || 'N/A',
+          section: s.classSection?.section?.name || 'N/A',
+          fatherName: s.fatherName || 'N/A',
+          motherName: s.motherName || 'N/A',
+          aadharNo: s.aadharNo || 'N/A',
+          paidAmount: paid,
+          balanceDue: due
+        };
+      }));
+    } catch (err) {
+      console.error('Failed to load students:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFilterOptions();
+    loadStudents();
+  }, []);
+
+  // Filters calculation
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase()) || 
+                            student.rollNo.toLowerCase().includes(search.toLowerCase()) ||
+                            student.phone.includes(search) ||
+                            student.email.toLowerCase().includes(search.toLowerCase());
+      
+      const matchesClass = selectedClass === 'All' || student.class === selectedClass;
+      const matchesSection = selectedSection === 'All' || student.section === selectedSection;
+
+      return matchesSearch && matchesClass && matchesSection;
+    });
+  }, [students, search, selectedClass, selectedSection]);
 
   const getInitials = (name: string) => {
     if (!name) return '?';
@@ -152,12 +119,91 @@ export default function StudentsDirectory() {
   };
 
   // Switch to detail view and load details
-  const handleViewDetails = (student: MockStudent) => {
-    setActiveStudent(student);
-    setExpandedInvoices({});
-    setExpandedExams({ 'ex-1': true }); // default expand first exam
-    setTempDiscount(0);
-    setAppliedDiscountPercent(0);
+  const handleViewDetails = async (student: Student) => {
+    try {
+      setLoading(true);
+      const [detailsRes, casesRes] = await Promise.all([
+        api.get(`/students/${student.id}`),
+        api.get(`/complaint-box/student-cases/${student.id}`)
+      ]);
+      
+      const data = detailsRes.data;
+      const casesData = casesRes.data;
+
+      // Group exams
+      const examsMap: Record<string, any> = {};
+      data.examMarks?.forEach((mark: any) => {
+        const exId = mark.exam.id;
+        if (!examsMap[exId]) {
+          examsMap[exId] = {
+            id: exId,
+            name: mark.exam.name,
+            type: mark.exam.type,
+            subjects: []
+          };
+        }
+        examsMap[exId].subjects.push({
+          name: mark.subject.name,
+          score: Number(mark.marksObtained),
+          max: 100
+        });
+      });
+
+      const exams = Object.values(examsMap).map((ex: any) => {
+        const total = ex.subjects.reduce((sum: number, s: any) => sum + s.score, 0);
+        const avg = ex.subjects.length > 0 ? (total / ex.subjects.length).toFixed(0) : '0';
+        return {
+          ...ex,
+          score: `${avg}%`
+        };
+      });
+
+      setActiveStudentDetails({
+        products: data.invoices?.flatMap((inv: any) => inv.invoiceItems?.map((it: any) => ({
+          id: it.id,
+          name: it.name,
+          price: Number(it.amount),
+          grossTotal: Number(it.amount),
+          discountPercent: 0,
+          discountAmount: 0,
+          netTotal: Number(it.amount)
+        }))) || [],
+        invoices: data.invoices?.map((inv: any) => ({
+          id: inv.id,
+          date: new Date(inv.invoiceDate).toISOString().split('T')[0],
+          number: `INV-${inv.id.substring(0, 8).toUpperCase()}`,
+          mode: inv.paymentMethod || '—',
+          amount: Number(inv.totalAmount),
+          status: inv.status === 'PAID' ? 'Paid' : 'Pending',
+          items: inv.invoiceItems?.map((it: any) => ({
+            name: it.name,
+            amount: Number(it.amount)
+          })) || []
+        })) || [],
+        exams,
+        cases: casesData.map((c: any) => ({
+          id: c.id,
+          type: c.behaviorType === 'Praise' ? 'Positive' : 'Negative',
+          typeIcon: c.behaviorType === 'Praise' ? '⭐' : '⚠️',
+          subject: c.category,
+          priority: c.priority,
+          status: c.status,
+          date: new Date(c.createdAt).toISOString().split('T')[0],
+          description: c.description || ''
+        }))
+      });
+
+      setActiveStudent(student);
+      setExpandedInvoices({});
+      setExpandedExams({});
+      setTempDiscount(0);
+      setAppliedDiscountPercent(0);
+    } catch (err) {
+      console.error('Failed to load student profile details:', err);
+      alert('Failed to load student details');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleApplyDiscount = () => {
@@ -178,7 +224,7 @@ export default function StudentsDirectory() {
   };
 
   // Detail rendering helpers
-  const detailData = activeStudent ? getStudentDetails(activeStudent) : null;
+  const detailData = activeStudentDetails;
   const isPaidClear = activeStudent ? activeStudent.balanceDue <= 0 : false;
 
   // Recalculated values based on discount
@@ -188,7 +234,7 @@ export default function StudentsDirectory() {
     const discAmt = baseTotal * (appliedDiscountPercent / 100);
     const finalVal = baseTotal - discAmt;
 
-    const list = detailData.products.map(p => {
+    const list = detailData.products.map((p: any) => {
       const price = p.price;
       const discountAmount = price * (appliedDiscountPercent / 100);
       const netTotal = price - discountAmount;
@@ -224,7 +270,7 @@ export default function StudentsDirectory() {
               </p>
             </div>
             <div className="text-slate-500 text-[12px] font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
-              Total Records Staged: <span className="text-[#2E5BFF] font-extrabold">{mockStudents.length}</span>
+              Total Records Staged: <span className="text-[#2E5BFF] font-extrabold">{students.length}</span>
             </div>
           </div>
 
@@ -247,11 +293,9 @@ export default function StudentsDirectory() {
               className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-[13px] font-semibold text-slate-700 focus:outline-none focus:border-[#2E5BFF] shadow-xs"
             >
               <option value="All">All Grades</option>
-              <option>Grade 10</option>
-              <option>Grade 9</option>
-              <option>Grade 8</option>
-              <option>Grade 11</option>
-              <option>Grade 12</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
             </select>
 
             <select
@@ -260,8 +304,9 @@ export default function StudentsDirectory() {
               className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-[13px] font-semibold text-slate-700 focus:outline-none focus:border-[#2E5BFF] shadow-xs"
             >
               <option value="All">All Sections</option>
-              <option>Section A</option>
-              <option>Section B</option>
+              {sections.map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
             </select>
           </div>
 
@@ -459,14 +504,15 @@ export default function StudentsDirectory() {
                     >
                       Save
                     </button>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(e.target.value)}
-                      className="border border-slate-200 rounded-lg p-1.5 text-xs text-slate-700 font-bold bg-white"
-                    >
-                      <option value="ay-1">2026-2027</option>
-                      <option value="ay-2">2025-2026</option>
-                    </select>
+                     <select
+                       value={selectedYear}
+                       onChange={(e) => setSelectedYear(e.target.value)}
+                       className="border border-slate-200 rounded-lg p-1.5 text-xs text-slate-700 font-bold bg-white"
+                     >
+                       {academicYears.map(ay => (
+                         <option key={ay.id} value={ay.id}>{ay.name}</option>
+                       ))}
+                     </select>
                   </div>
                 </div>
 
@@ -483,7 +529,7 @@ export default function StudentsDirectory() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
-                      {recFees.list.map((prod, idx) => (
+                      {recFees.list.map((prod: any, idx: number) => (
                         <tr key={prod.id}>
                           <td className="px-4 py-3 font-semibold text-slate-750">{prod.name}</td>
                           <td className="px-4 py-3 text-right font-mono">₹{prod.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
@@ -539,7 +585,7 @@ export default function StudentsDirectory() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs text-slate-600 font-medium">
-                      {detailData?.invoices.map((inv) => {
+                      {detailData?.invoices.map((inv: any) => {
                         const isExpanded = !!expandedInvoices[inv.id];
                         return (
                           <React.Fragment key={inv.id}>
@@ -571,7 +617,7 @@ export default function StudentsDirectory() {
                                 <td colSpan={6} className="px-6 py-3 border-t border-b border-slate-100">
                                   <div className="space-y-2 max-w-md">
                                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Particulars Breakdown:</div>
-                                    {inv.items.map((it, idx) => (
+                                    {inv.items.map((it: any, idx: number) => (
                                       <div key={idx} className="flex justify-between items-center text-xs">
                                         <span className="text-slate-500 font-semibold">{it.name}</span>
                                         <span className="text-slate-800 font-bold font-mono">₹{it.amount.toLocaleString()}</span>
@@ -650,8 +696,8 @@ export default function StudentsDirectory() {
                 {/* Exam Cards */}
                 <div className="space-y-3 pt-2">
                   {detailData?.exams
-                    .filter(ex => ex.type === selectedExamTab)
-                    .map((ex) => {
+                    .filter((ex: any) => ex.type === selectedExamTab)
+                    .map((ex: any) => {
                       const isExpanded = !!expandedExams[ex.id];
                       return (
                         <div key={ex.id} className="border border-slate-100 rounded-xl overflow-hidden">
@@ -671,7 +717,7 @@ export default function StudentsDirectory() {
                           
                           {isExpanded && (
                             <div className="p-3 border-t border-slate-100 bg-white space-y-2 text-xs">
-                              {ex.subjects.map((subj, idx) => (
+                              {ex.subjects.map((subj: any, idx: number) => (
                                 <div key={idx} className="flex justify-between items-center py-1 border-b border-slate-50 last:border-none">
                                   <span className="text-slate-500 font-semibold">{subj.name}</span>
                                   <span className="text-slate-800 font-extrabold font-mono">{subj.score} / {subj.max}</span>
@@ -694,7 +740,7 @@ export default function StudentsDirectory() {
 
                 {detailData && detailData.cases.length > 0 ? (
                   <div className="space-y-3">
-                    {detailData.cases.map((c) => (
+                    {detailData.cases.map((c: any) => (
                       <div key={c.id} className="border border-slate-100 rounded-xl p-3 bg-slate-50/30 space-y-2 text-xs">
                         <div className="flex justify-between items-start gap-2">
                           <span className="font-bold text-slate-750 leading-snug">{c.subject}</span>

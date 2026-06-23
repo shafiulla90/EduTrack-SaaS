@@ -26,7 +26,7 @@ interface AcademicTerm {
   isActive: boolean;
 }
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<'profile' | 'banking' | 'upi' | 'terms'>('profile');
@@ -41,16 +41,57 @@ export default function SettingsPage() {
   const [alertText, setAlertText] = useState('');
 
   // 1. School Profile Metadata
-  const [schoolName, setSchoolName] = useState('Vikas Senior Secondary School');
-  const [schoolSubtitle, setSchoolSubtitle] = useState('Inspiring Excellence, Nurturing Values');
-  const [schoolEmail, setSchoolEmail] = useState('contact@vikasschool.edu.in');
-  const [schoolPhone, setSchoolPhone] = useState('+91-11-27453300');
-  const [schoolAddress, setSchoolAddress] = useState('Plot No. 24, Vikas Marg, Sector 9, Rohini, New Delhi, India');
-  const [schoolLogo, setSchoolLogo] = useState('https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&q=80&w=200');
-  const [subdomain, setSubdomain] = useState('vikas-edu');
+  const [schoolName, setSchoolName] = useState('');
+  const [schoolSubtitle, setSchoolSubtitle] = useState('');
+  const [schoolEmail, setSchoolEmail] = useState('');
+  const [schoolPhone, setSchoolPhone] = useState('');
+  const [schoolAddress, setSchoolAddress] = useState('');
+  const [schoolLogo, setSchoolLogo] = useState('');
+  const [subdomain, setSubdomain] = useState('');
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [setupData, setSetupData] = useState<any>(null);
+
+  // 2. UPI Gateway Keys
+  const [gpayId, setGpayId] = useState('');
+  const [phonepeId, setPhonepeId] = useState('');
+  const [upiQrId, setUpiQrId] = useState('');
+
+  // 3. Bank Accounts List
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+
+  // 4. Academic Years List
+  const [academicYears, setAcademicYears] = useState<AcademicTerm[]>([]);
+
+  // Form helper for adding a new bank account
+  const [newBank, setNewBank] = useState({
+    name: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    branch: '',
+    isPrimary: false
+  });
+
+  // Form helper for adding a new academic year
+  const [newYearRange, setNewYearRange] = useState('');
+
+  const loadAcademicYears = async () => {
+    try {
+      const response = await api.get('/academics/academic-years');
+      const data = response.data;
+      const mapped = data.map((ay: any) => ({
+        id: ay.id,
+        name: ay.name,
+        startDate: ay.startDate ? new Date(ay.startDate).toISOString().split('T')[0] : '',
+        endDate: ay.endDate ? new Date(ay.endDate).toISOString().split('T')[0] : '',
+        isActive: ay.isActive,
+      }));
+      setAcademicYears(mapped);
+    } catch (err) {
+      console.error('Error loading academic years:', err);
+    }
+  };
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -66,6 +107,25 @@ export default function SettingsPage() {
           setSchoolLogo(data.setup.schoolLogo || '');
           if (data.setup.tenant) {
             setSubdomain(data.setup.tenant.subDomain || '');
+            setGpayId(data.setup.tenant.googlePayId || '');
+            setPhonepeId(data.setup.tenant.phonePeId || '');
+            setUpiQrId(data.setup.tenant.upiQrId || '');
+            
+            if (data.setup.tenant.bankAccountNo) {
+              setBankAccounts([
+                {
+                  id: 'primary-bank',
+                  name: data.setup.tenant.bankName || 'School Trust Account',
+                  bankName: data.setup.tenant.bankName || '',
+                  accountNumber: data.setup.tenant.bankAccountNo || '',
+                  ifscCode: data.setup.tenant.bankIFSC || '',
+                  branch: data.setup.tenant.bankBranch || '',
+                  isPrimary: true
+                }
+              ]);
+            } else {
+              setBankAccounts([]);
+            }
           }
         }
       } catch (err) {
@@ -74,81 +134,39 @@ export default function SettingsPage() {
         setLoadingProfile(false);
       }
     };
+    
     loadProfile();
+    loadAcademicYears();
   }, []);
-
-  // 2. UPI Gateway Keys
-  const [gpayId, setGpayId] = useState('gpay-vikas-edu@upi');
-  const [phonepeId, setPhonepeId] = useState('pe-vikas-edu@ybl');
-  const [upiQrId, setUpiQrId] = useState('upi-merchant-qr-code-payload-string-identifier');
-
-  // 3. Bank Accounts List (replicates School_Bank_Account__c)
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
-    {
-      id: 'bank-1',
-      name: 'Vikas School Trust Account',
-      bankName: 'State Bank of India',
-      accountNumber: '333444555666',
-      ifscCode: 'SBIN0001234',
-      branch: 'Rohini Sector 9 Branch',
-      isPrimary: true
-    },
-    {
-      id: 'bank-2',
-      name: 'Vikas School Operations Account',
-      bankName: 'HDFC Bank',
-      accountNumber: '5010042188992',
-      ifscCode: 'HDFC0000240',
-      branch: 'Pitampura Branch',
-      isPrimary: false
-    }
-  ]);
-
-  // 4. Academic Years List (replicates Academic_Year__c)
-  const [academicYears, setAcademicYears] = useState<AcademicTerm[]>([
-    {
-      id: 'ay-1',
-      name: '2026-2027',
-      startDate: '2026-06-01',
-      endDate: '2027-05-31',
-      isActive: true
-    },
-    {
-      id: 'ay-2',
-      name: '2025-2026',
-      startDate: '2025-06-01',
-      endDate: '2026-05-31',
-      isActive: false
-    }
-  ]);
-
-  // Form helper for adding a new bank account
-  const [newBank, setNewBank] = useState({
-    name: '',
-    bankName: '',
-    accountNumber: '',
-    ifscCode: '',
-    branch: '',
-    isPrimary: false
-  });
-
-  // Form helper for adding a new academic year
-  const [newYearRange, setNewYearRange] = useState('');
 
   // Handle Save
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = {
-        schoolName,
-        email: schoolEmail,
-        address: schoolAddress,
-        schoolLogo,
-        mobileNumber: schoolPhone,
-      };
+      if (activeTab === 'profile') {
+        const payload = {
+          schoolName,
+          email: schoolEmail,
+          address: schoolAddress,
+          schoolLogo,
+          mobileNumber: schoolPhone,
+        };
 
-      await api.put('/school-setup', payload);
-      setAlertText('School Setup org defaults successfully updated.');
+        await api.put('/school-setup', payload);
+        setAlertText('School Setup org defaults successfully updated.');
+      } else if (activeTab === 'upi') {
+        const primaryBank = bankAccounts[0];
+        await api.put('/tenant/banking-upi', {
+          bankName: primaryBank?.bankName || null,
+          bankAccountNo: primaryBank?.accountNumber || null,
+          bankIFSC: primaryBank?.ifscCode || null,
+          bankBranch: primaryBank?.branch || null,
+          googlePayId: gpayId,
+          phonePeId: phonepeId,
+          upiQrId: upiQrId,
+        });
+        setAlertText('UPI payment gateway keys updated.');
+      }
       setSaveSuccess(true);
 
       // Dispatch event to refresh branding instantly
@@ -164,57 +182,82 @@ export default function SettingsPage() {
   };
 
   // Add Bank Account Row
-  const handleAddBankAccount = (e: React.FormEvent) => {
+  const handleAddBankAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBank.name || !newBank.bankName || !newBank.accountNumber || !newBank.ifscCode) {
+    if (!newBank.bankName || !newBank.accountNumber || !newBank.ifscCode) {
       alert('Please fill out all required bank fields.');
       return;
     }
 
-    const updatedAccounts = bankAccounts.map(b => 
-      newBank.isPrimary ? { ...b, isPrimary: false } : b
-    );
+    try {
+      await api.put('/tenant/banking-upi', {
+        bankName: newBank.bankName,
+        bankAccountNo: newBank.accountNumber,
+        bankIFSC: newBank.ifscCode,
+        bankBranch: newBank.branch,
+        googlePayId: gpayId,
+        phonePeId: phonepeId,
+        upiQrId: upiQrId,
+      });
 
-    const newRow: BankAccount = {
-      id: `bank-${Date.now()}`,
-      ...newBank
-    };
+      setBankAccounts([
+        {
+          id: 'primary-bank',
+          name: newBank.bankName,
+          bankName: newBank.bankName,
+          accountNumber: newBank.accountNumber,
+          ifscCode: newBank.ifscCode,
+          branch: newBank.branch,
+          isPrimary: true
+        }
+      ]);
 
-    setBankAccounts([...updatedAccounts, newRow]);
-    setNewBank({
-      name: '',
-      bankName: '',
-      accountNumber: '',
-      ifscCode: '',
-      branch: '',
-      isPrimary: false
-    });
+      setNewBank({
+        name: '',
+        bankName: '',
+        accountNumber: '',
+        ifscCode: '',
+        branch: '',
+        isPrimary: false
+      });
 
-    setAlertText('New bank account added to listing.');
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+      setAlertText('Merchant bank account configuration updated.');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error adding bank account:', err);
+      alert('Failed to save bank account: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   // Delete Bank Account Row
-  const handleDeleteBankAccount = (id: string) => {
-    const target = bankAccounts.find(b => b.id === id);
-    if (target?.isPrimary && bankAccounts.length > 1) {
-      alert('Cannot delete the primary bank account. Please set another account as primary first.');
-      return;
+  const handleDeleteBankAccount = async (id: string) => {
+    try {
+      await api.put('/tenant/banking-upi', {
+        bankName: null,
+        bankAccountNo: null,
+        bankIFSC: null,
+        bankBranch: null,
+        googlePayId: gpayId,
+        phonePeId: phonepeId,
+        upiQrId: upiQrId,
+      });
+
+      setBankAccounts([]);
+      setAlertText('Merchant bank account configuration cleared.');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error clearing bank account:', err);
+      alert('Failed to clear bank account: ' + (err.response?.data?.message || err.message));
     }
-    setBankAccounts(bankAccounts.filter(b => b.id !== id));
   };
 
   // Toggle Primary Bank Account
-  const handleSetPrimaryBank = (id: string) => {
-    setBankAccounts(bankAccounts.map(b => ({
-      ...b,
-      isPrimary: b.id === id
-    })));
-  };
+  const handleSetPrimaryBank = (id: string) => {};
 
   // Add Academic Year
-  const handleAddAcademicYear = (e: React.FormEvent) => {
+  const handleAddAcademicYear = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanRange = newYearRange.replace('–', '-').trim();
     const years = cleanRange.split('-');
@@ -226,45 +269,39 @@ export default function SettingsPage() {
     const startYear = Number(years[0]);
     const endYear = Number(years[1]);
 
-    const newYear: AcademicTerm = {
-      id: `ay-${Date.now()}`,
-      name: cleanRange,
-      startDate: `${startYear}-06-01`,
-      endDate: `${endYear}-05-31`,
-      isActive: false
-    };
+    try {
+      await api.post('/academics/academic-years', {
+        name: cleanRange,
+        startDate: `${startYear}-06-01T00:00:00.000Z`,
+        endDate: `${endYear}-05-31T23:59:59.000Z`,
+        isActive: false
+      });
 
-    setAcademicYears([newYear, ...academicYears]);
-    setNewYearRange('');
+      setNewYearRange('');
+      await loadAcademicYears();
 
-    setAlertText(`Academic year term ${cleanRange} configured.`);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+      setAlertText(`Academic year term ${cleanRange} successfully configured.`);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error adding academic year:', err);
+      alert('Failed to add academic year: ' + (err.response?.data?.message || err.message));
+    }
   };
 
-  // Toggle Active Academic Year (limit active to 2, deactivating older active terms)
-  const handleToggleActiveYear = (id: string) => {
-    const updated = academicYears.map(ay => {
-      if (ay.id === id) {
-        return { ...ay, isActive: !ay.isActive };
-      }
-      return ay;
-    });
-
-    const activeCount = updated.filter(ay => ay.isActive).length;
-    if (activeCount > 2) {
-      alert('Maximum of 2 active academic years allowed. Deactivating oldest active year.');
-      // Find oldest active and deactivate it
-      let activeIndices: number[] = [];
-      updated.forEach((ay, idx) => {
-        if (ay.isActive && ay.id !== id) activeIndices.push(idx);
-      });
-      if (activeIndices.length > 0) {
-        updated[activeIndices[activeIndices.length - 1]].isActive = false;
-      }
+  // Toggle Active Academic Year
+  const handleToggleActiveYear = async (id: string) => {
+    try {
+      await api.patch(`/academics/academic-years/${id}/toggle`);
+      await loadAcademicYears();
+      
+      setAlertText('Academic year active status updated.');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error toggling academic year status:', err);
+      alert('Failed to update academic year active status: ' + (err.response?.data?.message || err.message));
     }
-
-    setAcademicYears(updated);
   };
 
   return (
@@ -801,5 +838,17 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="p-8 text-center text-slate-500 font-medium">
+        Loading settings...
+      </div>
+    }>
+      <SettingsPageContent />
+    </React.Suspense>
   );
 }

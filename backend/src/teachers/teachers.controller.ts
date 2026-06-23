@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { TeachersService } from './teachers.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -10,6 +10,11 @@ export class TeachersController {
   @Post()
   async create(@Body() data: any) {
     return this.teachersService.createTeacher(data);
+  }
+
+  @Get('teaching-staff')
+  async getTeachingStaff() {
+    return this.teachersService.getTeachingStaff();
   }
 
   @Get()
@@ -45,5 +50,15 @@ export class TeachersController {
   @Get(':id/skills')
   async getSkills(@Param('id') id: string) {
     return this.teachersService.getSkills(id);
+  }
+
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() data: any) {
+    return this.teachersService.updateTeacher(id, data);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.teachersService.deleteTeacher(id);
   }
 }

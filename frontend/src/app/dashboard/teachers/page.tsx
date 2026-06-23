@@ -7,6 +7,7 @@ import {
   BookOpen, Grid3X3, BarChart3, Clock, Upload, 
   Calendar, Layers
 } from 'lucide-react';
+import { useToast } from '@/components/Toast';
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#667eea,#764ba2)',
@@ -31,6 +32,7 @@ interface Teacher {
 
 interface ClassSection {
   id: string;
+  classId?: string;
   name: string;
   academicYear: string;
   subjectCount: number;
@@ -48,9 +50,9 @@ const initialTeachers: Teacher[] = [
 ];
 
 const initialClasses: ClassSection[] = [
-  { id: 'cs1', name: 'Grade 10 - Section A', academicYear: '2025-2026', subjectCount: 6, staffedCount: 5, loadPercent: 83 },
-  { id: 'cs2', name: 'Grade 9 - Section B', academicYear: '2025-2026', subjectCount: 5, staffedCount: 4, loadPercent: 80 },
-  { id: 'cs3', name: 'Grade 8 - Section A', academicYear: '2025-2026', subjectCount: 7, staffedCount: 6, loadPercent: 85 },
+  { id: 'cs1', classId: 'dummy', name: 'Grade 10 - Section A', academicYear: '2025-2026', subjectCount: 6, staffedCount: 5, loadPercent: 83 },
+  { id: 'cs2', classId: 'dummy', name: 'Grade 9 - Section B', academicYear: '2025-2026', subjectCount: 5, staffedCount: 4, loadPercent: 80 },
+  { id: 'cs3', classId: 'dummy', name: 'Grade 8 - Section A', academicYear: '2025-2026', subjectCount: 7, staffedCount: 6, loadPercent: 85 },
 ];
 
 function getLoadColor(pct: number) {
@@ -66,22 +68,37 @@ function getLoadBg(pct: number) {
 }
 
 export default function TeacherClassManagement() {
-  const [teachers, setTeachers] = useState<Teacher[]>(initialTeachers);
-  const [classes, setClasses] = useState<ClassSection[]>(initialClasses);
+  const { showToast } = useToast();
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [classes, setClasses] = useState<ClassSection[]>([]);
+  const [loading, setLoading] = useState(true);
   const [teacherSearch, setTeacherSearch] = useState('');
   const [classSearch, setClassSearch] = useState('');
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [selectedClass, setSelectedClass] = useState<ClassSection | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    show: boolean;
+    type: 'class' | 'teacher';
+    id: string;
+    classId?: string;
+    name: string;
+  }>({
+    show: false,
+    type: 'class',
+    id: '',
+    name: ''
+  });
 
   const fetchClassAndTeacherData = async () => {
     try {
-      // 1. Fetch teachers
-      const teacherRes = await api.get('/teachers');
+      setLoading(true);
+      // 1. Fetch only TEACHER-role staff for this page
+      const teacherRes = await api.get('/teachers/teaching-staff');
       if (teacherRes.data && teacherRes.data.length > 0) {
         const mappedTeachers: Teacher[] = teacherRes.data.map((t: any, idx: number) => ({
           id: t.id,
-          name: t.user.name,
-          initials: t.user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+          name: t.user?.name || 'Unknown Teacher',
+          initials: (t.user?.name || 'TT').split(' ').map((n: string) => n[0] || '').join('').substring(0, 2).toUpperCase(),
           subjects: t.subjectsTaught || [],
           classCount: t._count?.teacherAssignments || 0,
           loadPercent: Math.min(100, (t._count?.teacherAssignments || 0) * 15),
@@ -89,7 +106,7 @@ export default function TeacherClassManagement() {
         }));
         setTeachers(mappedTeachers);
       } else {
-        setTeachers(initialTeachers);
+        setTeachers([]);
       }
 
       // 2. Fetch ClassSections
@@ -97,6 +114,7 @@ export default function TeacherClassManagement() {
       if (classSectionRes.data && classSectionRes.data.length > 0) {
         const mappedClasses: ClassSection[] = classSectionRes.data.map((cs: any) => ({
           id: cs.id,
+          classId: cs.classId,
           name: `${cs.class.name} - ${cs.section.name}`,
           academicYear: cs.class.academicYear?.name || '2026-2027',
           subjectCount: cs._count?.classSubjects || 0,
@@ -105,16 +123,66 @@ export default function TeacherClassManagement() {
         }));
         setClasses(mappedClasses);
       } else {
-        setClasses(initialClasses);
+        setClasses([]);
       }
     } catch (err) {
       console.error('Failed to fetch teachers or classes:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchClassAndTeacherData();
   }, []);
+
+  const handleDeleteClassClick = (classSection: ClassSection) => {
+    setDeleteConfirm({
+      show: true,
+      type: 'class',
+      id: classSection.id,
+      classId: classSection.classId,
+      name: classSection.name
+    });
+  };
+
+  const handleDeleteTeacherClick = (teacher: Teacher) => {
+    setDeleteConfirm({
+      show: true,
+      type: 'teacher',
+      id: teacher.id,
+      name: teacher.name
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteConfirm.type === 'class') {
+      if (!deleteConfirm.classId) return;
+      try {
+        await api.delete(`/academics/classes/${deleteConfirm.classId}`);
+        showToast('Class deleted successfully.', 'success');
+        setSelectedClass(null);
+        setDeleteConfirm({ show: false, type: 'class', id: '', name: '' });
+        window.dispatchEvent(new CustomEvent('school-setup-updated'));
+        await fetchClassAndTeacherData();
+      } catch (err: any) {
+        console.error('Error deleting class:', err);
+        showToast(err.response?.data?.message || 'Failed to delete class.', 'error');
+      }
+    } else {
+      try {
+        await api.delete(`/teachers/${deleteConfirm.id}`);
+        showToast('Teacher deleted successfully.', 'success');
+        setSelectedTeacher(null);
+        setDeleteConfirm({ show: false, type: 'teacher', id: '', name: '' });
+        window.dispatchEvent(new CustomEvent('school-setup-updated'));
+        await fetchClassAndTeacherData();
+      } catch (err: any) {
+        console.error('Error deleting teacher:', err);
+        showToast(err.response?.data?.message || 'Failed to delete teacher.', 'error');
+      }
+    }
+  };
 
   // Modals
   const [showAddTeacher, setShowAddTeacher] = useState(false);
@@ -162,11 +230,11 @@ export default function TeacherClassManagement() {
   };
 
   const handleSaveTimetable = () => {
-    alert(`✅ Timetable for "${selectedClassSection}" saved successfully!`);
+    showToast(`Timetable for "${selectedClassSection}" saved successfully!`, 'success');
   };
 
   const handleLoadTimetable = () => {
-    alert(`🔍 Loaded timetable data for "${selectedClassSection}" (${academicYear})`);
+    showToast(`Loaded timetable data for "${selectedClassSection}" (${academicYear})`, 'success');
   };
 
   // Add Teacher Form
@@ -213,6 +281,8 @@ export default function TeacherClassManagement() {
       };
       await api.post('/teachers', payload);
 
+      showToast('Teacher created successfully.', 'success');
+
       // Dispatch event to refresh dashboard in real-time
       window.dispatchEvent(new CustomEvent('school-setup-updated'));
 
@@ -229,24 +299,24 @@ export default function TeacherClassManagement() {
       });
     } catch (err: any) {
       console.error('Error saving teacher:', err);
-      alert('Failed to save teacher: ' + (err.response?.data?.message || err.message));
+      showToast(err.response?.data?.message || 'Failed to save teacher.', 'error');
     }
   };
 
   const handleSaveSubjects = () => {
-    alert(`✅ ${subjects.filter(s => s.name).length} subject(s) saved successfully!`);
+    showToast(`${subjects.filter(s => s.name).length} subject(s) saved successfully!`, 'success');
     setShowAddSubject(false);
     setSubjects([{ id: 1, name: '' }]);
   };
 
   const handleSaveClass = async () => {
-    if (!newClassName.trim()) { alert('Enter a class name'); return; }
+    if (!newClassName.trim()) { showToast('Enter a class name', 'error'); return; }
     try {
       // 1. Fetch active academic year
       const yearsRes = await api.get('/academics/academic-years');
       const activeYear = yearsRes.data.find((y: any) => y.isActive) || yearsRes.data[0];
       if (!activeYear) {
-        alert('No active academic year found. Please configure settings first.');
+        showToast('No active academic year found. Please configure settings first.', 'error');
         return;
       }
 
@@ -280,17 +350,18 @@ export default function TeacherClassManagement() {
       // Reload list
       await fetchClassAndTeacherData();
 
+      showToast('Class created successfully.', 'success');
       setShowCreateClass(false);
       setNewClassName('');
     } catch (err: any) {
       console.error('Error saving class:', err);
-      alert('Failed to save class: ' + (err.response?.data?.message || err.message));
+      showToast(err.response?.data?.message || 'Failed to save class.', 'error');
     }
   };
 
   const handleSaveSection = () => {
-    if (!newSectionName.trim()) { alert('Enter a section name'); return; }
-    alert(`✅ Section "${newSectionName}" created successfully!`);
+    if (!newSectionName.trim()) { showToast('Enter a section name', 'error'); return; }
+    showToast(`Section "${newSectionName}" created successfully!`, 'success');
     setShowCreateSection(false);
     setNewSectionName('');
   };
@@ -610,7 +681,12 @@ export default function TeacherClassManagement() {
                 />
               </div>
             </div>
-            {filteredTeachers.length === 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2" />
+                <p className="text-xs font-semibold">Loading teachers...</p>
+              </div>
+            ) : filteredTeachers.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Users className="w-10 h-10 mb-2 opacity-30" />
                 <p className="text-sm font-semibold">No teachers added yet</p>
@@ -667,7 +743,12 @@ export default function TeacherClassManagement() {
                 />
               </div>
             </div>
-            {filteredClasses.length === 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mb-2" />
+                <p className="text-xs font-semibold">Loading classes...</p>
+              </div>
+            ) : filteredClasses.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Grid3X3 className="w-10 h-10 mb-2 opacity-30" />
                 <p className="text-sm font-semibold">No class sections yet</p>
@@ -705,14 +786,22 @@ export default function TeacherClassManagement() {
         {/* Selected Teacher Detail */}
         {selectedTeacher && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-extrabold" style={{ background: selectedTeacher.gradient }}>
-                {selectedTeacher.initials}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-extrabold" style={{ background: selectedTeacher.gradient }}>
+                  {selectedTeacher.initials}
+                </div>
+                <div>
+                  <div className="font-bold text-slate-800">{selectedTeacher.name}</div>
+                  <div className="text-xs text-slate-500">{selectedTeacher.subjects.join(', ')} · {selectedTeacher.classCount} class(es) assigned</div>
+                </div>
               </div>
-              <div>
-                <div className="font-bold text-slate-800">{selectedTeacher.name}</div>
-                <div className="text-xs text-slate-500">{selectedTeacher.subjects.join(', ')} · {selectedTeacher.classCount} class(es) assigned</div>
-              </div>
+              <button
+                onClick={() => handleDeleteTeacherClick(selectedTeacher)}
+                className="px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold transition-all border border-red-200"
+              >
+                Delete Teacher
+              </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="bg-white rounded-lg p-3 border border-blue-100">
@@ -730,6 +819,42 @@ export default function TeacherClassManagement() {
               <div className="bg-white rounded-lg p-3 border border-blue-100">
                 <div className="text-slate-400 mb-1">Today Schedule</div>
                 <div className="font-bold text-slate-500 italic text-[10px]">No periods assigned</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selected Class Detail */}
+        {selectedClass && (
+          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="font-bold text-slate-800 text-sm">{selectedClass.name}</div>
+                <div className="text-xs text-slate-500">{selectedClass.academicYear} · {selectedClass.staffedCount}/{selectedClass.subjectCount} subjects staffed</div>
+              </div>
+              <button
+                onClick={() => handleDeleteClassClick(selectedClass)}
+                className="px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold transition-all border border-red-200"
+              >
+                Delete Class
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="text-slate-400 mb-1">Workload</div>
+                <div className="font-bold text-slate-800">{selectedClass.loadPercent}%</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="text-slate-400 mb-1">Academic Year</div>
+                <div className="font-bold text-slate-800">{selectedClass.academicYear}</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="text-slate-400 mb-1">Subjects Staffed</div>
+                <div className="font-bold text-slate-800">{selectedClass.staffedCount} / {selectedClass.subjectCount}</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-emerald-100">
+                <div className="text-slate-400 mb-1">Status</div>
+                <div className="font-bold text-emerald-600">Active</div>
               </div>
             </div>
           </div>
@@ -964,13 +1089,45 @@ export default function TeacherClassManagement() {
               <p className="text-xs text-slate-400 mt-1">or click to browse</p>
             </div>
             <p className="text-xs text-slate-400 text-center mb-4">CSV columns: First Name, Last Name, Email, Phone, Gender, DOB, Qualification, Joining Date, Basic Salary, Subject, Skill Level</p>
-            <button onClick={() => { alert('Import functionality requires backend integration'); setShowImportTeachers(false); }} className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm">
+            <button onClick={() => { showToast('Import functionality requires backend integration', 'warning'); setShowImportTeachers(false); }} className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm">
               Upload &amp; Import
             </button>
           </div>
         </>
       )}
 
+      {/* ── CUSTOM DELETE CONFIRMATION MODAL ── */}
+      {deleteConfirm.show && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50 animate-fade-in" onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-2xl shadow-2xl z-50 p-6 animate-scale-in">
+            <div className="text-center py-2">
+              <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl mx-auto mb-3">
+                ⚠️
+              </div>
+              <h3 className="font-extrabold text-slate-800 text-base mb-1">Confirm Deletion</h3>
+              <p className="text-xs text-slate-500 mb-5">
+                Are you sure you want to delete {deleteConfirm.type === 'class' ? 'class' : 'teacher'}{' '}
+                <strong className="text-slate-700 font-bold">{deleteConfirm.name}</strong>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))}
+                className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer font-extrabold"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );

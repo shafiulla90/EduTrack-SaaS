@@ -54,6 +54,9 @@ export class LibraryService {
     const tenantId = this.getTenantId();
     return this.prisma.book.findMany({
       where: { tenantId },
+      include: {
+        copies: true,
+      },
       orderBy: { title: 'asc' },
     });
   }

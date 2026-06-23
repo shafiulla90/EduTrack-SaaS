@@ -3,6 +3,7 @@ import { IsNotEmpty, IsEnum } from 'class-validator';
 
 export enum ComplaintStatusEnum {
   NEW = 'New',
+  IN_PROGRESS = 'In Progress',
   CLOSED = 'Closed',
 }
 

@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { LineChart, BarChart2, PieChart, Download, Sparkles, CheckCircle2 } from 'lucide-react';
-import { mockStudents } from '@/lib/mockData';
 
 export default function ReportsAnalyticsPage() {
   const [exportSuccess, setExportSuccess] = useState(false);

@@ -47,6 +47,11 @@ export class StudentsController {
     });
   }
 
+  @Get('parents/all')
+  async getParents() {
+    return this.studentsService.getParents();
+  }
+
   @Get(':id')
   async getDetails(@Param('id') id: string) {
     return this.studentsService.getStudentDetails(id);

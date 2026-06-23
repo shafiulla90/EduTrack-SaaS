@@ -157,6 +157,10 @@ export class StudentsService {
             class: true,
             section: true,
           }
+        },
+        invoices: {
+          where: { tenantId },
+          select: { remainingBalance: true, paidAmount: true }
         }
       },
       orderBy: {
@@ -583,6 +587,28 @@ export class StudentsService {
         success: true,
         promotedCount
       };
+    });
+  }
+
+  async getParents() {
+    const tenantId = this.getTenantId();
+    return this.prisma.parentProfile.findMany({
+      where: {
+        user: { tenantId }
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        students: {
+          include: {
+            user: { select: { name: true } }
+          }
+        }
+      },
+      orderBy: {
+        user: { name: 'asc' }
+      }
     });
   }
 }

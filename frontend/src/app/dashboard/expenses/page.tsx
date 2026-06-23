@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, X, Search, Edit2, Trash2 } from 'lucide-react';
-import { mockExpenses } from '@/lib/mockData';
+import { api } from '@/lib/api';
 
 interface Expense {
   id: string;
@@ -10,7 +10,7 @@ interface Expense {
   amount: number;
   date: string;
   status: string;
-  mode: string;
+  paymentMode: string;
   description?: string;
 }
 
@@ -32,15 +32,18 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
+  APPROVED: 'bg-blue-50 text-blue-700 border-blue-200',
+  PAID: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Pending: 'bg-amber-50 text-amber-700 border-amber-200',
   Approved: 'bg-blue-50 text-blue-700 border-blue-200',
   Paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
 };
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState<Expense[]>(
-    mockExpenses.map(e => ({ ...e, description: '', mode: e.mode || 'Cash' }))
-  );
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({ currentMonth: 0, prevMonth: 0, yearly: 0 });
   const [showModal, setShowModal] = useState(false);
 
   // Filters
@@ -53,36 +56,44 @@ export default function ExpensesPage() {
   // Form
   const [currentExpense, setCurrentExpense] = useState<Partial<Expense>>({
     amount: 0, category: '', date: new Date().toISOString().split('T')[0],
-    status: 'Pending', description: '', mode: 'Cash'
+    status: 'PENDING', description: '', paymentMode: 'Cash'
   });
 
   const isEditing = !!(currentExpense as Expense).id;
 
-  // Summary
-  const summary = useMemo(() => {
-    const now = new Date();
-    const thisMonth = expenses.filter(e => {
-      const d = new Date(e.date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-    const prevMonth = expenses.filter(e => {
-      const d = new Date(e.date);
-      const pm = new Date(now); pm.setMonth(pm.getMonth() - 1);
-      return d.getMonth() === pm.getMonth() && d.getFullYear() === pm.getFullYear();
-    });
-    const yearly = expenses.filter(e => new Date(e.date).getFullYear() === now.getFullYear());
-    return {
-      currentMonth: thisMonth.reduce((s, e) => s + e.amount, 0),
-      prevMonth: prevMonth.reduce((s, e) => s + e.amount, 0),
-      yearly: yearly.reduce((s, e) => s + e.amount, 0),
-    };
-  }, [expenses]);
+  const loadExpenses = async () => {
+    try {
+      setLoading(true);
+      const [expRes, sumRes] = await Promise.all([
+        api.get('/expenses'),
+        api.get('/expenses/summary')
+      ]);
+      setExpenses(expRes.data.map((e: any) => ({
+        id: e.id,
+        category: e.category,
+        amount: Number(e.amount),
+        date: new Date(e.date).toISOString().split('T')[0],
+        status: e.status,
+        paymentMode: e.paymentMode,
+        description: e.description || ''
+      })));
+      setSummary(sumRes.data);
+    } catch (err) {
+      console.error('Failed to load expenses:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadExpenses();
+  }, []);
 
   // Filtered list
   const filteredExpenses = useMemo(() => {
     return expenses.filter(e => {
       if (selectedCategory && e.category !== selectedCategory) return false;
-      if (selectedStatus && e.status !== selectedStatus) return false;
+      if (selectedStatus && e.status.toLowerCase() !== selectedStatus.toLowerCase()) return false;
       if (!showAll && selectedMonth) {
         const expMonth = e.date.substring(0, 7);
         if (expMonth !== selectedMonth) return false;
@@ -97,37 +108,54 @@ export default function ExpensesPage() {
     } else {
       setCurrentExpense({
         amount: 0, category: '', date: new Date().toISOString().split('T')[0],
-        status: 'Pending', description: '', mode: 'Cash'
+        status: 'PENDING', description: '', paymentMode: 'Cash'
       });
     }
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!currentExpense.amount || !currentExpense.category) {
       alert('Amount and Category are required!');
       return;
     }
-    if (isEditing) {
-      setExpenses(prev => prev.map(e => e.id === (currentExpense as Expense).id ? { ...e, ...currentExpense } as Expense : e));
-    } else {
-      const newExp: Expense = {
-        id: `exp-${Date.now()}`,
-        category: currentExpense.category || 'Other',
-        amount: Number(currentExpense.amount),
-        date: currentExpense.date || new Date().toISOString().split('T')[0],
-        status: currentExpense.status || 'Pending',
-        description: currentExpense.description || '',
-        mode: currentExpense.mode || 'Cash',
-      };
-      setExpenses([newExp, ...expenses]);
+    try {
+      if (isEditing) {
+        await api.put(`/expenses/${(currentExpense as Expense).id}`, {
+          amount: Number(currentExpense.amount),
+          category: currentExpense.category,
+          date: currentExpense.date,
+          status: currentExpense.status,
+          paymentMode: currentExpense.paymentMode,
+          description: currentExpense.description
+        });
+      } else {
+        await api.post('/expenses', {
+          amount: Number(currentExpense.amount),
+          category: currentExpense.category,
+          date: currentExpense.date,
+          status: currentExpense.status,
+          paymentMode: currentExpense.paymentMode,
+          description: currentExpense.description
+        });
+      }
+      setShowModal(false);
+      loadExpenses();
+    } catch (err) {
+      console.error('Failed to save expense:', err);
+      alert('Failed to save expense');
     }
-    setShowModal(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this expense?')) {
-      setExpenses(expenses.filter(e => e.id !== id));
+      try {
+        await api.delete(`/expenses/${id}`);
+        loadExpenses();
+      } catch (err) {
+        console.error('Failed to delete expense:', err);
+        alert('Failed to delete expense');
+      }
     }
   };
 
@@ -205,7 +233,7 @@ export default function ExpensesPage() {
                 </div>
                 <div className="text-[10px] text-slate-400 mt-0.5 flex gap-3">
                   <span>📅 {exp.date}</span>
-                  <span>💳 {exp.mode}</span>
+                  <span>💳 {exp.paymentMode}</span>
                   {exp.description && <span className="truncate max-w-[200px]">{exp.description}</span>}
                 </div>
               </div>
@@ -269,7 +297,7 @@ export default function ExpensesPage() {
               </div>
               <div>
                 <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Payment Mode</label>
-                <select value={currentExpense.mode || 'Cash'} onChange={e => setCurrentExpense({...currentExpense, mode: e.target.value})}
+                <select value={currentExpense.paymentMode || 'Cash'} onChange={e => setCurrentExpense({...currentExpense, paymentMode: e.target.value})}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none">
                   {PAYMENT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>

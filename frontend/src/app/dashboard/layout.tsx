@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTenant } from '../providers/TenantContext';
+import ToastProvider from '@/components/Toast';
 
 export default function DashboardLayout({
   children,
@@ -196,6 +197,7 @@ export default function DashboardLayout({
   ];
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans">
       {/* Sidebar - Fix position matching .sidebar in LWC CSS */}
       <aside className="hidden lg:block w-[280px] bg-white border-r border-slate-200 h-screen fixed top-0 left-0 overflow-y-auto z-50 py-6 select-none shadow-sm">
@@ -369,5 +371,6 @@ export default function DashboardLayout({
         </div>
       )}
     </div>
+    </ToastProvider>
   );
 }

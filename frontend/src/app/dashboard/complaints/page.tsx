@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Search, User, Filter, Plus, ShieldAlert, Award, Calendar, ChevronRight } from 'lucide-react';
-import { mockStudents } from '@/lib/mockData';
+import { api } from '@/lib/api';
 
 interface BehaviorCase {
   id: string;
@@ -21,79 +21,22 @@ interface BehaviorCase {
 }
 
 export default function ComplaintsPage() {
-  // Mock initial cases
-  const [cases, setCases] = useState<BehaviorCase[]>([
-    {
-      id: 'case-1',
-      caseNumber: 'CASE-00101',
-      studentId: 'student-uuid-1',
-      studentName: 'James Smith',
-      className: 'Grade 10 - Section A',
-      behaviorType: 'Complaint',
-      category: 'Discipline',
-      description: 'Disrupted the physics classroom activity by repeatedly talking and ignoring instructions.',
-      status: 'New',
-      priority: 'High',
-      academicYear: '2026-2027',
-      submittedBy: 'Teacher Marie Curie',
-      createdDate: '2026-06-16'
-    },
-    {
-      id: 'case-2',
-      caseNumber: 'CASE-00102',
-      studentId: 'student-uuid-2',
-      studentName: 'Mary Johnson',
-      className: 'Grade 9 - Section B',
-      behaviorType: 'Praise',
-      category: 'Academic',
-      description: 'Showed exceptional peer leadership and assisted struggling classmates during the algebra workshop.',
-      status: 'Closed',
-      priority: 'Medium',
-      academicYear: '2026-2027',
-      submittedBy: 'Teacher James Smith',
-      createdDate: '2026-06-15'
-    },
-    {
-      id: 'case-3',
-      caseNumber: 'CASE-00103',
-      studentId: 'student-uuid-3',
-      studentName: 'William Brown',
-      className: 'Grade 10 - Section A',
-      behaviorType: 'Complaint',
-      category: 'Attendance',
-      description: 'Late for morning assembly and first-period class for four consecutive days without explanation.',
-      status: 'In Progress',
-      priority: 'High',
-      academicYear: '2026-2027',
-      submittedBy: 'Teacher Sarah Moore',
-      createdDate: '2026-06-14'
-    },
-    {
-      id: 'case-4',
-      caseNumber: 'CASE-00104',
-      studentId: 'student-uuid-4',
-      studentName: 'Patricia Davis',
-      className: 'Grade 8 - Section A',
-      behaviorType: 'Praise',
-      category: 'Dress Code',
-      description: 'Commended for always maintaining pristine school uniform and representing school values during the local inter-school science meet.',
-      status: 'Closed',
-      priority: 'Medium',
-      academicYear: '2026-2027',
-      submittedBy: 'Teacher Marie Curie',
-      createdDate: '2026-06-10'
-    }
-  ]);
+  const [cases, setCases] = useState<BehaviorCase[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Form states
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
+  const [studentSearchResults, setStudentSearchResults] = useState<any[]>([]);
   const [behaviorType, setBehaviorType] = useState<'Complaint' | 'Praise'>('Complaint');
   const [category, setCategory] = useState('Discipline');
   const [description, setDescription] = useState('');
   const [academicYear, setAcademicYear] = useState('2026-2027');
-  const [submittedBy, setSubmittedBy] = useState('');
+  const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [submittedByTeacherId, setSubmittedByTeacherId] = useState('');
+  const [teachersList, setTeachersList] = useState<any[]>([]);
+  const [classesList, setClassesList] = useState<any[]>([]);
   
   // Filter states
   const [filterClass, setFilterClass] = useState('All');
@@ -106,6 +49,70 @@ export default function ComplaintsPage() {
 
   // Success alert state
   const [alertMessage, setAlertMessage] = useState('');
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [casesRes, ayRes, teachersRes, classesRes] = await Promise.all([
+        api.get('/complaint-box/pending-cases'),
+        api.get('/complaint-box/academic-years'),
+        api.get('/complaint-box/teachers'),
+        api.get('/complaint-box/student-classes')
+      ]);
+
+      setAcademicYears(ayRes.data);
+      if (ayRes.data.length > 0) {
+        setAcademicYear(ayRes.data[0].name);
+      }
+
+      setTeachersList(teachersRes.data);
+      setClassesList(classesRes.data);
+
+      setCases(casesRes.data.map((c: any) => ({
+        id: c.id,
+        caseNumber: c.id.substring(0, 8).toUpperCase(),
+        studentId: c.studentId,
+        studentName: c.student?.user?.name || 'Unknown Student',
+        className: c.student?.classSection ? `${c.student.classSection.class.name} - ${c.student.classSection.section.name}` : 'N/A',
+        behaviorType: c.behaviorType,
+        category: c.category,
+        description: c.description || '',
+        status: c.status,
+        priority: c.priority,
+        academicYear: c.academicYear,
+        submittedBy: c.teacher?.user?.name || 'Admin',
+        createdDate: new Date(c.createdAt).toISOString().split('T')[0]
+      })));
+    } catch (err) {
+      console.error('Failed to load complaint data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Search students when input changes
+  useEffect(() => {
+    if (studentSearch.trim() === '' || selectedStudentId) {
+      setStudentSearchResults([]);
+      return;
+    }
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await api.get('/complaint-box/search-students', {
+          params: { searchTerm: studentSearch }
+        });
+        setStudentSearchResults(res.data);
+      } catch (err) {
+        console.error('Error searching students:', err);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [studentSearch, selectedStudentId]);
 
   // Auto-calculated statistics
   const totalCases = cases.length;
@@ -124,68 +131,63 @@ export default function ComplaintsPage() {
     return matchesClass && matchesType && matchesStatus && matchesSearch;
   });
 
-  // Filtered student search list for the form
-  const studentSearchResults = studentSearch.trim() === '' 
-    ? [] 
-    : mockStudents.filter(s => 
-        s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
-        s.rollNo.includes(studentSearch)
-      ).slice(0, 5);
-
-  const handleSelectStudent = (student: typeof mockStudents[0]) => {
+  const handleSelectStudent = (student: any) => {
     setSelectedStudentId(student.id);
-    setStudentSearch(student.name);
+    setStudentSearch(student.user.name);
+    setStudentSearchResults([]);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudentId) {
       alert('Please search and select a valid student from the suggestions list.');
       return;
     }
 
-    const targetStudent = mockStudents.find(s => s.id === selectedStudentId);
-    if (!targetStudent) return;
+    try {
+      const res = await api.post('/complaint-box/submit-behavior', {
+        studentId: selectedStudentId,
+        behaviorType,
+        category,
+        description,
+        academicYear,
+        teacherId: submittedByTeacherId || undefined
+      });
 
-    const newCase: BehaviorCase = {
-      id: `case-${Date.now()}`,
-      caseNumber: `CASE-00${cases.length + 101}`,
-      studentId: selectedStudentId,
-      studentName: targetStudent.name,
-      className: `${targetStudent.class} - ${targetStudent.section}`,
-      behaviorType,
-      category,
-      description,
-      status: 'New',
-      priority: behaviorType === 'Complaint' ? 'High' : 'Medium',
-      academicYear,
-      submittedBy,
-      createdDate: new Date().toISOString().split('T')[0]
-    };
+      setShowAddForm(false);
+      
+      // Reset form fields
+      setSelectedStudentId('');
+      setStudentSearch('');
+      setDescription('');
+      setBehaviorType('Complaint');
+      setCategory('Discipline');
+      setSubmittedByTeacherId('');
 
-    setCases([newCase, ...cases]);
-    setShowAddForm(false);
-    
-    // Reset form fields
-    setSelectedStudentId('');
-    setStudentSearch('');
-    setDescription('');
-    setBehaviorType('Complaint');
-    setCategory('Discipline');
-
-    setAlertMessage(`Record ${newCase.caseNumber} created successfully.`);
-    setTimeout(() => setAlertMessage(''), 4000);
+      setAlertMessage(`Record created successfully.`);
+      setTimeout(() => setAlertMessage(''), 4000);
+      loadData();
+    } catch (err) {
+      console.error('Failed to submit behavior:', err);
+      alert('Failed to submit behavior record');
+    }
   };
 
-  const handleUpdateStatus = (caseId: string, newStatus: 'New' | 'In Progress' | 'Closed') => {
-    setCases(cases.map(c => c.id === caseId ? { ...c, status: newStatus } : c));
-    if (selectedCase && selectedCase.id === caseId) {
-      setSelectedCase({ ...selectedCase, status: newStatus });
+  const handleUpdateStatus = async (caseId: string, newStatus: 'New' | 'In Progress' | 'Closed') => {
+    try {
+      await api.patch(`/complaint-box/case-status/${caseId}`, { status: newStatus });
+      setCases(prev => prev.map(c => c.id === caseId ? { ...c, status: newStatus } : c));
+      if (selectedCase && selectedCase.id === caseId) {
+        setSelectedCase({ ...selectedCase, status: newStatus });
+      }
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      alert('Failed to update case status');
     }
   };
 
   // Get unique classes for the filter dropdown
-  const uniqueClasses = Array.from(new Set(mockStudents.map(s => s.class))).sort();
+  const uniqueClasses = Array.from(new Set(classesList.map(cs => cs.class.name))).sort();
 
   return (
     <div className="space-y-8 animate-in">
@@ -295,8 +297,10 @@ export default function ComplaintsPage() {
                         onClick={() => handleSelectStudent(student)}
                         className="w-full text-left px-4 py-2.5 text-[13px] text-slate-700 hover:bg-slate-50 flex justify-between items-center cursor-pointer"
                       >
-                        <span className="font-medium">{student.name}</span>
-                        <span className="text-[11px] text-slate-400 font-mono">Roll: {student.rollNo} • {student.class}</span>
+                        <span className="font-medium">{student.user.name}</span>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          Roll: {student.rollNo || 'N/A'} • {student.classSection ? `${student.classSection.class.name} - ${student.classSection.section.name}` : 'N/A'}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -304,7 +308,7 @@ export default function ComplaintsPage() {
                 {selectedStudentId && (
                   <div className="mt-1 text-[11px] text-[#2E5BFF] font-semibold flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5" />
-                    Student Selected: {mockStudents.find(s => s.id === selectedStudentId)?.name} ({mockStudents.find(s => s.id === selectedStudentId)?.class})
+                    Student Selected: {studentSearch}
                   </div>
                 )}
               </div>
@@ -368,25 +372,23 @@ export default function ComplaintsPage() {
                       onChange={(e) => setAcademicYear(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none"
                     >
-                      <option value="2026-2027">2026-2027</option>
-                      <option value="2025-2026">2025-2026</option>
+                      {academicYears.map(ay => (
+                        <option key={ay.id} value={ay.name}>{ay.name}</option>
+                      ))}
                     </select>
                   </div>
                   {/* Submitting Teacher - matches Salesforce getTeachers */}
                   <div>
                     <label className="block text-[12px] text-slate-500 font-semibold mb-1">Submitting Teacher *</label>
                     <select
-                      value={submittedBy}
-                      onChange={(e) => setSubmittedBy(e.target.value)}
-                      required
+                      value={submittedByTeacherId}
+                      onChange={(e) => setSubmittedByTeacherId(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
                     >
                       <option value="">-- Select a Teacher --</option>
-                      <option value="Teacher James Smith">Teacher James Smith</option>
-                      <option value="Teacher Sarah Moore">Teacher Sarah Moore</option>
-                      <option value="Teacher Marie Curie">Teacher Marie Curie</option>
-                      <option value="Teacher SAKIBANDA SUNIL BABU">SAKIBANDA SUNIL BABU</option>
-                      <option value="Teacher Lalsagari Shaik Shafiulla">Lalsagari Shaik Shafiulla</option>
+                      {teachersList.map(t => (
+                        <option key={t.id} value={t.id}>{t.user.name}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

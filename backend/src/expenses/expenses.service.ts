@@ -57,6 +57,29 @@ export class ExpensesService {
     });
   }
 
+  async updateExpense(id: string, data: any) {
+    const tenantId = this.getTenantId();
+    const expense = await this.prisma.expense.findUnique({
+      where: { id },
+    });
+
+    if (!expense || expense.tenantId !== tenantId) {
+      throw new NotFoundException('Expense record not found');
+    }
+
+    return this.prisma.expense.update({
+      where: { id },
+      data: {
+        amount: data.amount !== undefined ? data.amount : undefined,
+        category: data.category !== undefined ? data.category : undefined,
+        date: data.date !== undefined ? new Date(data.date) : undefined,
+        description: data.description !== undefined ? data.description : undefined,
+        paymentMode: data.paymentMode !== undefined ? data.paymentMode : undefined,
+        status: data.status !== undefined ? data.status : undefined,
+      },
+    });
+  }
+
   async getExpenseSummary() {
     const tenantId = this.getTenantId();
 

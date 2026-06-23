@@ -52,6 +52,36 @@ export class AcademicsService {
     });
   }
 
+  async toggleAcademicYearActive(id: string) {
+    const tenantId = this.getTenantId();
+    const ay = await this.prisma.academicYear.findUnique({
+      where: { id },
+    });
+    if (!ay || ay.tenantId !== tenantId) {
+      throw new NotFoundException('Academic year not found');
+    }
+
+    const nextActive = !ay.isActive;
+    if (nextActive) {
+      // Limit of up to 2 active academic years
+      const activeYears = await this.prisma.academicYear.findMany({
+        where: { tenantId, isActive: true },
+        orderBy: { startDate: 'asc' },
+      });
+      if (activeYears.length >= 2) {
+        await this.prisma.academicYear.update({
+          where: { id: activeYears[0].id },
+          data: { isActive: false },
+        });
+      }
+    }
+
+    return this.prisma.academicYear.update({
+      where: { id },
+      data: { isActive: nextActive },
+    });
+  }
+
   // ── CLASS SERVICES ──────────────────────────────────────────────────────────
 
   async createClass(name: string, academicYearId: string) {
@@ -71,6 +101,99 @@ export class AcademicsService {
       where: { tenantId },
       include: { academicYear: true },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  async deleteClass(id: string) {
+    const tenantId = this.getTenantId();
+
+    // ── 1. Tenant-isolation check ────────────────────────────────────────────
+    const classRecord = await this.prisma.class.findFirst({
+      where: { id, tenantId },
+    });
+    if (!classRecord) {
+      throw new NotFoundException('Class not found');
+    }
+
+    // ── 2. Dependency guards (hard blocks – no data loss allowed) ────────────
+    // Collect ALL ClassSection ids for this class (used in cascaded checks)
+    const classSections = await this.prisma.classSection.findMany({
+      where: { classId: id, tenantId },
+      select: { id: true },
+    });
+    const classSectionIds = classSections.map((cs) => cs.id);
+
+    // 2a. Students enrolled in any section of this class
+    const studentCount =
+      classSectionIds.length > 0
+        ? await this.prisma.studentProfile.count({
+            where: { classSectionId: { in: classSectionIds } },
+          })
+        : 0;
+
+    // 2b. Attendance sessions recorded against these class-sections
+    const attendanceCount =
+      classSectionIds.length > 0
+        ? await this.prisma.attendanceSession.count({
+            where: {
+              tenantId,
+              classSectionId: { in: classSectionIds },
+            },
+          })
+        : 0;
+
+    // 2c. Exams created for any section of this class
+    const examCount =
+      classSectionIds.length > 0
+        ? await this.prisma.exam.count({
+            where: { tenantId, classSectionId: { in: classSectionIds } },
+          })
+        : 0;
+
+    // Build descriptive error message
+    const blockers: string[] = [];
+    if (studentCount > 0) blockers.push(`${studentCount} Student(s)`);
+    if (attendanceCount > 0) blockers.push(`${attendanceCount} Attendance Record(s)`);
+    if (examCount > 0) blockers.push(`${examCount} Exam(s)`);
+
+    if (blockers.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete this Class because it is already being used by: ${blockers.join(', ')}. ` +
+          `Please remove all associated records before deleting this class.`,
+      );
+    }
+
+    // ── 3. Cascade-delete safe child records in a transaction ────────────────
+    return this.prisma.$transaction(async (tx) => {
+      // 3a. Delete ClassSubjects (subjects assigned to class sections)
+      if (classSectionIds.length > 0) {
+        await tx.classSubject.deleteMany({
+          where: { tenantId, classSectionId: { in: classSectionIds } },
+        });
+
+        // 3b. Delete Periods (timetable entries) tied to class sections
+        await tx.period.deleteMany({
+          where: { tenantId, classSectionId: { in: classSectionIds } },
+        });
+
+        // 3c. Deactivate (not delete) any Pricebooks referencing this class
+        //     so fee history is preserved; classId pointer is cleared.
+        await tx.pricebook.updateMany({
+          where: { tenantId, classId: id },
+          data: { classId: null, isActive: false },
+        });
+
+        // 3d. Delete ClassSections themselves
+        await tx.classSection.deleteMany({
+          where: { tenantId, classId: id },
+        });
+      }
+
+      // 3e. Finally delete the class record
+      return tx.class.update({
+          where: { id },
+          data: { isActive: false },
+        });
     });
   }
 

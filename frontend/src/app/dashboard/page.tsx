@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-// Mock data removed – real data should be fetched via API
 import BulkImportModal from '@/components/BulkImportModal';
 import { api } from '@/lib/api';
 
@@ -12,36 +11,70 @@ export default function DashboardOverview() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [setupStatus, setSetupStatus] = useState<any>(null);
   const [showBanner, setShowBanner] = useState(true);
+  
+  const [stats, setStats] = useState({
+    studentsCount: 0,
+    totalRevenue: 0,
+    attendanceRate: 0,
+    academicAverage: 0
+  });
+  const [recentAdmissions, setRecentAdmissions] = useState<any[]>([]);
+  const [paymentOverview, setPaymentOverview] = useState<any[]>([]);
 
   useEffect(() => {
-    const getStatus = async () => {
+    const loadDashboardData = async () => {
       try {
-        const res = await api.get('/tenant/setup-status');
-        setSetupStatus(res.data);
+        const [setupRes, statsRes, studentsRes, invoicesRes] = await Promise.all([
+          api.get('/tenant/setup-status'),
+          api.get('/tenant/dashboard-stats'),
+          api.get('/students'),
+          api.get('/billing/invoices/recent')
+        ]);
+
+        setSetupStatus(setupRes.data);
+        setStats(statsRes.data);
+
+        // Map recent students
+        const mappedStudents = (studentsRes.data || []).slice(0, 15).map((s: any) => ({
+          id: s.id,
+          name: s.user?.name || 'Unknown',
+          avatar: (s.user?.name || 'U').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+          class: s.classSection ? `${s.classSection.class.name} - ${s.classSection.section.name}` : 'Unassigned',
+          status: 'Active'
+        }));
+        setRecentAdmissions(mappedStudents);
+
+        // Map recent invoices
+        const mappedInvoices = (invoicesRes.data || []).slice(0, 15).map((inv: any, idx: number) => {
+          const isFull = inv.status === 'Paid';
+          return {
+            id: inv.id || `INV-2026-${String(idx + 1).padStart(3, '0')}`,
+            name: `${inv.student?.user?.name || 'Unknown'} - Tuition Fees`,
+            amount: '₹' + (inv.totalAmount || 0).toLocaleString(),
+            status: isFull ? 'Paid' : 'Partial',
+            statusClass: isFull ? 'badge-status badge-paid' : 'badge-status badge-partial'
+          };
+        });
+        setPaymentOverview(mappedInvoices);
       } catch (err) {
-        console.error('Failed to load setup status', err);
+        console.error('Failed to load dashboard data', err);
       }
     };
-    getStatus();
+    loadDashboardData();
   }, []);
 
-  // Dynamic calculations from database if loaded, otherwise mockData
-  const totalStudents = setupStatus?.studentsCount ?? 0;
-
-  // Placeholder total revenue – replace with actual revenue calculation when API available
-  const totalRevenue = '₹0';
+  const totalStudents = stats.studentsCount;
+  
+  const rawRevenue = stats.totalRevenue;
+  const totalRevenue = rawRevenue > 100000 
+    ? '₹' + (rawRevenue / 100000).toFixed(1) + 'L'
+    : '₹' + rawRevenue.toLocaleString();
 
   // Trends mapped exactly from LWC defaults
   const studentTrend = { value: '12.4%', isUp: true };
   const revenueTrend = { value: '8.2%', isUp: true };
   const attendanceTrend = { value: '1.5%', isUp: true };
   const scoreTrend = { value: '0.8%', isUp: false };
-
-  // Recent Admissions List
-  const recentAdmissions: any[] = [];
-
-  // Payment Overview List
-  const paymentOverview: any[] = [];
 
   const displayAdmissions = recentAdmissions.slice(0, admissionsLimit);
   const displayPayments = paymentOverview.slice(0, paymentsLimit);
@@ -111,7 +144,7 @@ export default function DashboardOverview() {
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href="/dashboard/settings?tab=school-profile"
+              href="/dashboard/setup-checklist"
               className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-amber-500/10 transition-all"
             >
               Complete Setup
@@ -164,7 +197,7 @@ export default function DashboardOverview() {
                   {setupStatus.setupCompleted ? 'Completed' : 'Complete Profile'}
                 </div>
                 {!setupStatus.setupCompleted && (
-                  <Link href="/dashboard/settings?tab=school-profile" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                  <Link href="/dashboard/setup-checklist" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
                     Complete now
                   </Link>
                 )}
@@ -181,7 +214,7 @@ export default function DashboardOverview() {
                 <div className="text-xs font-semibold text-slate-800 mt-0.5">
                   {setupStatus.classesCount > 0 ? `${setupStatus.classesCount} Active Class(es)` : 'No classes added'}
                 </div>
-                <Link href="/dashboard/teachers" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                <Link href="/dashboard/timetable" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
                   Add Classes
                 </Link>
               </div>
@@ -292,7 +325,7 @@ export default function DashboardOverview() {
             </div>
           </div>
           <div>
-            <div className="text-[32px] font-extrabold text-slate-800 leading-none">95.2%</div>
+            <div className="text-[32px] font-extrabold text-slate-800 leading-none">{stats.attendanceRate}%</div>
             <div className="text-[14px] text-slate-500 font-semibold mt-1">Average Attendance</div>
           </div>
           <div className="border-t border-slate-100 pt-2 text-[11px] text-slate-400 font-medium">
@@ -321,7 +354,7 @@ export default function DashboardOverview() {
             </div>
           </div>
           <div>
-            <div className="text-[32px] font-extrabold text-slate-800 leading-none">84.5%</div>
+            <div className="text-[32px] font-extrabold text-slate-800 leading-none">{stats.academicAverage}%</div>
             <div className="text-[14px] text-slate-500 font-semibold mt-1">Avg. Academic Score</div>
           </div>
           <div className="border-t border-slate-100 pt-2 text-[11px] text-slate-400 font-medium">

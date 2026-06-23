@@ -141,11 +141,24 @@ export class ComplaintBoxService {
     return this.prisma.academicYear.findMany({ where: { tenantId }, orderBy: { name: 'desc' } });
   }
 
-  /** Returns pending (non‑closed) behavior cases. */
+  /** Returns pending behavior cases (actually returns all cases for management ledger). */
   async getPendingCases(academicYear?: string) {
     const tenantId = this.getTenantId();
     return this.prisma.behaviorCase.findMany({
-      where: { tenantId, status: { not: 'Closed' }, ...(academicYear ? { academicYear } : {}) },
+      where: { tenantId, ...(academicYear ? { academicYear } : {}) },
+      include: {
+        student: {
+          include: {
+            user: { select: { name: true } },
+            classSection: { include: { class: true, section: true } },
+          },
+        },
+        teacher: {
+          include: {
+            user: { select: { name: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

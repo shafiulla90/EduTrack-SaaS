@@ -100,4 +100,31 @@ export class BillingController {
   async importStudents(@Body('studentDataList') studentDataList: any[]) {
     return this.billingService.importStudentsBulk(studentDataList);
   }
+
+  @Get('products')
+  async getProducts() {
+    return this.billingService.getAllFeeProducts();
+  }
+
+  @Post('products')
+  async createProducts(@Body('productNames') productNames: string[]) {
+    return this.billingService.createFeeProducts(productNames);
+  }
+
+  @Get('pricebook')
+  async getPriceBook(
+    @Query('classId') classId: string,
+    @Query('academicYearId') academicYearId: string,
+  ) {
+    return this.billingService.getPriceBook(classId, academicYearId);
+  }
+
+  @Post('pricebook')
+  async savePriceBook(
+    @Body('classId') classId: string,
+    @Body('academicYearId') academicYearId: string,
+    @Body('priceItems') priceItems: { productId: string; price: number; selected: boolean }[],
+  ) {
+    return this.billingService.savePriceBook(classId, academicYearId, priceItems);
+  }
 }

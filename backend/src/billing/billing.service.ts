@@ -54,45 +54,74 @@ export class BillingService {
       return [];
     }
 
-    // Fetch Class Name
-    const classRecord = await this.prisma.class.findFirst({
-      where: { id: classId, tenantId },
-    });
-    if (!classRecord) {
-      return [];
-    }
-
-    const className = classRecord.name;
-    const priceBookName = className.replace('-', ' ');
-    const priceBookNameAlt = className.replace(' ', '-');
-
     let classPriceBook;
     if (academicYearId) {
+      // First try strong relation
       classPriceBook = await this.prisma.pricebook.findFirst({
         where: {
           tenantId,
-          isActive: true,
+          classId,
           academicYearId,
-          OR: [
-            { name: { equals: priceBookName, mode: 'insensitive' } },
-            { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
-            { name: { startsWith: priceBookName, mode: 'insensitive' } },
-            { name: { startsWith: priceBookNameAlt, mode: 'insensitive' } },
-          ],
-        },
-        orderBy: { academicYearId: 'asc' },
+          isActive: true
+        }
       });
+
+      // Fallback to name matching
+      if (!classPriceBook) {
+        const classRecord = await this.prisma.class.findFirst({
+          where: { id: classId, tenantId },
+        });
+        if (classRecord) {
+          const className = classRecord.name;
+          const priceBookName = className.replace('-', ' ');
+          const priceBookNameAlt = className.replace(' ', '-');
+          classPriceBook = await this.prisma.pricebook.findFirst({
+            where: {
+              tenantId,
+              isActive: true,
+              academicYearId,
+              OR: [
+                { name: { equals: priceBookName, mode: 'insensitive' } },
+                { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
+                { name: { startsWith: priceBookName, mode: 'insensitive' } },
+                { name: { startsWith: priceBookNameAlt, mode: 'insensitive' } },
+              ],
+            },
+            orderBy: { academicYearId: 'asc' },
+          });
+        }
+      }
     } else {
+      // First try strong relation
       classPriceBook = await this.prisma.pricebook.findFirst({
         where: {
           tenantId,
-          isActive: true,
-          OR: [
-            { name: { equals: priceBookName, mode: 'insensitive' } },
-            { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
-          ],
-        },
+          classId,
+          isActive: true
+        }
       });
+
+      // Fallback to name matching
+      if (!classPriceBook) {
+        const classRecord = await this.prisma.class.findFirst({
+          where: { id: classId, tenantId },
+        });
+        if (classRecord) {
+          const className = classRecord.name;
+          const priceBookName = className.replace('-', ' ');
+          const priceBookNameAlt = className.replace(' ', '-');
+          classPriceBook = await this.prisma.pricebook.findFirst({
+            where: {
+              tenantId,
+              isActive: true,
+              OR: [
+                { name: { equals: priceBookName, mode: 'insensitive' } },
+                { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
+              ],
+            },
+          });
+        }
+      }
     }
 
     if (!classPriceBook) {
@@ -833,6 +862,13 @@ export class BillingService {
           const classPriceBook = await tx.pricebook.findFirst({
             where: {
               tenantId,
+              classId: matchedClass.id,
+              academicYearId: matchedAY?.id || undefined,
+              isActive: true
+            },
+          }) || await tx.pricebook.findFirst({
+            where: {
+              tenantId,
               isActive: true,
               OR: [
                 { name: { equals: priceBookName, mode: 'insensitive' } },
@@ -885,5 +921,205 @@ export class BillingService {
       successCount,
       errors,
     };
+  }
+
+  // ── PRODUCT MANAGEMENT ─────────────────────────────────────────────────────
+
+  async createFeeProducts(productNames: string[]) {
+    const tenantId = this.getTenantId();
+    const created = [];
+
+    const generateProductCode = (name: string) => {
+      const clean = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      return `${clean.slice(0, 10)}_${Date.now().toString().slice(-4)}`;
+    };
+
+    for (const name of productNames) {
+      if (!name || name.trim() === '') continue;
+      const cleanName = name.trim();
+
+      // Check if product with same name already exists for this tenant
+      const existing = await this.prisma.product.findFirst({
+        where: {
+          tenantId,
+          name: { equals: cleanName, mode: 'insensitive' },
+          isActive: true,
+        },
+      });
+
+      if (!existing) {
+        const prod = await this.prisma.product.create({
+          data: {
+            name: cleanName,
+            productCode: generateProductCode(cleanName),
+            tenantId,
+            isActive: true,
+          },
+        });
+        created.push(prod);
+      } else {
+        created.push(existing);
+      }
+    }
+    return created;
+  }
+
+  async getAllFeeProducts() {
+    const tenantId = this.getTenantId();
+    return this.prisma.product.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  // ── PRICEBOOK UPSERT & LOADING ─────────────────────────────────────────────
+
+  async getPriceBook(classId: string, academicYearId: string) {
+    const tenantId = this.getTenantId();
+    
+    if (!classId || !academicYearId) {
+      throw new BadRequestException('classId and academicYearId are required');
+    }
+
+    // Try to find pricebook by classId and academicYearId
+    const pricebook = await this.prisma.pricebook.findFirst({
+      where: {
+        tenantId,
+        classId,
+        academicYearId,
+        isActive: true,
+      },
+      include: {
+        pricebookEntries: {
+          where: { isActive: true },
+          include: { product: true },
+        },
+      },
+    });
+
+    if (pricebook) {
+      return {
+        id: pricebook.id,
+        name: pricebook.name,
+        isActive: pricebook.isActive,
+        academicYearId: pricebook.academicYearId,
+        classId: pricebook.classId,
+        entries: pricebook.pricebookEntries.map(e => ({
+          productId: e.productId,
+          productName: e.product.name,
+          unitPrice: Number(e.unitPrice),
+          isActive: e.isActive,
+        })),
+      };
+    }
+    return null;
+  }
+
+  async savePriceBook(
+    classId: string,
+    academicYearId: string,
+    priceItems: { productId: string; price: number; selected: boolean }[],
+  ) {
+    const tenantId = this.getTenantId();
+
+    if (!classId || !academicYearId) {
+      throw new BadRequestException('classId and academicYearId are required');
+    }
+
+    const classRecord = await this.prisma.class.findFirst({
+      where: { id: classId, tenantId },
+    });
+    const ayRecord = await this.prisma.academicYear.findFirst({
+      where: { id: academicYearId, tenantId },
+    });
+
+    if (!classRecord || !ayRecord) {
+      throw new BadRequestException('Class or Academic Year not found');
+    }
+
+    const pricebookName = `${classRecord.name} - ${ayRecord.name}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      // Upsert the pricebook record
+      const pricebook = await tx.pricebook.upsert({
+        where: {
+          tenantId_classId_academicYearId: {
+            tenantId,
+            classId,
+            academicYearId,
+          },
+        },
+        create: {
+          tenantId,
+          classId,
+          academicYearId,
+          name: pricebookName,
+          isActive: true,
+        },
+        update: {
+          name: pricebookName,
+          isActive: true,
+        },
+      });
+
+      // Handle entries
+      for (const item of priceItems) {
+        const existingEntry = await tx.pricebookEntry.findFirst({
+          where: {
+            tenantId,
+            pricebookId: pricebook.id,
+            productId: item.productId,
+          },
+        });
+
+        if (existingEntry) {
+          await tx.pricebookEntry.update({
+            where: { id: existingEntry.id },
+            data: {
+              unitPrice: item.price,
+              isActive: item.selected && item.price > 0,
+            },
+          });
+        } else if (item.selected && item.price > 0) {
+          await tx.pricebookEntry.create({
+            data: {
+              tenantId,
+              pricebookId: pricebook.id,
+              productId: item.productId,
+              unitPrice: item.price,
+              isActive: true,
+            },
+          });
+        }
+      }
+
+      // Return the updated pricebook
+      const finalPb = await tx.pricebook.findUnique({
+        where: { id: pricebook.id },
+        include: {
+          pricebookEntries: {
+            where: { isActive: true },
+            include: { product: true },
+          },
+        },
+      });
+
+      return {
+        id: finalPb.id,
+        name: finalPb.name,
+        isActive: finalPb.isActive,
+        academicYearId: finalPb.academicYearId,
+        classId: finalPb.classId,
+        entries: finalPb.pricebookEntries.map(e => ({
+          productId: e.productId,
+          productName: e.product.name,
+          unitPrice: Number(e.unitPrice),
+          isActive: e.isActive,
+        })),
+      };
+    });
   }
 }

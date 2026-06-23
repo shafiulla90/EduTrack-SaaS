@@ -17,13 +17,10 @@ export class AttendanceService {
 
   async getRecentSubmissions() {
     const tenantId = this.getTenantId();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     return this.prisma.attendanceSession.findMany({
       where: {
         tenantId,
-        date: today,
       },
       include: {
         classSection: {

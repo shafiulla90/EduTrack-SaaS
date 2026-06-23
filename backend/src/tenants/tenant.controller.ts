@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards, Req, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma.service';
@@ -127,5 +127,93 @@ export class TenantController {
       missingFields,
       setup,
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('dashboard-stats')
+  async getDashboardStats(@Req() req: any) {
+    const tenantId = req.user.tenantId;
+
+    const studentsCount = await this.prisma.studentProfile.count({
+      where: { user: { tenantId } },
+    });
+
+    const teachersCount = await this.prisma.staffProfile.count({
+      where: { user: { tenantId } },
+    });
+
+    const classesCount = await this.prisma.class.count({
+      where: { tenantId },
+    });
+
+    const booksCount = await this.prisma.book.count({
+      where: { tenantId },
+    });
+
+    const complaintsCount = await this.prisma.behaviorCase.count({
+      where: { tenantId },
+    });
+
+    // Invoices / revenue
+    const invoices = await this.prisma.invoice.findMany({
+      where: { tenantId },
+      select: { paidAmount: true },
+    });
+    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+
+    // Expenses
+    const expenses = await this.prisma.expense.findMany({
+      where: { tenantId },
+      select: { amount: true },
+    });
+    const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
+
+    // Attendance rate
+    const sessions = await this.prisma.attendanceSession.findMany({
+      where: { tenantId },
+      select: { presentCount: true, totalStudents: true },
+    });
+    const totalPresent = sessions.reduce((sum, s) => sum + s.presentCount, 0);
+    const totalRoster = sessions.reduce((sum, s) => sum + s.totalStudents, 0);
+    const attendanceRate = totalRoster > 0 ? Math.round((totalPresent / totalRoster) * 1000) / 10 : 0;
+
+    // Academic scores
+    const marks = await this.prisma.examMark.findMany({
+      where: { tenantId },
+      select: { marksObtained: true },
+    });
+    const academicAverage = marks.length > 0
+      ? Math.round((marks.reduce((sum, m) => sum + Number(m.marksObtained), 0) / (marks.length)) * 10) / 10
+      : 0;
+
+    return {
+      studentsCount,
+      teachersCount,
+      classesCount,
+      booksCount,
+      complaintsCount,
+      totalRevenue,
+      totalExpenses,
+      attendanceRate,
+      academicAverage,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('banking-upi')
+  async updateBankingUpi(@Req() req: any, @Body() body: any) {
+    const tenantId = req.user.tenantId;
+    return this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        bankName: body.bankName || null,
+        bankBranch: body.bankBranch || null,
+        bankIFSC: body.bankIFSC || null,
+        bankAccountNo: body.bankAccountNo || null,
+        googlePayId: body.googlePayId || null,
+        phonePeId: body.phonePeId || null,
+        upiQrId: body.upiQrId || null,
+      },
+    });
   }
 }

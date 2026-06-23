@@ -223,6 +223,7 @@ model Class {
   
   classSections  ClassSection[]
   opportunities  Opportunity[]
+  pricebooks     Pricebook[]
 }
 
 model Section {
@@ -235,6 +236,7 @@ model Section {
   classSections ClassSection[]
   opportunities Opportunity[]
 }
+
 
 model ClassSection {
   id         String   @id @default(uuid())
@@ -585,6 +587,8 @@ model Pricebook {
   isActive       Boolean       @default(true)
   academicYearId String?
   academicYear   AcademicYear? @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  classId        String?
+  class          Class?        @relation(fields: [classId], references: [id], onDelete: SetNull)
   tenantId       String
   tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -592,6 +596,8 @@ model Pricebook {
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  @@unique([tenantId, classId, academicYearId])
 }
 
 model PricebookEntry {

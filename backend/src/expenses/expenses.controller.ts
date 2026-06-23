@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ExpensesService } from './expenses.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ExpenseStatus } from '@prisma/client';
@@ -29,5 +29,10 @@ export class ExpensesController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.expensesService.deleteExpense(id);
+  }
+
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() data: any) {
+    return this.expensesService.updateExpense(id, data);
   }
 }

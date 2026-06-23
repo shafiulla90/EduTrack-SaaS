@@ -1,23 +1,55 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Mail, Phone, Search, Bell, Send, CheckCircle2 } from 'lucide-react';
-import { mockParents, MockParent } from '@/lib/mockData';
+import { api } from '@/lib/api';
+
+interface Parent {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  children: string[];
+}
 
 export default function ParentsDirectory() {
   const [search, setSearch] = useState('');
   const [alertSuccess, setAlertSuccess] = useState(false);
   const [notifiedParentName, setNotifiedParentName] = useState('');
+  const [parents, setParents] = useState<Parent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadParents = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/students/parents/all');
+      setParents(res.data.map((p: any) => ({
+        id: p.id,
+        name: p.user?.name || 'Unknown Parent',
+        email: p.user?.email || 'N/A',
+        phone: p.user?.phone || 'N/A',
+        children: p.students?.map((s: any) => s.user?.name).filter(Boolean) || []
+      })));
+    } catch (err) {
+      console.error('Failed to load parents:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadParents();
+  }, []);
 
   // Filter parents
-  const filteredParents = mockParents.filter(
+  const filteredParents = parents.filter(
     (parent) =>
       parent.name.toLowerCase().includes(search.toLowerCase()) ||
       parent.email.toLowerCase().includes(search.toLowerCase()) ||
       parent.phone.includes(search)
   );
 
-  const handleSendNotification = (parent: MockParent) => {
+  const handleSendNotification = (parent: Parent) => {
     setNotifiedParentName(parent.name);
     setAlertSuccess(true);
     setTimeout(() => {
@@ -39,7 +71,7 @@ export default function ParentsDirectory() {
           </p>
         </div>
         <div className="text-slate-400 text-xs font-semibold bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
-          Active Guardians: <span className="text-brand-400 font-bold">{mockParents.length}</span>
+          Active Guardians: <span className="text-brand-400 font-bold">{parents.length}</span>
         </div>
       </div>
 

@@ -6,20 +6,47 @@ import {
   ChevronLeft, User, Calendar, DollarSign, AlertCircle, 
   Award, Users, ArrowRight, Shield, RefreshCw
 } from 'lucide-react';
-import { mockStudents, MockStudent, mockAcademicYears } from '@/lib/mockData';
 import { api } from '@/lib/api';
 
-// Constants matching LWC CLASS_ORDER
 const CLASS_ORDER = [
-  'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+  'Nursery', 'LKG', 'UKG',
+  'Class-1', 'Class-2', 'Class-3', 'Class-4', 'Class-5', 'Class-6', 'Class-7', 'Class-8', 'Class-9', 'Class-10',
+  'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
 ];
 
-function getNextClass(currentClass: string) {
+function getNextClass(currentClass: string): string {
   if (!currentClass) return '';
-  const idx = CLASS_ORDER.indexOf(currentClass);
+  const normalized = currentClass.trim().replace(/\s+/g, ' ');
+  const normalizedWithDash = currentClass.trim().replace(/\s+/g, '-');
+  
+  let idx = CLASS_ORDER.findIndex(c => c.toLowerCase() === normalized.toLowerCase() || c.toLowerCase() === normalizedWithDash.toLowerCase());
   if (idx >= 0 && idx < CLASS_ORDER.length - 1) {
-    return CLASS_ORDER[idx + 1];
+    const currentIsGrade = normalized.toLowerCase().startsWith('grade');
+    const nextClass = CLASS_ORDER[idx + 1];
+    const nextIsGrade = nextClass.toLowerCase().startsWith('grade');
+    if (currentIsGrade === nextIsGrade) {
+      return nextClass;
+    }
   }
+  
+  const salesforceOrder = [
+    'Nursery', 'LKG', 'UKG',
+    'Class-1', 'Class-2', 'Class-3', 'Class-4', 'Class-5', 'Class-6', 'Class-7', 'Class-8', 'Class-9', 'Class-10'
+  ];
+  const gradeOrder = [
+    'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+  ];
+  
+  let salesforceIdx = salesforceOrder.findIndex(c => c.toLowerCase() === normalizedWithDash.toLowerCase() || c.toLowerCase() === normalized.toLowerCase());
+  if (salesforceIdx >= 0 && salesforceIdx < salesforceOrder.length - 1) {
+    return salesforceOrder[salesforceIdx + 1];
+  }
+  
+  let gradeIdx = gradeOrder.findIndex(c => c.toLowerCase() === normalized.toLowerCase() || c.toLowerCase() === normalizedWithDash.toLowerCase());
+  if (gradeIdx >= 0 && gradeIdx < gradeOrder.length - 1) {
+    return gradeOrder[gradeIdx + 1];
+  }
+  
   return '';
 }
 
@@ -31,7 +58,7 @@ interface ClassSummary {
 
 export default function StudentPromotionPage() {
   const [academicYears, setAcademicYears] = useState<any[]>([]);
-  const [studentsState, setStudentsState] = useState<MockStudent[]>([]);
+  const [studentsState, setStudentsState] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -642,7 +669,7 @@ export default function StudentPromotionPage() {
                               className="accent-blue-600 cursor-pointer w-4 h-4 rounded-md"
                             />
                             <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center text-slate-700 text-xs font-extrabold">
-                              {s.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
+                              {s.name.split(' ').map((n: string) => n[0]).join('').substring(0,2)}
                             </div>
                             <div>
                               <h5 className="font-bold text-slate-800 text-xs">{s.name}</h5>
@@ -759,7 +786,7 @@ export default function StudentPromotionPage() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-extrabold">
-                            {s.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
+                            {s.name.split(' ').map((n: string) => n[0]).join('').substring(0,2)}
                           </div>
                           <div>
                             <h5 className="font-bold text-slate-800 text-xs">{s.name}</h5>

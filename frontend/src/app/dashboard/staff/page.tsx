@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, X, Search, Phone, Mail, Calendar,
   ChevronRight, Edit2, Trash2, Clock, BookOpen, Check
 } from 'lucide-react';
-import { mockTeachers } from '@/lib/mockData';
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#667eea,#764ba2)',
@@ -51,103 +50,35 @@ interface StaffMember {
   avatarUrl?: string;
 }
 
-const initialStaff: StaffMember[] = [
-  ...mockTeachers.map((teacher, idx) => {
-    const parts = teacher.name.replace('Teacher ', '').split(' ');
-    const firstName = parts[0] || 'Teacher';
-    const lastName = parts[1] || 'Staff';
-    return {
-      id: teacher.id,
-      firstName,
-      lastName,
-      name: teacher.name.replace('Teacher ', ''),
-      initials: (firstName[0] || '') + (lastName[0] || ''),
-      email: teacher.email,
-      phone: `+91 98765 432${String(idx).padStart(2, '0')}`,
-      employeeId: teacher.employeeId,
-      designation: teacher.designation,
-      department: idx % 2 === 0 ? 'Science' : 'Mathematics',
-      staffType: 'Teaching' as const,
-      subject: teacher.subjects[0] || 'General Knowledge',
-      basicSalary: teacher.basicSalary,
-      hra: Math.round(teacher.basicSalary * 0.12),
-      da: Math.round(teacher.basicSalary * 0.08),
-      pf: Math.round(teacher.basicSalary * 0.05),
-      joiningDate: '2025-06-01',
-      qualification: teacher.qualification,
-      gender: idx % 2 === 0 ? 'Male' : 'Female',
-      dob: '1988-05-15',
-      address: 'Plot No. 12, Vikas Nagar, Rohini, Delhi',
-      status: 'Active' as const,
-      accountNumber: `918273645${idx}`,
-      ifsc: 'SBIN0001234',
-      skills: teacher.subjects.map(sub => ({ subject: sub, level: 'Expert', exp: 5 + (idx % 5) })),
-      salaryStatus: (idx % 3 === 0 ? 'Paid' : 'Pending') as 'Paid' | 'Pending',
-      gradient: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]
-    };
-  }),
-  {
-    id: 'staff-nt-1',
-    firstName: 'Ramesh',
-    lastName: 'Kumar',
-    name: 'Ramesh Kumar',
-    initials: 'RK',
-    email: 'ramesh.kumar@school.com',
-    phone: '+91 99999 88881',
-    employeeId: 'EMP-NT-01',
-    designation: 'Accountant',
-    department: 'Finance',
-    staffType: 'Non-Teaching',
-    subject: '',
-    basicSalary: 35000,
-    hra: 4200,
-    da: 2800,
-    pf: 1750,
-    joiningDate: '2024-04-10',
-    qualification: 'B.Com, Tally certified',
-    gender: 'Male',
-    dob: '1990-12-05',
-    address: 'Sector 3, Rohini, New Delhi',
-    status: 'Active',
-    accountNumber: '10002938475',
-    ifsc: 'HDFC0000242',
-    skills: [],
-    salaryStatus: 'Paid',
-    gradient: AVATAR_GRADIENTS[9]
-  },
-  {
-    id: 'staff-nt-2',
-    firstName: 'Sunita',
-    lastName: 'Sharma',
-    name: 'Sunita Sharma',
-    initials: 'SS',
-    email: 'sunita.sharma@school.com',
-    phone: '+91 99999 88882',
-    employeeId: 'EMP-NT-02',
-    designation: 'Librarian',
-    department: 'Library',
-    staffType: 'Non-Teaching',
-    subject: '',
-    basicSalary: 30000,
-    hra: 3600,
-    da: 2400,
-    pf: 1500,
-    joiningDate: '2023-08-15',
-    qualification: 'M.Lib',
-    gender: 'Female',
-    dob: '1985-07-22',
-    address: 'Pocket A, Sector 8, Rohini, New Delhi',
-    status: 'Active',
-    accountNumber: '10002938486',
-    ifsc: 'ICIC0000111',
-    skills: [],
-    salaryStatus: 'Pending',
-    gradient: AVATAR_GRADIENTS[8]
-  }
-];
+import { api } from '@/lib/api';
+import { useToast } from '@/components/Toast';
 
 export default function SchoolStaffPage() {
-  const [staff, setStaff] = useState<StaffMember[]>(initialStaff);
+  const { showToast } = useToast();
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    show: boolean;
+    id: string;
+    name: string;
+  }>({
+    show: false,
+    id: '',
+    name: ''
+  });
+
+  const handleConfirmDelete = async () => {
+    try {
+      await api.delete(`/teachers/${deleteConfirm.id}`);
+      showToast('Staff member deleted successfully.', 'success');
+      setSelectedStaff(null);
+      setDeleteConfirm({ show: false, id: '', name: '' });
+      loadStaff();
+    } catch (err: any) {
+      console.error('Error deleting staff:', err);
+      showToast(err.response?.data?.message || 'Failed to delete staff member.', 'error');
+    }
+  };
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'teaching' | 'non-teaching' | 'salary'>('all');
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
@@ -195,79 +126,137 @@ export default function SchoolStaffPage() {
     ifsc: ''
   });
 
+  const loadStaff = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/teachers');
+      setStaff(res.data.map((t: any, idx: number) => {
+        const nameParts = t.user?.name ? t.user.name.split(' ') : ['Teacher'];
+        const firstName = nameParts[0] || 'Teacher';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        return {
+          id: t.id,
+          firstName,
+          lastName,
+          name: t.user?.name || 'Unknown Teacher',
+          initials: (firstName[0] || '') + (lastName[0] || ''),
+          email: t.user?.email || '',
+          phone: t.user?.phone || '',
+          employeeId: t.employeeId || `EMP-T-${t.id.substring(0, 4).toUpperCase()}`,
+          designation: t.designation || 'Teacher',
+          department: t.designation?.toLowerCase().includes('teacher') ? 'Teaching' : 'Administration',
+          staffType: t.user?.role === 'STAFF' ? 'Non-Teaching' : 'Teaching',
+          subject: t.subjectsTaught?.[0] || 'General',
+          basicSalary: Number(t.basicSalary) || 25000,
+          hra: Number(t.allowances) || 0,
+          da: 0,
+          pf: Number(t.pfDeduction) || 0,
+          joiningDate: t.joiningDate ? new Date(t.joiningDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          qualification: t.qualification || '',
+          gender: 'General',
+          dob: '',
+          address: '',
+          status: t.status || 'Active',
+          accountNumber: '',
+          ifsc: '',
+          skills: t.subjectsTaught?.map((sub: string) => ({ subject: sub, level: 'Expert', exp: 5 })) || [],
+          salaryStatus: 'Pending',
+          gradient: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]
+        };
+      }));
+    } catch (err) {
+      console.error('Failed to load staff list:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
   const handlePaySalary = (id: string) => {
     setStaff(prev => prev.map(m => m.id === id ? { ...m, salaryStatus: 'Paid' } : m));
   };
 
   const handleProcessAll = () => {
     setStaff(prev => prev.map(m => ({ ...m, salaryStatus: 'Paid' })));
-    alert('✅ All salaries processed successfully!');
+    showToast('All salaries processed successfully!', 'success');
   };
 
-  const handleSaveStaff = (e: React.FormEvent) => {
+  const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newMember: StaffMember = {
-      id: `staff-${Date.now()}`,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      name: `${formData.firstName} ${formData.lastName}`,
-      initials: (formData.firstName[0] || '') + (formData.lastName[0] || ''),
-      email: formData.email,
-      phone: formData.phone,
-      employeeId: `EMP-${formType === 'Teaching' ? 'TCH' : 'NT'}-${Math.floor(10 + Math.random() * 90)}`,
-      designation: formData.designation,
-      department: formData.department,
-      staffType: formType,
-      subject: formSkills[0]?.subject || '',
-      basicSalary: Number(formData.basicSalary),
-      hra: Number(formData.hra),
-      da: Number(formData.da),
-      pf: Number(formData.pf),
-      joiningDate: formData.joiningDate || new Date().toISOString().slice(0, 10),
-      qualification: formData.qualification,
-      gender: formData.gender,
-      dob: formData.dob,
-      address: formData.address,
-      status: formData.status,
-      accountNumber: formData.accountNumber,
-      ifsc: formData.ifsc,
-      skills: formSkills.map(s => ({ subject: s.subject, level: s.level, exp: s.exp })),
-      salaryStatus: 'Pending',
-      gradient: AVATAR_GRADIENTS[staff.length % AVATAR_GRADIENTS.length],
-      avatarUrl: photoPreview || undefined
-    };
-    setStaff([newMember, ...staff]);
-    setShowAddModal(false);
-    // Reset form
-    setFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      designation: '',
-      department: '',
-      basicSalary: 30000,
-      hra: 3600,
-      da: 2400,
-      pf: 1500,
-      joiningDate: '',
-      qualification: '',
-      gender: '',
-      dob: '',
-      address: '',
-      status: 'Active',
-      accountNumber: '',
-      ifsc: ''
-    });
-    setFormSkills([{ id: 1, subject: '', level: 'Expert', exp: 3 }]);
-    setPhotoPreview(null);
+    try {
+      await api.post('/teachers', {
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        phone: formData.phone,
+        employeeId: formData.designation.toUpperCase().substring(0,3) + '-' + Math.floor(100 + Math.random() * 900),
+        designation: formData.designation,
+        basicSalary: Number(formData.basicSalary),
+        allowances: Number(formData.hra),
+        pfDeduction: Number(formData.pf),
+        joiningDate: formData.joiningDate || new Date().toISOString().slice(0, 10),
+        qualification: formData.qualification,
+        subjectsTaught: formSkills.map(s => s.subject).filter(Boolean),
+        staffType: formType,
+        status: 'Active'
+      });
+
+      setShowAddModal(false);
+      // Reset form
+      setFormData({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        designation: '',
+        department: '',
+        basicSalary: 30000,
+        hra: 3600,
+        da: 2400,
+        pf: 1500,
+        joiningDate: '',
+        qualification: '',
+        gender: '',
+        dob: '',
+        address: '',
+        status: 'Active',
+        accountNumber: '',
+        ifsc: ''
+      });
+      setFormSkills([{ id: 1, subject: '', level: 'Expert', exp: 3 }]);
+      setPhotoPreview(null);
+      loadStaff();
+    } catch (err: any) {
+      console.error('Failed to save staff member:', err);
+      showToast(err.response?.data?.message || 'Failed to save staff member', 'error');
+    }
   };
 
-  const handleUpdateStaff = (e: React.FormEvent) => {
+  const handleUpdateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStaff) return;
-    setStaff(prev => prev.map(m => m.id === editingStaff.id ? editingStaff : m));
-    setEditingStaff(null);
+    try {
+      await api.put(`/teachers/${editingStaff.id}`, {
+        name: editingStaff.name,
+        email: editingStaff.email,
+        phone: editingStaff.phone,
+        employeeId: editingStaff.employeeId,
+        designation: editingStaff.designation,
+        basicSalary: Number(editingStaff.basicSalary),
+        allowances: Number(editingStaff.hra),
+        pfDeduction: Number(editingStaff.pf),
+        joiningDate: editingStaff.joiningDate,
+        qualification: editingStaff.qualification,
+        status: editingStaff.status
+      });
+      setEditingStaff(null);
+      loadStaff();
+    } catch (err: any) {
+      console.error('Failed to update staff:', err);
+      showToast(err.response?.data?.message || 'Failed to update staff member', 'error');
+    }
   };
 
   const totalStaff = staff.length;
@@ -402,98 +391,104 @@ export default function SchoolStaffPage() {
       {/* Staff Cards / Payroll Table */}
       {activeTab !== 'salary' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredStaff.map(member => {
-            const netSalary = member.basicSalary + member.hra + member.da - member.pf;
-            return (
-              <div
-                key={member.id}
-                onClick={() => setSelectedStaff(member)}
-                className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 cursor-pointer transition-all group"
-              >
-                {/* Color Band */}
-                <div className="h-1.5" style={{ background: member.gradient }} />
-                <div className="p-5">
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      {member.avatarUrl ? (
-                        <img src={member.avatarUrl} alt={member.name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
-                      ) : (
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-extrabold flex-shrink-0"
-                          style={{ background: member.gradient }}
-                        >
-                          {member.initials}
-                        </div>
-                      )}
-                      <div>
-                        <h3 className="font-bold text-slate-800 text-sm leading-tight">{member.name}</h3>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">{member.employeeId}</p>
-                      </div>
-                    </div>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                      member.status === 'Active'
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        : member.status === 'On Leave'
-                        ? 'bg-amber-50 text-amber-600 border-amber-100'
-                        : 'bg-slate-50 text-slate-500 border-slate-200'
-                    }`}>
-                      {member.status}
-                    </span>
-                  </div>
-
-                  {/* Skills / Subject row */}
-                  {member.staffType === 'Teaching' && member.skills.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-1.5">
-                      {member.skills.slice(0, 2).map((sk, i) => (
-                        <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase tracking-wide">
-                          {sk.subject}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Info Grid */}
-                  <div className="space-y-1.5 text-xs mb-3">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <Mail className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{member.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <Phone className="w-3 h-3 flex-shrink-0" />
-                      <span>{member.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <Calendar className="w-3 h-3 flex-shrink-0" />
-                      <span>Joined {member.joiningDate}</span>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${
-                        member.staffType === 'Teaching'
-                          ? 'bg-blue-50 text-blue-600 border-blue-100'
-                          : 'bg-slate-50 text-slate-600 border-slate-200'
-                      }`}>
-                        {member.staffType}
-                      </span>
-                      <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
-                        Active
-                      </span>
-                    </div>
-                    <span className="text-xs font-bold text-slate-700">₹{netSalary.toLocaleString('en-IN')}/mo</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {filteredStaff.length === 0 && (
+          {loading ? (
+            <div className="col-span-full py-16 text-center text-slate-400 bg-white border border-slate-200 rounded-2xl">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3" />
+              <p className="font-semibold text-sm">Loading staff members...</p>
+            </div>
+          ) : filteredStaff.length === 0 ? (
             <div className="col-span-full py-16 text-center text-slate-400 bg-white border border-dashed border-slate-200 rounded-2xl">
               <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="font-semibold">No staff members found</p>
             </div>
+          ) : (
+            filteredStaff.map(member => {
+              const netSalary = member.basicSalary + member.hra + member.da - member.pf;
+              return (
+                <div
+                  key={member.id}
+                  onClick={() => setSelectedStaff(member)}
+                  className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 cursor-pointer transition-all group"
+                >
+                  {/* Color Band */}
+                  <div className="h-1.5" style={{ background: member.gradient }} />
+                  <div className="p-5">
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        {member.avatarUrl ? (
+                          <img src={member.avatarUrl} alt={member.name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                        ) : (
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-extrabold flex-shrink-0"
+                            style={{ background: member.gradient }}
+                          >
+                            {member.initials}
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="font-bold text-slate-800 text-sm leading-tight">{member.name}</h3>
+                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">{member.employeeId}</p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                        member.status === 'Active'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          : member.status === 'On Leave'
+                          ? 'bg-amber-50 text-amber-600 border-amber-100'
+                          : 'bg-slate-50 text-slate-500 border-slate-200'
+                      }`}>
+                        {member.status}
+                      </span>
+                    </div>
+
+                    {/* Skills / Subject row */}
+                    {member.staffType === 'Teaching' && member.skills.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-1.5">
+                        {member.skills.slice(0, 2).map((sk, i) => (
+                          <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 uppercase tracking-wide">
+                            {sk.subject}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Info Grid */}
+                    <div className="space-y-1.5 text-xs mb-3">
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Mail className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{member.email}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Phone className="w-3 h-3 flex-shrink-0" />
+                        <span>{member.phone}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Calendar className="w-3 h-3 flex-shrink-0" />
+                        <span>Joined {member.joiningDate}</span>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${
+                          member.staffType === 'Teaching'
+                            ? 'bg-blue-50 text-blue-600 border-blue-100'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}>
+                          {member.staffType}
+                        </span>
+                        <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
+                          Active
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">₹{netSalary.toLocaleString('en-IN')}/mo</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       ) : (
@@ -533,62 +528,77 @@ export default function SchoolStaffPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm text-slate-600 font-medium">
-                {staff.map(m => {
-                  const net = m.basicSalary + m.hra + m.da - m.pf;
-                  const isPaid = m.salaryStatus === 'Paid';
-                  return (
-                    <tr key={m.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          {m.avatarUrl ? (
-                            <img src={m.avatarUrl} alt={m.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ background: m.gradient }}>
-                              {m.initials}
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2" />
+                      Loading payroll...
+                    </td>
+                  </tr>
+                ) : staff.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
+                      No staff members found.
+                    </td>
+                  </tr>
+                ) : (
+                  staff.map(m => {
+                    const net = m.basicSalary + m.hra + m.da - m.pf;
+                    const isPaid = m.salaryStatus === 'Paid';
+                    return (
+                      <tr key={m.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            {m.avatarUrl ? (
+                              <img src={m.avatarUrl} alt={m.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ background: m.gradient }}>
+                                {m.initials}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-bold text-slate-800 text-sm">{m.name}</div>
+                              <div className="text-xs text-slate-400">{m.designation}</div>
                             </div>
-                          )}
-                          <div>
-                            <div className="font-bold text-slate-800 text-sm">{m.name}</div>
-                            <div className="text-xs text-slate-400">{m.designation}</div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
-                          m.staffType === 'Teaching'
-                            ? 'bg-blue-50 text-blue-600 border-blue-100'
-                            : 'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}>
-                          {m.staffType}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-mono">₹{m.basicSalary.toLocaleString('en-IN')}</td>
-                      <td className="px-5 py-3.5 text-right font-mono text-emerald-600">+₹{(m.hra + m.da).toLocaleString('en-IN')}</td>
-                      <td className="px-5 py-3.5 text-right font-mono text-rose-600">-₹{m.pf.toLocaleString('en-IN')}</td>
-                      <td className="px-5 py-3.5 text-right font-mono font-extrabold text-slate-800">₹{net.toLocaleString('en-IN')}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                          isPaid ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                          {m.salaryStatus}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <button
-                          onClick={() => handlePaySalary(m.id)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
-                            isPaid
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                              : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
-                          }`}
-                        >
-                          {isPaid ? 'Salary Disbursed' : 'Pay Salary'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
+                            m.staffType === 'Teaching'
+                              ? 'bg-blue-50 text-blue-600 border-blue-100'
+                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}>
+                            {m.staffType}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-mono">₹{m.basicSalary.toLocaleString('en-IN')}</td>
+                        <td className="px-5 py-3.5 text-right font-mono text-emerald-600">+₹{(m.hra + m.da).toLocaleString('en-IN')}</td>
+                        <td className="px-5 py-3.5 text-right font-mono text-rose-600">-₹{m.pf.toLocaleString('en-IN')}</td>
+                        <td className="px-5 py-3.5 text-right font-mono font-extrabold text-slate-800">₹{net.toLocaleString('en-IN')}</td>
+                        <td className="px-5 py-3.5">
+                          <span className={`flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                            isPaid ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            {m.salaryStatus}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <button
+                            onClick={() => handlePaySalary(m.id)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                              isPaid
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                            }`}
+                          >
+                            {isPaid ? 'Salary Disbursed' : 'Pay Salary'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -737,10 +747,11 @@ export default function SchoolStaffPage() {
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm(`Remove ${selectedStaff.name} from staff directory?`)) {
-                      setStaff(prev => prev.filter(s => s.id !== selectedStaff.id));
-                      setSelectedStaff(null);
-                    }
+                    setDeleteConfirm({
+                      show: true,
+                      id: selectedStaff.id,
+                      name: selectedStaff.name
+                    });
                   }}
                   className="px-5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm flex items-center gap-2 cursor-pointer"
                 >
@@ -949,7 +960,7 @@ export default function SchoolStaffPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-400 font-bold mb-1">Designation *</label>
-                  <select value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
+                  <select required value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
                     <option value="">Select Designation</option>
                     {formType === 'Teaching'
                       ? ['Principal', 'Vice Principal', 'Senior Teacher', 'Teacher', 'Sports Coach'].map(d => <option key={d}>{d}</option>)
@@ -959,7 +970,7 @@ export default function SchoolStaffPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 font-bold mb-1">Department *</label>
-                  <select value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
+                  <select required value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
                     <option value="">Select Department</option>
                     {formType === 'Teaching'
                       ? ['Science', 'Mathematics', 'English', 'Social Studies', 'General Knowledge'].map(d => <option key={d}>{d}</option>)
@@ -1010,6 +1021,39 @@ export default function SchoolStaffPage() {
                 <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md cursor-pointer">✅ Save Staff</button>
               </div>
             </form>
+          </div>
+        </>
+      )}
+
+      {/* ── CUSTOM DELETE CONFIRMATION MODAL ── */}
+      {deleteConfirm.show && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50 animate-fade-in" onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-2xl shadow-2xl z-50 p-6 animate-scale-in">
+            <div className="text-center py-2">
+              <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl mx-auto mb-3">
+                ⚠️
+              </div>
+              <h3 className="font-extrabold text-slate-800 text-base mb-1">Confirm Deletion</h3>
+              <p className="text-xs text-slate-500 mb-5">
+                Are you sure you want to delete staff member{' '}
+                <strong className="text-slate-700 font-bold">{deleteConfirm.name}</strong>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))}
+                className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer font-extrabold"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </>
       )}

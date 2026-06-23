@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { AcademicsService } from './academics.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -23,6 +23,11 @@ export class AcademicsController {
     return this.academicsService.getAcademicYears();
   }
 
+  @Patch('academic-years/:id/toggle')
+  async toggleYearActive(@Param('id') id: string) {
+    return this.academicsService.toggleAcademicYearActive(id);
+  }
+
   // ── Classes ────────────────────────────────────────────────────────────────
   @Post('classes')
   async createClass(@Body('name') name: string, @Body('academicYearId') academicYearId: string) {
@@ -32,6 +37,11 @@ export class AcademicsController {
   @Get('classes')
   async getClasses() {
     return this.academicsService.getClasses();
+  }
+
+  @Delete('classes/:id')
+  async deleteClass(@Param('id') id: string) {
+    return this.academicsService.deleteClass(id);
   }
 
   // ── Sections ───────────────────────────────────────────────────────────────
