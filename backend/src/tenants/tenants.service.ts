@@ -133,6 +133,7 @@ export class TenantsService {
           userId: user.id,
           designation: 'Principal',
           status: 'Active',
+          tenantId: tenant.id,
         },
       });
 

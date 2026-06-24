@@ -66,6 +66,7 @@ export class TeachersService {
           status: 'Active',
           qualification: data.qualification,
           subjectsTaught: data.subjectsTaught || [],
+          tenantId,
         },
       });
 
@@ -301,4 +302,58 @@ export class TeachersService {
       });
     });
   }
+
+  async paySalary(id: string, month: string) {
+    const tenantId = this.getTenantId();
+    const profile = await this.prisma.staffProfile.findFirst({
+      where: { id, user: { tenantId } },
+      include: { user: true }
+    });
+    if (!profile) {
+      throw new NotFoundException('Staff profile not found');
+    }
+
+    const netSalary = Number(profile.basicSalary || 0) + Number(profile.allowances || 0) - Number(profile.pfDeduction || 0);
+
+    return this.prisma.expense.create({
+      data: {
+        amount: netSalary,
+        category: 'Salary',
+        date: new Date(),
+        description: `Salary disbursed to ${profile.user.name} (${profile.employeeId || 'Staff'}) for ${month}`,
+        paymentMode: 'BANK_TRANSFER',
+        status: 'PAID',
+        tenantId,
+      }
+    });
+  }
+
+  async payAllSalaries(month: string) {
+    const tenantId = this.getTenantId();
+    const staffMembers = await this.prisma.staffProfile.findMany({
+      where: { user: { tenantId, isActive: true } },
+      include: { user: true }
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const createdExpenses = [];
+      for (const staff of staffMembers) {
+        const netSalary = Number(staff.basicSalary || 0) + Number(staff.allowances || 0) - Number(staff.pfDeduction || 0);
+        const exp = await tx.expense.create({
+          data: {
+            amount: netSalary,
+            category: 'Salary',
+            date: new Date(),
+            description: `Salary disbursed to ${staff.user.name} (${staff.employeeId || 'Staff'}) for ${month}`,
+            paymentMode: 'BANK_TRANSFER',
+            status: 'PAID',
+            tenantId,
+          }
+        });
+        createdExpenses.push(exp);
+      }
+      return createdExpenses;
+    });
+  }
 }
+

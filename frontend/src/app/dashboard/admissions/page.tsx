@@ -215,6 +215,7 @@ export default function AdmissionsPage() {
             selectedPricebookEntryIds: selectedProductIds,
             concessionAmount: concessionVal
           });
+          window.dispatchEvent(new CustomEvent('school-setup-updated'));
           setCurrentStep(5);
         } catch (err: any) {
           console.error('Admission failed:', err);
@@ -787,13 +788,13 @@ export default function AdmissionsPage() {
             <button
               onClick={handleBack}
               disabled={currentStep === 1}
-              className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 disabled:opacity-40 disabled:pointer-events-none rounded-lg text-slate-500 font-bold flex items-center gap-1"
+              className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 disabled:opacity-40 disabled:pointer-events-none rounded-lg text-slate-500 font-bold flex items-center gap-1 min-h-[44px]"
             >
               Back
             </button>
             <button
               onClick={handleNext}
-              className="px-5 py-2 bg-[#2E5BFF] hover:bg-[#1E3FCC] text-white rounded-lg font-bold flex items-center gap-1 shadow-md shadow-blue-500/10 transition-all"
+              className="px-5 py-2 bg-[#2E5BFF] hover:bg-[#1E3FCC] text-white rounded-lg font-bold flex items-center gap-1 shadow-md shadow-blue-500/10 transition-all min-h-[44px]"
             >
               {currentStep === 4 ? 'Confirm Admission' : 'Continue'}
             </button>

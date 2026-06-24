@@ -70,6 +70,8 @@ export default function SchoolStaffPage() {
     try {
       await api.delete(`/teachers/${deleteConfirm.id}`);
       showToast('Staff member deleted successfully.', 'success');
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
       setSelectedStaff(null);
       setDeleteConfirm({ show: false, id: '', name: '' });
       loadStaff();
@@ -175,13 +177,30 @@ export default function SchoolStaffPage() {
     loadStaff();
   }, []);
 
-  const handlePaySalary = (id: string) => {
-    setStaff(prev => prev.map(m => m.id === id ? { ...m, salaryStatus: 'Paid' } : m));
+  const handlePaySalary = async (id: string) => {
+    try {
+      await api.post(`/teachers/${id}/pay-salary`, { month: selectedPayrollMonth });
+      showToast('Salary disbursed successfully.', 'success');
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      setStaff(prev => prev.map(m => m.id === id ? { ...m, salaryStatus: 'Paid' } : m));
+    } catch (err: any) {
+      console.error('Error paying salary:', err);
+      showToast(err.response?.data?.message || 'Failed to disburse salary.', 'error');
+    }
   };
 
-  const handleProcessAll = () => {
-    setStaff(prev => prev.map(m => ({ ...m, salaryStatus: 'Paid' })));
-    showToast('All salaries processed successfully!', 'success');
+  const handleProcessAll = async () => {
+    try {
+      await api.post('/teachers/pay-all-salaries', { month: selectedPayrollMonth });
+      showToast('All salaries processed successfully!', 'success');
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      setStaff(prev => prev.map(m => ({ ...m, salaryStatus: 'Paid' })));
+    } catch (err: any) {
+      console.error('Error processing all salaries:', err);
+      showToast(err.response?.data?.message || 'Failed to process all salaries.', 'error');
+    }
   };
 
   const handleSaveStaff = async (e: React.FormEvent) => {
@@ -228,6 +247,9 @@ export default function SchoolStaffPage() {
       setFormSkills([{ id: 1, subject: '', level: 'Expert', exp: 3 }]);
       setPhotoPreview(null);
       loadStaff();
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      showToast('Staff member registered successfully.', 'success');
     } catch (err: any) {
       console.error('Failed to save staff member:', err);
       showToast(err.response?.data?.message || 'Failed to save staff member', 'error');
@@ -253,6 +275,9 @@ export default function SchoolStaffPage() {
       });
       setEditingStaff(null);
       loadStaff();
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      showToast('Staff member updated successfully.', 'success');
     } catch (err: any) {
       console.error('Failed to update staff:', err);
       showToast(err.response?.data?.message || 'Failed to update staff member', 'error');
@@ -513,7 +538,7 @@ export default function SchoolStaffPage() {
               </select>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
@@ -601,6 +626,78 @@ export default function SchoolStaffPage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {loading ? (
+              <div className="p-8 text-center text-slate-400">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2" />
+                Loading payroll...
+              </div>
+            ) : staff.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">
+                No staff members found.
+              </div>
+            ) : (
+              staff.map(m => {
+                const net = m.basicSalary + m.hra + m.da - m.pf;
+                const isPaid = m.salaryStatus === 'Paid';
+                return (
+                  <div key={m.id} className="p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-2.5">
+                        {m.avatarUrl ? (
+                          <img src={m.avatarUrl} alt={m.name} className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: m.gradient }}>
+                            {m.initials}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-slate-800 text-sm">{m.name}</div>
+                          <div className="text-xs text-slate-400">{m.designation} ({m.staffType})</div>
+                        </div>
+                      </div>
+                      <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                        isPaid ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        {m.salaryStatus}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-250/10">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Basic & Allowances</span>
+                        <span className="font-bold text-slate-700 block mt-0.5">
+                          ₹{m.basicSalary.toLocaleString('en-IN')} + ₹{(m.hra + m.da).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">PF & Net Salary</span>
+                        <span className="font-bold text-slate-700 block mt-0.5">
+                          -₹{m.pf.toLocaleString('en-IN')} / <span className="text-blue-600 font-extrabold">₹{net.toLocaleString('en-IN')}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        onClick={() => handlePaySalary(m.id)}
+                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all border cursor-pointer min-h-[44px] ${
+                          isPaid
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                            : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
+                        }`}
+                      >
+                        {isPaid ? 'Salary Disbursed' : 'Pay Salary'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -802,7 +899,7 @@ export default function SchoolStaffPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-500 font-bold mb-1">First Name *</label>
                   <input required value={editingStaff.firstName} onChange={e => setEditingStaff({...editingStaff, firstName: e.target.value, name: `${e.target.value} ${editingStaff.lastName}`})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" />
@@ -812,7 +909,7 @@ export default function SchoolStaffPage() {
                   <input required value={editingStaff.lastName} onChange={e => setEditingStaff({...editingStaff, lastName: e.target.value, name: `${editingStaff.firstName} ${e.target.value}`})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-500 font-bold mb-1">Email *</label>
                   <input type="email" required value={editingStaff.email} onChange={e => setEditingStaff({...editingStaff, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" />
@@ -822,7 +919,7 @@ export default function SchoolStaffPage() {
                   <input type="tel" required value={editingStaff.phone} onChange={e => setEditingStaff({...editingStaff, phone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-500 font-bold mb-1">Designation *</label>
                   <select value={editingStaff.designation} onChange={e => setEditingStaff({...editingStaff, designation: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
@@ -842,7 +939,7 @@ export default function SchoolStaffPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs text-slate-500 font-bold mb-1">Basic Salary (₹)</label>
                   <input type="number" value={editingStaff.basicSalary} onChange={e => setEditingStaff({...editingStaff, basicSalary: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none" />
@@ -856,7 +953,7 @@ export default function SchoolStaffPage() {
                   <input type="number" value={editingStaff.pf} onChange={e => setEditingStaff({...editingStaff, pf: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-500 font-bold mb-1">Status *</label>
                   <select value={editingStaff.status} onChange={e => setEditingStaff({...editingStaff, status: e.target.value as any})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
@@ -870,7 +967,7 @@ export default function SchoolStaffPage() {
                   <input value={editingStaff.qualification} onChange={e => setEditingStaff({...editingStaff, qualification: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-500 font-bold mb-1">Bank Account</label>
                   <input value={editingStaff.accountNumber} onChange={e => setEditingStaff({...editingStaff, accountNumber: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none" placeholder="Account Number" />
@@ -885,8 +982,8 @@ export default function SchoolStaffPage() {
                 <textarea value={editingStaff.address} onChange={e => setEditingStaff({...editingStaff, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none h-16 resize-none" />
               </div>
               <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
-                <button type="button" onClick={() => setEditingStaff(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm cursor-pointer">Cancel</button>
-                <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md cursor-pointer flex items-center gap-1.5"><Check className="w-4 h-4" /> Save Changes</button>
+                <button type="button" onClick={() => setEditingStaff(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm cursor-pointer min-h-[44px]">Cancel</button>
+                <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md cursor-pointer flex items-center gap-1.5 min-h-[44px]"><Check className="w-4 h-4" /> Save Changes</button>
               </div>
             </form>
           </div>
@@ -908,7 +1005,7 @@ export default function SchoolStaffPage() {
                 {(['Teaching', 'Non-Teaching'] as const).map(t => (
                   <button
                     key={t} type="button" onClick={() => setFormType(t)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer min-h-[40px] ${
                       formType === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
@@ -937,7 +1034,7 @@ export default function SchoolStaffPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-400 font-bold mb-1">First Name *</label>
                   <input required value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" placeholder="First Name" />
@@ -947,7 +1044,7 @@ export default function SchoolStaffPage() {
                   <input required value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" placeholder="Last Name" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-400 font-bold mb-1">Email *</label>
                   <input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" placeholder="email@school.com" />
@@ -957,7 +1054,7 @@ export default function SchoolStaffPage() {
                   <input type="tel" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:border-blue-500" placeholder="+91 9XXXXXXXXX" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-slate-400 font-bold mb-1">Designation *</label>
                   <select required value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
@@ -979,7 +1076,7 @@ export default function SchoolStaffPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs text-slate-400 font-bold mb-1">Basic Salary (₹)</label>
                   <input type="number" value={formData.basicSalary} onChange={e => setFormData({...formData, basicSalary: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none" />
@@ -1017,8 +1114,8 @@ export default function SchoolStaffPage() {
                 </div>
               )}
               <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm cursor-pointer">Cancel</button>
-                <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md cursor-pointer">✅ Save Staff</button>
+                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm cursor-pointer min-h-[44px]">Cancel</button>
+                <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md cursor-pointer min-h-[44px]">✅ Save Staff</button>
               </div>
             </form>
           </div>

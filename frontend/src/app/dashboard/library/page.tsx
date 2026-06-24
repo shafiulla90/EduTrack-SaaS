@@ -302,25 +302,51 @@ export default function LibraryCatalogPage() {
                     </p>
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-900/60 bg-slate-900/10 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                        <th className="px-6 py-4">Title / Author</th>
-                        <th className="px-6 py-4">Category</th>
-                        <th className="px-6 py-4">ISBN</th>
-                        <th className="px-6 py-4 text-right">Available Copies</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-900/60 text-slate-300 text-sm">
+                  <>
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-900/60 bg-slate-900/10 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                            <th className="px-6 py-4">Title / Author</th>
+                            <th className="px-6 py-4">Category</th>
+                            <th className="px-6 py-4">ISBN</th>
+                            <th className="px-6 py-4 text-right">Available Copies</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-900/60 text-slate-300 text-sm">
+                          {books.map((book) => (
+                            <tr key={book.id} className="hover:bg-slate-900/10 transition-colors">
+                              <td className="px-6 py-4 font-semibold text-slate-200">
+                                <div>{book.title}</div>
+                                <div className="text-xs text-slate-500 font-light">by {book.author}</div>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-slate-400">{book.category || 'General'}</td>
+                              <td className="px-6 py-4 font-mono text-xs text-slate-500">{book.isbn || '—'}</td>
+                              <td className="px-6 py-4 text-right">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  book.availableCopies > 0 
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                }`}>
+                                  {book.availableCopies} / {book.totalCopies} Left
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden divide-y divide-slate-900/60">
                       {books.map((book) => (
-                        <tr key={book.id} className="hover:bg-slate-900/10 transition-colors">
-                          <td className="px-6 py-4 font-semibold text-slate-200">
-                            <div>{book.title}</div>
-                            <div className="text-xs text-slate-500 font-light">by {book.author}</div>
-                          </td>
-                          <td className="px-6 py-4 text-xs text-slate-400">{book.category || 'General'}</td>
-                          <td className="px-6 py-4 font-mono text-xs text-slate-500">{book.isbn || '—'}</td>
-                          <td className="px-6 py-4 text-right">
+                        <div key={book.id} className="p-4 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-200">{book.title}</h4>
+                              <p className="text-xs text-slate-500 font-light mt-0.5">by {book.author}</p>
+                            </div>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               book.availableCopies > 0 
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
@@ -328,11 +354,20 @@ export default function LibraryCatalogPage() {
                             }`}>
                               {book.availableCopies} / {book.totalCopies} Left
                             </span>
-                          </td>
-                        </tr>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-1">
+                            <span className="px-2 py-0.5 rounded bg-slate-900/30 text-slate-400 border border-slate-800 text-[10px] font-semibold">
+                              {book.category || 'General'}
+                            </span>
+                            <span className="font-mono text-slate-500 text-[11px]">
+                              ISBN: {book.isbn || '—'}
+                            </span>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                  </>
                 )}
               </div>
 

@@ -74,6 +74,7 @@ export class StudentsService {
           motherName: data.motherName,
           aadharNo: data.aadharNo,
           classSectionId: classSectionId || null,
+          tenantId,
         },
       });
 
@@ -120,8 +121,9 @@ export class StudentsService {
     });
   }
 
-  async searchStudents(searchTerm?: string, classId?: string, sectionId?: string) {
+  async searchStudents(searchTerm?: string, classId?: string, sectionId?: string, page = 1, limit = 100) {
     const tenantId = this.getTenantId();
+    const skip = (page - 1) * limit;
 
     return this.prisma.studentProfile.findMany({
       where: {
@@ -168,7 +170,8 @@ export class StudentsService {
           name: 'asc'
         }
       },
-      take: 200,
+      skip,
+      take: limit,
     });
   }
 
@@ -299,6 +302,7 @@ export class StudentsService {
               motherName,
               aadharNo: aadharNo ? String(aadharNo) : null,
               classSectionId: matchedClassSection.id,
+              tenantId,
             }
           });
 

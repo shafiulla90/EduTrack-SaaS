@@ -135,6 +135,7 @@ export class AuthService {
             motherName: data.motherName,
             aadharNo: data.aadharNo,
             classSectionId: data.classSectionId,
+            tenantId,
           },
         });
       } else if (
@@ -155,6 +156,7 @@ export class AuthService {
             status: 'Active',
             qualification: data.qualification,
             subjectsTaught: data.subjectsTaught || [],
+            tenantId,
           },
         });
       } else if (data.role === Role.PARENT) {

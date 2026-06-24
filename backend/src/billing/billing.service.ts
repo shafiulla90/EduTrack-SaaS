@@ -210,6 +210,7 @@ export class BillingService {
           motherName: studentData.motherName || null,
           aadharNo: studentData.aadharNo || null,
           classSectionId,
+          tenantId,
         },
       });
 
@@ -309,6 +310,8 @@ export class BillingService {
 
   // ── STUDENT SEARCH WITH PENDING BALANCE CALCULATIONS ─────────────────────────
 
+  // ── STUDENT SEARCH WITH PENDING BALANCE CALCULATIONS ─────────────────────────
+
   async searchStudents(searchTerm: string) {
     const tenantId = this.getTenantId();
 
@@ -336,6 +339,18 @@ export class BillingService {
           },
           orderBy: { createdAt: 'desc' },
           take: 1,
+          include: {
+            opportunityLineItems: {
+              include: { product: true }
+            },
+            invoices: {
+              where: {
+                tenantId,
+                status: { not: PaymentStatus.VOIDED }
+              },
+              include: { invoiceItems: true }
+            }
+          }
         },
       },
       take: 20,
@@ -343,34 +358,23 @@ export class BillingService {
 
     const results = [];
     for (const student of students) {
-      // Find open opportunity
       const openOpp = student.opportunities[0];
       let totalFee = 0;
       let totalPaid = 0;
 
       if (openOpp) {
         // Sum opportunity line items: TotalPrice = UnitPrice * Quantity * (1 - Discount/100)
-        const olis = await this.prisma.opportunityLineItem.findMany({
-          where: { opportunityId: openOpp.id, tenantId },
-        });
-
-        totalFee = olis.reduce((sum, oli) => {
+        totalFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
           const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
           const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
           return sum + (itemTotal - itemDiscount);
         }, 0);
 
         // Sum invoice payments
-        const invoiceItems = await this.prisma.invoiceItem.findMany({
-          where: {
-            tenantId,
-            invoice: {
-              opportunityId: openOpp.id,
-              status: { not: PaymentStatus.VOIDED },
-            },
-          },
-        });
-        totalPaid = invoiceItems.reduce((sum, item) => sum + Number(item.amount), 0);
+        totalPaid = openOpp.invoices.reduce((sum, inv) => {
+          const invoiceSum = inv.invoiceItems.reduce((iSum, item) => iSum + Number(item.amount), 0);
+          return sum + invoiceSum;
+        }, 0);
       }
 
       results.push({
@@ -412,6 +416,18 @@ export class BillingService {
           },
           orderBy: { createdAt: 'desc' },
           take: 1,
+          include: {
+            opportunityLineItems: {
+              include: { product: true }
+            },
+            invoices: {
+              where: {
+                tenantId,
+                status: { not: PaymentStatus.VOIDED }
+              },
+              include: { invoiceItems: true }
+            }
+          }
         },
       },
     });
@@ -425,26 +441,16 @@ export class BillingService {
     let totalPaid = 0;
 
     if (openOpp) {
-      const olis = await this.prisma.opportunityLineItem.findMany({
-        where: { opportunityId: openOpp.id, tenantId },
-      });
-
-      totalFee = olis.reduce((sum, oli) => {
+      totalFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
         const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
         const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
         return sum + (itemTotal - itemDiscount);
       }, 0);
 
-      const invoiceItems = await this.prisma.invoiceItem.findMany({
-        where: {
-          tenantId,
-          invoice: {
-            opportunityId: openOpp.id,
-            status: { not: PaymentStatus.VOIDED },
-          },
-        },
-      });
-      totalPaid = invoiceItems.reduce((sum, item) => sum + Number(item.amount), 0);
+      totalPaid = openOpp.invoices.reduce((sum, inv) => {
+        const invoiceSum = inv.invoiceItems.reduce((iSum, item) => iSum + Number(item.amount), 0);
+        return sum + invoiceSum;
+      }, 0);
     }
 
     return {
@@ -837,6 +843,7 @@ export class BillingService {
               motherName: data['Mother Name'] || data['motherName'] || null,
               aadharNo: data['Aadhar No'] || data['aadharNo'] || null,
               classSectionId: matchedCS.id,
+              tenantId,
             },
           });
 

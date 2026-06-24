@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   AlertCircle, CheckCircle, Search, User, Filter, Plus, 
   ShieldAlert, Award, Calendar, ChevronRight, BookOpen, Clock, 
-  Activity, ArrowLeft, RefreshCw, Eye
+  Activity, ArrowLeft, RefreshCw, Eye, X, Phone, GraduationCap
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import Link from 'next/link';
 
 interface BehaviorCase {
   id: string;
@@ -53,6 +54,18 @@ interface StudentOption {
   };
 }
 
+interface ClassSectionOption {
+  id: string;
+  class: {
+    id: string;
+    name: string;
+  };
+  section: {
+    id: string;
+    name: string;
+  };
+}
+
 interface TeacherOption {
   id: string;
   user: {
@@ -63,6 +76,7 @@ interface TeacherOption {
 interface AcademicYear {
   id: string;
   name: string;
+  isActive: boolean;
 }
 
 interface StudentStats {
@@ -74,42 +88,47 @@ interface StudentStats {
 }
 
 export default function ComplaintBoxPage() {
-  const [activeTab, setActiveTab] = useState<'pending' | 'submit' | 'history'>('pending');
+  const [activeTab, setActiveTab] = useState<'submit' | 'pending' | 'history'>('submit');
 
-  // Backend data states
-  const [pendingCases, setPendingCases] = useState<BehaviorCase[]>([]);
+  // Backend configuration states
+  const [classOptions, setClassOptions] = useState<ClassSectionOption[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [currentTeacher, setCurrentTeacher] = useState<TeacherOption | null>(null);
 
-  // Form states
+  // Class & Student listing states for log flow
+  const [selectedClass, setSelectedClass] = useState<string>('');
+  const [students, setStudents] = useState<StudentOption[]>([]);
+  const [searchKey, setSearchKey] = useState<string>('');
   const [selectedStudent, setSelectedStudent] = useState<StudentOption | null>(null);
-  const [studentSearchInput, setStudentSearchInput] = useState('');
-  const [studentSearchResults, setStudentSearchResults] = useState<StudentOption[]>([]);
+
+  // Form input fields
   const [behaviorType, setBehaviorType] = useState<'Complaint' | 'Praise'>('Complaint');
-  const [category, setCategory] = useState('Discipline');
-  const [description, setDescription] = useState('');
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
-  const [submittingTeacherId, setSubmittingTeacherId] = useState('');
+  const [category, setCategory] = useState<string>('Discipline');
+  const [description, setDescription] = useState<string>('');
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>('');
+  const [submittingTeacherId, setSubmittingTeacherId] = useState<string>('');
 
-  // Filtering states
-  const [filterAcademicYear, setFilterAcademicYear] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  // Pending ledger and history lists
+  const [pendingCases, setPendingCases] = useState<BehaviorCase[]>([]);
+  const [filterAcademicYear, setFilterAcademicYear] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Student history & stats states
+  // Student history and stats
   const [historyStudent, setHistoryStudent] = useState<StudentOption | null>(null);
-  const [historyStudentInput, setHistoryStudentInput] = useState('');
+  const [historyStudentInput, setHistoryStudentInput] = useState<string>('');
   const [historySearchResults, setHistorySearchResults] = useState<StudentOption[]>([]);
   const [studentCases, setStudentCases] = useState<BehaviorCase[]>([]);
   const [studentStats, setStudentStats] = useState<StudentStats | null>(null);
-  const [historyAcademicYearFilter, setHistoryAcademicYearFilter] = useState('All');
+  const [historyAcademicYearFilter, setHistoryAcademicYearFilter] = useState<string>('All');
 
   // UI state
   const [selectedCase, setSelectedCase] = useState<BehaviorCase | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [alertMessage, setAlertMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [alertMessage, setAlertMessage] = useState<{ text: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null);
 
-  // Fetch initial configuration
+  // Fetch initial setup data
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -117,12 +136,14 @@ export default function ComplaintBoxPage() {
   const fetchInitialData = async () => {
     try {
       setIsLoading(true);
-      const [yearsRes, teachersRes, currentTeacherRes] = await Promise.all([
+      const [classesRes, yearsRes, teachersRes, currentTeacherRes] = await Promise.all([
+        api.get('/complaint-box/student-classes'),
         api.get('/complaint-box/academic-years'),
         api.get('/complaint-box/teachers'),
-        api.get('/complaint-box/current-teacher').catch(() => null) // Ignore error if not teacher
+        api.get('/complaint-box/current-teacher').catch(() => null)
       ]);
 
+      setClassOptions(classesRes.data || []);
       setAcademicYears(yearsRes.data || []);
       setTeachers(teachersRes.data || []);
 
@@ -156,29 +177,38 @@ export default function ComplaintBoxPage() {
     }
   };
 
+  // Load students when a class is selected
   useEffect(() => {
-    refreshPendingCases();
-  }, [filterAcademicYear]);
-
-  // Autocomplete searches
-  useEffect(() => {
-    if (studentSearchInput.trim().length < 2) {
-      setStudentSearchResults([]);
-      return;
+    if (selectedClass) {
+      loadStudentsByClass(selectedClass);
+    } else {
+      setStudents([]);
+      setSearchKey('');
+      setSelectedStudent(null);
     }
-    const delayDebounce = setTimeout(async () => {
-      try {
-        const res = await api.get('/complaint-box/search-students', {
-          params: { searchTerm: studentSearchInput }
-        });
-        setStudentSearchResults(res.data || []);
-      } catch (err) {
-        console.error('Student search failed:', err);
-      }
-    }, 300);
-    return () => clearTimeout(delayDebounce);
-  }, [studentSearchInput]);
+  }, [selectedClass]);
 
+  const loadStudentsByClass = async (classSectionId: string) => {
+    try {
+      setIsLoading(true);
+      const res = await api.get(`/complaint-box/students-by-class/${classSectionId}`);
+      setStudents(res.data || []);
+      setSearchKey('');
+      setSelectedStudent(null);
+      if (!res.data || res.data.length === 0) {
+        showAlert('No students found in this class section.', 'info');
+      } else {
+        showAlert(`${res.data.length} student(s) loaded.`, 'success');
+      }
+    } catch (err) {
+      console.error('Failed to load students for class:', err);
+      showAlert('Error loading student roster.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Autocomplete search on history tab
   useEffect(() => {
     if (historyStudentInput.trim().length < 2) {
       setHistorySearchResults([]);
@@ -197,7 +227,7 @@ export default function ComplaintBoxPage() {
     return () => clearTimeout(delayDebounce);
   }, [historyStudentInput]);
 
-  // Load history and stats when target student is selected
+  // Load student cases history and stats
   useEffect(() => {
     if (historyStudent) {
       loadStudentHistoryAndStats(historyStudent.id);
@@ -218,46 +248,73 @@ export default function ComplaintBoxPage() {
       setStudentCases(casesRes.data || []);
       setStudentStats(statsRes.data || null);
     } catch (err) {
-      console.error('Failed to load student history & stats:', err);
+      console.error('Failed to load student statistics:', err);
     }
   };
 
-  const showAlert = (text: string, type: 'success' | 'error') => {
+  const showAlert = (text: string, type: 'success' | 'error' | 'warning' | 'info') => {
     setAlertMessage({ text, type });
     setTimeout(() => setAlertMessage(null), 4000);
+  };
+
+  const handleResetForm = () => {
+    setBehaviorType('Complaint');
+    setCategory('Discipline');
+    setDescription('');
+    if (currentTeacher) {
+      setSubmittingTeacherId(currentTeacher.id);
+    } else {
+      setSubmittingTeacherId('');
+    }
+    if (academicYears.length > 0) {
+      const activeYear = academicYears.find(y => y.isActive) || academicYears[0];
+      setSelectedAcademicYear(activeYear.name);
+    }
+  };
+
+  const handleClearStudentSelection = () => {
+    setSelectedStudent(null);
+    handleResetForm();
   };
 
   const handleSubmitBehavior = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudent) {
-      showAlert('Please search and select a valid student.', 'error');
+      showAlert('Please select a student from the class roster.', 'error');
       return;
     }
+    if (!behaviorType || !category || !description || !selectedAcademicYear || !submittingTeacherId) {
+      showAlert('Please fill all required form fields.', 'error');
+      return;
+    }
+    if (description.length < 10) {
+      showAlert('Description must be at least 10 characters long.', 'error');
+      return;
+    }
+
     try {
+      setIsSubmitting(true);
       setIsLoading(true);
-      await api.post('/complaint-box/submit-behavior', {
+      const res = await api.post('/complaint-box/submit-behavior', {
         studentId: selectedStudent.id,
-        teacherId: submittingTeacherId || undefined,
         behaviorType,
         category,
         academicYear: selectedAcademicYear,
-        description
+        description,
+        teacherId: submittingTeacherId
       });
 
-      showAlert(`Successfully submitted student behavior record for ${selectedStudent.user.name}.`, 'success');
-      
-      // Reset Form fields
-      setSelectedStudent(null);
-      setStudentSearchInput('');
-      setDescription('');
-      
-      // Go back to pending view and refresh list
+      showAlert(`Behavior record submitted successfully for ${selectedStudent.user.name}.`, 'success');
+      handleClearStudentSelection();
       await refreshPendingCases();
+      
+      // Navigate to ledger view
       setActiveTab('pending');
     } catch (err) {
-      console.error('Failed to submit student behavior case:', err);
-      showAlert('Failed to save student behavior log. Check required fields.', 'error');
+      console.error('Failed to save behavior case:', err);
+      showAlert('Failed to save behavior record. Please try again.', 'error');
     } finally {
+      setIsSubmitting(false);
       setIsLoading(false);
     }
   };
@@ -269,621 +326,769 @@ export default function ComplaintBoxPage() {
       });
       showAlert(`Case status updated to ${newStatus}.`, 'success');
       
-      // Update case status locally in modal if currently open
       if (selectedCase && selectedCase.id === caseId) {
         setSelectedCase(prev => prev ? { ...prev, status: newStatus } : null);
       }
       
-      // Refresh grids
       await refreshPendingCases();
       if (historyStudent) {
         await loadStudentHistoryAndStats(historyStudent.id);
       }
     } catch (err) {
       console.error('Failed to update case status:', err);
-      showAlert('Error updating case status.', 'error');
+      showAlert('Failed to update status.', 'error');
     }
   };
 
-  // Local filtering based on query match (Search by student name or category or description)
+  // Local memory search filtering for students list
+  const filteredStudents = students.filter(student => {
+    if (!searchKey) return true;
+    const name = student.user?.name?.toLowerCase() || '';
+    const phone = student.user?.phone?.toLowerCase() || '';
+    const roll = student.rollNo?.toLowerCase() || '';
+    const term = searchKey.toLowerCase();
+    return name.includes(term) || phone.includes(term) || roll.includes(term);
+  });
+
+  // Local search query filtering for pending list view
   const filteredPendingCases = pendingCases.filter(c => {
     const term = searchQuery.toLowerCase().trim();
     if (!term) return true;
-    
-    const studentName = c.student?.user?.name?.toLowerCase() || '';
+    const sName = c.student?.user?.name?.toLowerCase() || '';
     const desc = c.description?.toLowerCase() || '';
     const cat = c.category?.toLowerCase() || '';
-    const id = c.id.toLowerCase();
-    
-    return studentName.includes(term) || desc.includes(term) || cat.includes(term) || id.includes(term);
+    return sName.includes(term) || desc.includes(term) || cat.includes(term);
   });
 
+  // Unique class names helper for pending filters
+  const uniqueClassNames = Array.from(new Set(classOptions.map(opt => opt.class.name))).sort();
+
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 p-4 sm:p-8 font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Alert Component */}
+    <main className="min-h-screen bg-[#F8FAFC] text-slate-800 p-4 sm:p-8 font-sans selection:bg-blue-500 selection:text-white">
+      {/* Alert toast notification */}
       {alertMessage && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-xl border flex items-center gap-3 text-sm animate-bounce ${
-          alertMessage.type === 'success' 
-            ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300' 
-            : 'bg-rose-950/90 border-rose-500 text-rose-300'
+          alertMessage.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+          alertMessage.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' :
+          alertMessage.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+          'bg-blue-50 border-blue-200 text-blue-800'
         }`}>
-          {alertMessage.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          {alertMessage.type === 'success' ? <CheckCircle className="w-5 h-5 text-emerald-600" /> : <AlertCircle className="w-5 h-5 text-rose-600" />}
           <span className="font-semibold">{alertMessage.text}</span>
         </div>
       )}
 
       {/* Main Container */}
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header Block */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Complaint Box
-            </h1>
-            <p className="text-slate-400 text-xs font-medium">
-              Enterprise Parity Platform | Log and manage behavior records, praises, and disciplinary action logs.
-            </p>
+      <div className="max-w-[1400px] mx-auto space-y-6">
+        
+        {/* Nav Header Link */}
+        <div className="flex items-center justify-between">
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm cursor-pointer">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </Link>
+          <span className="text-[11px] font-bold text-slate-400 font-mono uppercase tracking-wider">
+            EduTrack SaaS Parity Portal
+          </span>
+        </div>
+
+        {/* Premium Card Panel */}
+        <div className="bg-white border border-slate-200 rounded-[20px] shadow-2xl overflow-hidden">
+          
+          {/* LWC Header Gradient */}
+          <div className="bg-gradient-to-r from-[#2E5BFF] to-[#8B5CF6] p-8 text-white">
+            <div className="flex items-center gap-5">
+              <div className="bg-white/20 p-4 rounded-2xl shrink-0">
+                <BookOpen className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                  Student Behavior Submission
+                </h1>
+                <p className="text-white/90 text-sm font-medium">
+                  Submit complaints or praises for student behavior logs in the EduTrack Package
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Tab Selection buttons */}
-          <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 w-fit">
+          {/* Salesforce SLDS Style Navigation Tabs */}
+          <div className="flex border-b border-slate-200 bg-slate-50/50 px-6">
+            <button
+              onClick={() => setActiveTab('submit')}
+              className={`px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+                activeTab === 'submit'
+                  ? 'border-blue-600 text-blue-600 bg-white font-extrabold'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Log Behavior
+            </button>
             <button
               onClick={() => { setActiveTab('pending'); refreshPendingCases(); }}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'pending' 
-                  ? 'bg-indigo-600 text-white shadow-md' 
-                  : 'text-slate-400 hover:text-slate-200'
+              className={`px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+                activeTab === 'pending'
+                  ? 'border-blue-600 text-blue-600 bg-white font-extrabold'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
               }`}
             >
               Pending Cases
             </button>
             <button
-              onClick={() => setActiveTab('submit')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'submit' 
-                  ? 'bg-indigo-600 text-white shadow-md' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Submit Behavior Log
-            </button>
-            <button
               onClick={() => setActiveTab('history')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'history' 
-                  ? 'bg-indigo-600 text-white shadow-md' 
-                  : 'text-slate-400 hover:text-slate-200'
+              className={`px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+                activeTab === 'history'
+                  ? 'border-blue-600 text-blue-600 bg-white font-extrabold'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
               }`}
             >
-              Student History & Stats
+              Student Ledger & Stats
             </button>
           </div>
-        </div>
 
-        {/* LOADING INDICATOR */}
-        {isLoading && (
-          <div className="w-full flex items-center justify-center p-12">
-            <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-            <span className="ml-3 text-slate-400 text-sm font-semibold">Loading platform logs...</span>
-          </div>
-        )}
+          {/* Card Body Container */}
+          <div className="p-8">
 
-        {/* TAB 1: PENDING CASES LEDGER */}
-        {!isLoading && activeTab === 'pending' && (
-          <div className="space-y-6">
-            {/* Filters Header bar */}
-            <div className="bg-slate-850 p-4 rounded-2xl border border-slate-800 flex flex-wrap gap-4 items-center justify-between shadow-lg">
-              <div className="flex items-center gap-2 text-slate-300">
-                <Filter className="w-4 h-4 text-slate-500" />
-                <span className="font-bold text-xs uppercase tracking-wider">Filters Ledger</span>
+            {/* Loading Spinner overlay */}
+            {isLoading && !isSubmitting && (
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+                <p className="text-xs text-slate-500 font-semibold mt-3">Loading school directory records...</p>
               </div>
+            )}
 
-              <div className="flex flex-wrap gap-3 items-center">
-                {/* Search Term Filter */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-505" />
-                  <input
-                    type="text"
-                    placeholder="Search by student, details..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-1.5 text-xs text-slate-100 outline-none w-48 focus:border-indigo-500"
-                  />
+            {/* TAB 1: FORM BEHAVIOR LOG SUBMISSION (Salesforce complaintbox LWC replicate) */}
+            {!isLoading && activeTab === 'submit' && (
+              <div className="space-y-6">
+                
+                {/* 1. Class Selection Gated Box */}
+                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-2 mb-3 text-slate-700">
+                    <Filter className="w-4 h-4 text-blue-600" />
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Filter by Class *</label>
+                  </div>
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                  >
+                    <option value="">-- Select a Class to view student roster --</option>
+                    {classOptions.map(opt => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.class.name} - {opt.section.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Academic Year Selector */}
-                <select
-                  value={filterAcademicYear}
-                  onChange={(e) => setFilterAcademicYear(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-350 outline-none focus:border-indigo-500"
-                >
-                  <option value="All">All Years</option>
-                  {academicYears.map(year => (
-                    <option key={year.id} value={year.name}>{year.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+                {/* Gated displays: only when class selection is active */}
+                {selectedClass ? (
+                  <div className="space-y-6">
 
-            {/* Cases Card ledger grid */}
-            {filteredPendingCases.length === 0 ? (
-              <div className="bg-slate-850 border border-dashed border-slate-800 rounded-2xl p-12 text-center text-slate-500 shadow-inner">
-                <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="font-bold text-sm">No pending student behavior cases found.</p>
-                <p className="text-xs text-slate-600 mt-1">Cases with status other than "Closed" appear here.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredPendingCases.map(c => {
-                  const isComplaint = c.behaviorType === 'Complaint';
-                  return (
-                    <div 
-                      key={c.id} 
-                      className="bg-slate-850 border border-slate-800 hover:border-slate-700 transition-all rounded-2xl p-5 shadow-md hover:shadow-lg flex flex-col justify-between"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                            isComplaint ? 'bg-rose-950/80 border border-rose-900 text-rose-300' : 'bg-emerald-950/80 border border-emerald-900 text-emerald-300'
-                          }`}>
-                            {isComplaint ? <ShieldAlert className="w-3.5 h-3.5" /> : <Award className="w-3.5 h-3.5" />}
-                            {c.behaviorType}
-                          </span>
-
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase border ${
-                            c.priority === 'High' ? 'bg-rose-950 border-rose-900 text-rose-300' : 'bg-amber-950 border-amber-900 text-amber-300'
-                          }`}>
-                            {c.priority} Priority
-                          </span>
+                    {/* 2. Student Lookup and Cards list - only show when no student is active */}
+                    {!selectedStudent && (
+                      <div className="space-y-4">
+                        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                          <div className="flex items-center gap-2 mb-3 text-slate-700">
+                            <Search className="w-4 h-4 text-blue-600" />
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Search Class Student</label>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Type student name or phone number..."
+                            value={searchKey}
+                            onChange={(e) => setSearchKey(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                          />
                         </div>
 
-                        <div>
-                          <h3 className="font-bold text-sm text-slate-100">{c.student?.user?.name || 'Unknown Student'}</h3>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                            Roll No: {c.student?.rollNo || 'N/A'} • {c.student?.classSection?.class.name} {c.student?.classSection?.section.name}
-                          </p>
-                        </div>
+                        {/* Cards list grid */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-400 px-1 uppercase tracking-wider">
+                            <span>Roster Results</span>
+                            <span className="text-blue-600">{filteredStudents.length} Students found</span>
+                          </div>
 
-                        <div>
-                          <span className="text-[11px] font-bold text-indigo-400">{c.category}</span>
-                          <p className="text-slate-300 text-xs mt-1 line-clamp-3 leading-relaxed">
-                            {c.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-slate-800 mt-4 pt-3 flex items-center justify-between text-xs">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-500 font-semibold uppercase">Logged By</span>
-                          <span className="text-slate-300 font-medium">{c.teacher?.user.name || 'Admin'}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setSelectedCase(c)}
-                            className="p-1.5 rounded-lg bg-slate-805 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-slate-100 transition-colors"
-                            title="View Case Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          
-                          {c.status !== 'Closed' && (
-                            <button
-                              onClick={() => handleUpdateStatus(c.id, 'Closed')}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-950 border border-emerald-900 hover:bg-emerald-900 text-emerald-300 font-bold text-[11px] transition-colors"
-                            >
-                              Resolve
-                            </button>
+                          {filteredStudents.length === 0 ? (
+                            <div className="p-8 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-400 font-semibold">
+                              No students in this class match your search query.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-1">
+                              {filteredStudents.map(student => (
+                                <div
+                                  key={student.id}
+                                  onClick={() => setSelectedStudent(student)}
+                                  className="flex items-center justify-between p-4 bg-white border border-slate-200 hover:border-blue-500 rounded-xl shadow-xs hover:shadow-md cursor-pointer transition-all hover:-translate-y-0.5 group"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs">
+                                      {student.user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                                    </div>
+                                    <div className="space-y-0.5">
+                                      <h4 className="font-bold text-xs text-slate-800 group-hover:text-blue-600">{student.user.name}</h4>
+                                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold">
+                                        <span className="flex items-center gap-0.5"><GraduationCap className="w-3 h-3" /> Roll: {student.rollNo || 'N/A'}</span>
+                                        {student.user.phone && <span className="flex items-center gap-0.5"><Phone className="w-3 h-3" /> {student.user.phone}</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <ChevronRight className="w-4 h-4 text-slate-350 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    )}
+
+                    {/* 3. Selected student confirmation banner */}
+                    {selectedStudent && (
+                      <div className="space-y-6 animate-in fade-in slide-in-from-top-1.5 duration-200">
+                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-xl shadow-md flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <CheckCircle className="w-6 h-6 text-emerald-400 bg-white rounded-full p-0.5 shrink-0" />
+                            <div className="space-y-0.5">
+                              <h4 className="font-bold text-sm leading-none">{selectedStudent.user.name}</h4>
+                              <p className="text-[11px] text-white/80 font-medium">
+                                Class: {selectedStudent.classSection?.class.name} - {selectedStudent.classSection?.section.name} • Roll No: {selectedStudent.rollNo || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleClearStudentSelection}
+                            className="p-1 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors cursor-pointer"
+                            title="Clear Selection"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Behavior submission form */}
+                        <form onSubmit={handleSubmitBehavior} className="space-y-5 border-t border-slate-200 pt-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            
+                            {/* Behavior Type */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Behavior Record Type *</label>
+                              <select
+                                value={behaviorType}
+                                onChange={(e) => setBehaviorType(e.target.value as any)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                              >
+                                <option value="Complaint">Infraction / Complaint (High Priority)</option>
+                                <option value="Praise">Praise / Merit (Medium Priority)</option>
+                              </select>
+                            </div>
+
+                            {/* Category Dropdown (Salesforce aligned) */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Behavior Category *</label>
+                              <select
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                              >
+                                <option value="Academic">Academic Performance</option>
+                                <option value="Discipline">Discipline</option>
+                                <option value="Sports">Sports & Athletics</option>
+                                <option value="Extra-Curricular">Extra-Curricular Activities</option>
+                                <option value="General">General Behavior</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            
+                            {/* Academic Year */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Academic Year *</label>
+                              <select
+                                value={selectedAcademicYear}
+                                onChange={(e) => setSelectedAcademicYear(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                              >
+                                {academicYears.map(year => (
+                                  <option key={year.id} value={year.name}>{year.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Submitting Teacher */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Submitting Teacher *</label>
+                              <select
+                                value={submittingTeacherId}
+                                onChange={(e) => setSubmittingTeacherId(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                              >
+                                <option value="">-- Select Submitting Teacher --</option>
+                                {teachers.map(teacher => (
+                                  <option key={teacher.id} value={teacher.id}>
+                                    {teacher.user.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Description details */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Detailed Incident Description *</label>
+                            <textarea
+                              required
+                              rows={4}
+                              value={description}
+                              onChange={(e) => setDescription(e.target.value)}
+                              placeholder="Provide description of the behavior (minimum 10 characters required)..."
+                              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white resize-none"
+                            />
+                            {description && description.length < 10 && (
+                              <p className="text-[11px] font-bold text-rose-600">
+                                Description must be at least 10 characters (currently: {description.length}).
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Form action triggers */}
+                          <div className="flex gap-4 pt-4 border-t border-slate-100 justify-end">
+                            <button
+                              type="button"
+                              onClick={handleResetForm}
+                              className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition-colors cursor-pointer"
+                            >
+                              Reset Form
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isSubmitting || description.length < 10}
+                              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              {isSubmitting ? 'Submitting...' : 'Submit Behavior Record'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Form Empty State when no class selected */
+                  <div className="p-16 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400">
+                    <Filter className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-base font-bold text-slate-700">No Class Selected</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                      Please select a class section from the dropdown list to load and view student profiles.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* TAB 2: LOG NEW BEHAVIOR RECORD */}
-        {!isLoading && activeTab === 'submit' && (
-          <div className="bg-slate-850 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6 max-w-2xl mx-auto">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-xl font-bold text-slate-100">Log Behavior / Praise Record</h2>
-              <p className="text-slate-500 text-xs mt-1">Submit behaviour case log. Matches Salesforce target metadata.</p>
-            </div>
-
-            <form onSubmit={handleSubmitBehavior} className="space-y-5">
-              {/* Autocomplete Student Search */}
-              <div className="relative">
-                <label className="block text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Search Student *</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input
-                    type="text"
-                    required={!selectedStudent}
-                    placeholder="Type student name or roll number to search..."
-                    value={studentSearchInput}
-                    onChange={(e) => {
-                      setStudentSearchInput(e.target.value);
-                      if (selectedStudent) setSelectedStudent(null);
-                    }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                {/* Suggestions List */}
-                {!selectedStudent && studentSearchResults.length > 0 && (
-                  <div className="absolute left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-slate-700">
-                    {studentSearchResults.map(student => (
-                      <button
-                        key={student.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedStudent(student);
-                          setStudentSearchInput(student.user.name);
-                          setStudentSearchResults([]);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs text-slate-300 hover:bg-slate-750 flex justify-between items-center transition-colors"
-                      >
-                        <span className="font-semibold">{student.user.name}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          Roll: {student.rollNo || 'N/A'} • {student.classSection?.class.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {selectedStudent && (
-                  <div className="mt-2 p-2 bg-indigo-950/40 border border-indigo-900 rounded-xl flex items-center gap-2 text-[11px] text-indigo-300">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>
-                      Selected: <strong>{selectedStudent.user.name}</strong> ({selectedStudent.classSection?.class.name} {selectedStudent.classSection?.section.name})
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Behavior Record Type */}
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => setBehaviorType('Complaint')}
-                  className={`py-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                    behaviorType === 'Complaint'
-                      ? 'border-rose-500 bg-rose-950/40 text-rose-400'
-                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:bg-slate-800'
-                  }`}
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                  Complaint (High Priority)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setBehaviorType('Praise')}
-                  className={`py-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                    behaviorType === 'Praise'
-                      ? 'border-emerald-500 bg-emerald-950/40 text-emerald-400'
-                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:bg-slate-800'
-                  }`}
-                >
-                  <Award className="w-4 h-4" />
-                  Praise (Medium Priority)
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Academic Year Selection */}
-                <div>
-                  <label className="block text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Academic Year</label>
-                  <select
-                    value={selectedAcademicYear}
-                    onChange={(e) => setSelectedAcademicYear(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-350 outline-none"
-                  >
-                    {academicYears.map(year => (
-                      <option key={year.id} value={year.name}>{year.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Submitting Teacher */}
-                <div className="sm:col-span-2">
-                  <label className="block text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Submitting Teacher</label>
-                  <select
-                    value={submittingTeacherId}
-                    onChange={(e) => setSubmittingTeacherId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500"
-                  >
-                    {currentTeacher && (
-                      <option value={currentTeacher.id}>
-                        {currentTeacher.user.name} (Authenticated Teacher Profile)
-                      </option>
-                    )}
-                    <option value="">-- Select Alternate Teacher --</option>
-                    {teachers
-                      .filter(t => currentTeacher ? t.id !== currentTeacher.id : true)
-                      .map(teacher => (
-                        <option key={teacher.id} value={teacher.id}>
-                          {teacher.user.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Category *</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 outline-none focus:border-indigo-500"
-                >
-                  <option value="Academic">Academic Performance</option>
-                  <option value="Discipline">Classroom Discipline</option>
-                  <option value="Attendance">Attendance & Punctuality</option>
-                  <option value="Sports">Sports & Physical Education</option>
-                  <option value="Dress Code">Uniform & Dress Code</option>
-                  <option value="General">General Conduct</option>
-                </select>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-xs text-slate-400 font-bold uppercase tracking-wider mb-2">Details & Description *</label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="Describe the student behavior, location, circumstances, and actions taken..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-100 outline-none focus:border-indigo-500 resize-none"
-                />
-              </div>
-
-              {/* Submits */}
-              <div className="flex gap-4 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedStudent(null);
-                    setStudentSearchInput('');
-                    setDescription('');
-                    setActiveTab('pending');
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-slate-400 font-bold text-xs transition-colors cursor-pointer text-center"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-colors cursor-pointer text-center"
-                >
-                  Log Case Record
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* TAB 3: STUDENT HISTORY & STATS DASHBOARD */}
-        {!isLoading && activeTab === 'history' && (
-          <div className="space-y-6">
-            {/* Student Selector card */}
-            <div className="bg-slate-850 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4 max-w-xl mx-auto">
-              <div>
-                <h3 className="font-bold text-sm text-slate-100">Select Student to view behavior ledger</h3>
-                <p className="text-slate-500 text-[11px] mt-0.5">Fetches student stats dashboard and full historical log.</p>
-              </div>
-
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-505" />
-                <input
-                  type="text"
-                  placeholder="Search student name..."
-                  value={historyStudentInput}
-                  onChange={(e) => {
-                    setHistoryStudentInput(e.target.value);
-                    if (historyStudent) setHistoryStudent(null);
-                  }}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-100 outline-none focus:border-indigo-500"
-                />
-
-                {!historyStudent && historySearchResults.length > 0 && (
-                  <div className="absolute left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-slate-700">
-                    {historySearchResults.map(student => (
-                      <button
-                        key={student.id}
-                        type="button"
-                        onClick={() => {
-                          setHistoryStudent(student);
-                          setHistoryStudentInput(student.user.name);
-                          setHistorySearchResults([]);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs text-slate-355 hover:bg-slate-750 flex justify-between items-center transition-colors"
-                      >
-                        <span className="font-semibold">{student.user.name}</span>
-                        <span className="text-[10px] text-slate-505 font-mono">
-                          Roll: {student.rollNo || 'N/A'} • {student.classSection?.class.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Dashboard & History container */}
-            {historyStudent ? (
+            {/* TAB 2: PENDING CASES LEDGER */}
+            {!isLoading && activeTab === 'pending' && (
               <div className="space-y-6">
-                {/* Stats Dashboard cards */}
-                {studentStats && (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* Card 1 */}
-                    <div className="bg-slate-850 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 text-indigo-400 flex items-center justify-center">
-                        <Activity className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="text-xl font-black text-slate-100">{studentStats.totalCases}</div>
-                        <div className="text-[9px] text-slate-505 uppercase tracking-widest font-bold">Total Logs</div>
-                      </div>
-                    </div>
-
-                    {/* Card 2 */}
-                    <div className="bg-slate-850 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 text-rose-400 flex items-center justify-center">
-                        <ShieldAlert className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="text-xl font-black text-slate-100">{studentStats.complaintCount}</div>
-                        <div className="text-[9px] text-slate-505 uppercase tracking-widest font-bold">Complaints</div>
-                      </div>
-                    </div>
-
-                    {/* Card 3 */}
-                    <div className="bg-slate-850 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 text-emerald-400 flex items-center justify-center">
-                        <Award className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="text-xl font-black text-slate-100">{studentStats.praiseCount}</div>
-                        <div className="text-[9px] text-slate-505 uppercase tracking-widest font-bold">Praises & Merits</div>
-                      </div>
-                    </div>
-
-                    {/* Card 4 */}
-                    <div className="bg-slate-850 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 text-teal-400 flex items-center justify-center">
-                        <CheckCircle className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="text-xl font-black text-slate-100">{studentStats.resolvedCount}</div>
-                        <div className="text-[9px] text-slate-505 uppercase tracking-widest font-bold">Resolved</div>
-                      </div>
-                    </div>
+                
+                {/* Ledger filters */}
+                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 flex flex-wrap gap-4 items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-2 text-slate-700">
+                    <Filter className="w-4 h-4 text-blue-600" />
+                    <span className="font-bold text-xs uppercase tracking-wider text-slate-700">Filters Ledger</span>
                   </div>
-                )}
 
-                {/* History list block */}
-                <div className="bg-slate-850 border border-slate-800 rounded-3xl overflow-hidden shadow-lg">
-                  <div className="p-5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-100">Behavior Cases History</h4>
-                      <p className="text-slate-505 text-[10px] mt-0.5">Historical logs for {historyStudent.user.name}</p>
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search student, details..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-1.5 text-xs text-slate-800 outline-none w-48 focus:border-blue-500"
+                      />
                     </div>
 
-                    {/* Academic year filter for student cases */}
                     <select
-                      value={historyAcademicYearFilter}
-                      onChange={(e) => setHistoryAcademicYearFilter(e.target.value)}
-                      className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-indigo-500"
+                      value={filterAcademicYear}
+                      onChange={(e) => setFilterAcademicYear(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-500"
                     >
-                      <option value="All">All Academic Years</option>
+                      <option value="All">All Years</option>
                       {academicYears.map(year => (
                         <option key={year.id} value={year.name}>{year.name}</option>
                       ))}
                     </select>
                   </div>
+                </div>
 
-                  <div className="p-4">
-                    {studentCases.length === 0 ? (
-                      <p className="text-center text-slate-500 text-xs py-8 font-medium">
-                        No cases logged for this student under selection year.
-                      </p>
-                    ) : (
-                      <div className="divide-y divide-slate-800">
-                        {studentCases.map(c => {
-                          const isComplaint = c.behaviorType === 'Complaint';
-                          return (
-                            <div key={c.id} className="py-4 first:pt-1 last:pb-1 flex flex-col sm:flex-row justify-between gap-3 text-xs">
-                              <div className="space-y-1.5 flex-1">
-                                <div className="flex flex-wrap gap-2 items-center">
-                                  <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                    isComplaint ? 'bg-rose-950/80 border border-rose-900 text-rose-400' : 'bg-emerald-950/80 border border-emerald-900 text-emerald-400'
+                {/* Table list view */}
+                {filteredPendingCases.length === 0 ? (
+                  <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-16 text-center text-slate-400">
+                    <BookOpen className="w-12 h-12 text-slate-350 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-base font-bold text-slate-750">No Pending Behavior Logs</h3>
+                    <p className="text-xs text-slate-400 mt-1">Cases with status other than "Closed" will appear in this ledger.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-2xl shadow-sm bg-white">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            <th className="px-6 py-4">Student & Class</th>
+                            <th className="px-6 py-4">Type & Category</th>
+                            <th className="px-6 py-4">Description</th>
+                            <th className="px-6 py-4">Priority</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-150">
+                          {filteredPendingCases.map(c => {
+                            const isComplaint = c.behaviorType === 'Complaint';
+                            return (
+                              <tr key={c.id} className="hover:bg-slate-50/50 text-[13px] text-slate-700 transition-all">
+                                <td className="px-6 py-4">
+                                  <div className="font-bold text-slate-900">{c.student?.user?.name || 'Unknown Student'}</div>
+                                  <div className="text-[11px] text-slate-450 mt-0.5 font-medium">
+                                    Roll: {c.student?.rollNo || 'N/A'} • {c.student?.classSection?.class.name} {c.student?.classSection?.section.name}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                                    isComplaint ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
                                   }`}>
+                                    {isComplaint ? <ShieldAlert className="w-3.5 h-3.5" /> : <Award className="w-3.5 h-3.5" />}
                                     {c.behaviorType}
                                   </span>
-
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wide uppercase border ${
-                                    c.status === 'Closed' 
-                                      ? 'bg-slate-900 border-slate-800 text-slate-505' 
-                                      : 'bg-indigo-950 border-indigo-900 text-indigo-300'
+                                  <div className="text-[11px] text-slate-500 font-bold mt-1.5">{c.category}</div>
+                                </td>
+                                <td className="px-6 py-4 max-w-xs">
+                                  <p className="truncate text-slate-600" title={c.description}>
+                                    {c.description}
+                                  </p>
+                                  <span className="text-[10px] text-slate-400 font-semibold block mt-1">
+                                    Logged by: {c.teacher?.user.name || 'Admin'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+                                    c.priority === 'High' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-slate-100 border-slate-200 text-slate-700'
                                   }`}>
-                                    Status: {c.status}
+                                    {c.priority}
                                   </span>
-
-                                  <span className="text-[10px] text-slate-505 font-medium font-mono">
-                                    Logged on {new Date(c.createdAt).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                                    c.status === 'New' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                    c.status === 'In Progress' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                    'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  }`}>
+                                    {c.status}
                                   </span>
-                                </div>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <div className="flex justify-end gap-2 items-center">
+                                    <button
+                                      onClick={() => setSelectedCase(c)}
+                                      className="p-1 rounded-lg hover:bg-slate-100 text-slate-450 hover:text-slate-700 cursor-pointer"
+                                      title="View Case Details"
+                                    >
+                                      <Eye className="w-4.5 h-4.5" />
+                                    </button>
+                                    {c.status !== 'Closed' && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(c.id, 'Closed')}
+                                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-xs"
+                                      >
+                                        Resolve
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                                <div className="text-[11px] font-semibold text-indigo-400">
-                                  Category: {c.category} • Academic Year: {c.academicYear}
-                                </div>
-
-                                <p className="text-slate-300 leading-relaxed text-xs">
-                                  {c.description}
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden space-y-4">
+                      {filteredPendingCases.map(c => {
+                        const isComplaint = c.behaviorType === 'Complaint';
+                        return (
+                          <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-bold text-slate-800 text-sm">{c.student?.user?.name || 'Unknown Student'}</h4>
+                                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                                  Roll: {c.student?.rollNo || 'N/A'} • {c.student?.classSection?.class.name} {c.student?.classSection?.section.name}
                                 </p>
                               </div>
-
-                              <div className="flex flex-col sm:items-end justify-between self-end sm:self-auto gap-2">
-                                <button
-                                  onClick={() => setSelectedCase(c)}
-                                  className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5 self-start"
-                                >
-                                  View Details <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                                
-                                {c.status !== 'Closed' && (
-                                  <button
-                                    onClick={() => handleUpdateStatus(c.id, 'Closed')}
-                                    className="px-2 py-1 rounded border border-emerald-900 bg-emerald-950/40 text-emerald-400 font-bold text-[10px] hover:bg-emerald-900 hover:text-emerald-200 transition-colors"
-                                  >
-                                    Resolve Case
-                                  </button>
-                                )}
-                              </div>
+                              <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                                isComplaint ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              }`}>
+                                {c.behaviorType}
+                              </span>
                             </div>
-                          );
-                        })}
+
+                            <p className="text-xs text-slate-600 line-clamp-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200/50 leading-relaxed">
+                              {c.description}
+                            </p>
+
+                            <div className="flex flex-wrap gap-2 items-center text-xs text-slate-500 justify-between">
+                              <div className="flex gap-2">
+                                <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${
+                                  c.priority === 'High' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-slate-100 border-slate-200 text-slate-700'
+                                }`}>
+                                  {c.priority}
+                                </span>
+                                <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                  c.status === 'New' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                  c.status === 'In Progress' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                  'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                }`}>
+                                  {c.status}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400">
+                                by {c.teacher?.user.name || 'Admin'}
+                              </span>
+                            </div>
+
+                            <div className="flex gap-2 justify-end pt-1 border-t border-slate-100">
+                              <button
+                                onClick={() => setSelectedCase(c)}
+                                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold min-h-[44px] cursor-pointer"
+                              >
+                                <Eye className="w-4 h-4" /> View Details
+                              </button>
+                              {c.status !== 'Closed' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(c.id, 'Closed')}
+                                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors min-h-[44px] cursor-pointer"
+                                >
+                                  Resolve Case
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: STUDENT HISTORY & STATS DASHBOARD */}
+            {!isLoading && activeTab === 'history' && (
+              <div className="space-y-6">
+                
+                {/* Student Selector card */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 shadow-xs max-w-xl mx-auto space-y-4">
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 leading-none">Select Student to view history</h3>
+                    <p className="text-slate-450 text-[11px] font-semibold mt-1">Queries student stats metrics and full logs registry.</p>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Type student name to search..."
+                      value={historyStudentInput}
+                      onChange={(e) => {
+                        setHistoryStudentInput(e.target.value);
+                        if (historyStudent) setHistoryStudent(null);
+                      }}
+                      className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+                    />
+
+                    {!historyStudent && historySearchResults.length > 0 && (
+                      <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-slate-100">
+                        {historySearchResults.map(student => (
+                          <button
+                            key={student.id}
+                            type="button"
+                            onClick={() => {
+                              setHistoryStudent(student);
+                              setHistoryStudentInput(student.user.name);
+                              setHistorySearchResults([]);
+                            }}
+                            className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 flex justify-between items-center transition-colors cursor-pointer"
+                          >
+                            <span className="font-semibold">{student.user.name}</span>
+                            <span className="text-[10px] text-slate-400 font-bold font-mono">
+                              Roll: {student.rollNo || 'N/A'} • {student.classSection?.class.name}
+                            </span>
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-slate-850 border border-dashed border-slate-800 rounded-2xl p-12 text-center text-slate-500 shadow-inner max-w-xl mx-auto">
-                <User className="w-10 h-10 mx-auto mb-3 opacity-30 animate-pulse" />
-                <p className="font-bold text-sm">Please search and select a student above.</p>
+
+                {/* Dashboard statistics display and timelines */}
+                {historyStudent ? (
+                  <div className="space-y-6 animate-in fade-in duration-200">
+                    
+                    {/* Stats summary cards */}
+                    {studentStats && (
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 text-blue-600 flex items-center justify-center shrink-0">
+                            <Activity className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-xl font-extrabold text-slate-900 leading-tight">{studentStats.totalCases}</div>
+                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Logs</div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                            <ShieldAlert className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-xl font-extrabold text-slate-900 leading-tight">{studentStats.complaintCount}</div>
+                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Complaints</div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                            <Award className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-xl font-extrabold text-slate-900 leading-tight">{studentStats.praiseCount}</div>
+                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Praises</div>
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-xl font-extrabold text-slate-900 leading-tight">{studentStats.resolvedCount}</div>
+                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Resolved</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Behavior cases history */}
+                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="p-5 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                          <h4 className="font-bold text-sm text-slate-800">Behavior Cases History</h4>
+                          <p className="text-slate-400 text-[11px] font-semibold mt-0.5">Historical logs for {historyStudent.user.name}</p>
+                        </div>
+
+                        <select
+                          value={historyAcademicYearFilter}
+                          onChange={(e) => setHistoryAcademicYearFilter(e.target.value)}
+                          className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                        >
+                          <option value="All">All Academic Years</option>
+                          {academicYears.map(year => (
+                            <option key={year.id} value={year.name}>{year.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="p-6 divide-y divide-slate-100">
+                        {studentCases.length === 0 ? (
+                          <p className="text-center text-slate-400 text-xs py-8 font-medium">
+                            No cases logged for this student in the selected year.
+                          </p>
+                        ) : (
+                          studentCases.map(c => {
+                            const isComplaint = c.behaviorType === 'Complaint';
+                            return (
+                              <div key={c.id} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between gap-3 text-xs">
+                                <div className="space-y-1.5 flex-1">
+                                  <div className="flex flex-wrap gap-2 items-center">
+                                    <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                      isComplaint ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                                    }`}>
+                                      {c.behaviorType}
+                                    </span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wide uppercase border ${
+                                      c.status === 'Closed' ? 'bg-slate-50 border-slate-200 text-slate-500' : 'bg-blue-50 border-blue-100 text-blue-700'
+                                    }`}>
+                                      Status: {c.status}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-bold font-mono">
+                                      Logged: {new Date(c.createdAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+
+                                  <div className="text-[11px] font-bold text-blue-600">
+                                    Category: {c.category} • Academic Year: {c.academicYear}
+                                  </div>
+
+                                  <p className="text-slate-600 leading-relaxed text-xs">
+                                    {c.description}
+                                  </p>
+                                </div>
+
+                                <div className="flex flex-col sm:items-end justify-between gap-2 shrink-0">
+                                  <button
+                                    onClick={() => setSelectedCase(c)}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 self-start sm:self-auto cursor-pointer"
+                                  >
+                                    View Details <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                  {c.status !== 'Closed' && (
+                                    <button
+                                      onClick={() => handleUpdateStatus(c.id, 'Closed')}
+                                      className="px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 font-bold text-[10px] hover:bg-emerald-600 hover:text-white transition-all cursor-pointer"
+                                    >
+                                      Resolve Case
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-16 text-center text-slate-400 max-w-xl mx-auto">
+                    <User className="w-12 h-12 mx-auto mb-3 opacity-30 animate-pulse text-slate-400" />
+                    <h3 className="text-base font-bold text-slate-705">Select a Student</h3>
+                    <p className="text-xs text-slate-400 mt-1">Please search and select a student above to inspect behavior timelines.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* CASE DETAILS MODAL / DRAWER */}
+      {/* CASE DETAILS MODAL */}
       {selectedCase && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in zoom-in-95">
-          <div className="bg-slate-905 border border-slate-800 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl">
-            {/* Modal Header banner */}
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl space-y-0">
+            
+            {/* Modal Header */}
             <div className={`p-6 text-white flex justify-between items-start ${
-              selectedCase.behaviorType === 'Complaint' 
-                ? 'bg-rose-950 border-b border-rose-900/60' 
-                : 'bg-emerald-950 border-b border-emerald-900/60'
+              selectedCase.behaviorType === 'Complaint' ? 'bg-rose-600' : 'bg-emerald-600'
             }`}>
               <div className="space-y-1">
-                <span className="text-[9px] font-bold uppercase tracking-widest bg-white/10 px-2.5 py-0.5 rounded-full">
-                  {selectedCase.behaviorType} Incident Record
+                <span className="text-[9px] font-bold uppercase tracking-widest bg-white/20 px-2.5 py-0.5 rounded-full">
+                  {selectedCase.behaviorType} Incident Details
                 </span>
                 <h3 className="text-lg font-black">{selectedCase.student?.user.name || 'Unknown Student'}</h3>
               </div>
               <button
                 onClick={() => setSelectedCase(null)}
-                className="text-slate-400 hover:text-white font-semibold text-sm bg-slate-900/60 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border border-slate-800"
+                className="text-white hover:bg-white/10 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-colors"
               >
                 ✕
               </button>
@@ -891,54 +1096,53 @@ export default function ComplaintBoxPage() {
 
             {/* Modal Body */}
             <div className="p-6 space-y-6">
-              {/* Properties Grid */}
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
-                  <span className="text-slate-505 font-semibold block text-[10px] uppercase tracking-wider">Student Name</span>
-                  <span className="text-slate-200 font-bold block mt-0.5">{selectedCase.student?.user.name || 'N/A'}</span>
+                  <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Student Name</span>
+                  <span className="text-slate-800 font-bold block mt-0.5">{selectedCase.student?.user.name || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-slate-505 font-semibold block text-[10px] uppercase tracking-wider">Class & Section</span>
-                  <span className="text-slate-200 font-semibold block mt-0.5">
+                  <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Class & Section</span>
+                  <span className="text-slate-800 font-semibold block mt-0.5">
                     {selectedCase.student?.classSection?.class.name} {selectedCase.student?.classSection?.section.name}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-550 font-semibold block text-[10px] uppercase tracking-wider">Logged By Teacher</span>
-                  <span className="text-slate-200 font-medium block mt-0.5">{selectedCase.teacher?.user.name || 'Admin'}</span>
+                  <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Logged By Teacher</span>
+                  <span className="text-slate-800 font-medium block mt-0.5">{selectedCase.teacher?.user.name || 'Admin'}</span>
                 </div>
                 <div>
-                  <span className="text-slate-505 font-semibold block text-[10px] uppercase tracking-wider">Category</span>
-                  <span className="text-slate-200 font-semibold block mt-0.5">{selectedCase.category}</span>
+                  <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Category</span>
+                  <span className="text-slate-800 font-semibold block mt-0.5">{selectedCase.category}</span>
                 </div>
                 <div>
-                  <span className="text-slate-505 font-semibold block text-[10px] uppercase tracking-wider">Academic Year</span>
-                  <span className="text-slate-305 font-mono block mt-0.5">{selectedCase.academicYear}</span>
+                  <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Academic Year</span>
+                  <span className="text-slate-800 font-mono block mt-0.5">{selectedCase.academicYear}</span>
                 </div>
                 <div>
-                  <span className="text-slate-505 font-semibold block text-[10px] uppercase tracking-wider">Date Created</span>
-                  <span className="text-slate-300 font-mono block mt-0.5">
+                  <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Date Created</span>
+                  <span className="text-slate-800 font-mono block mt-0.5 font-bold">
                     {new Date(selectedCase.createdAt).toLocaleString()}
                   </span>
                 </div>
               </div>
 
-              {/* Description Details box */}
-              <div className="border-t border-slate-800 pt-4">
-                <span className="text-slate-505 font-semibold block text-[10px] uppercase tracking-wider mb-2">Description details</span>
-                <div className="p-4 bg-slate-850 rounded-2xl border border-slate-800 text-slate-300 text-xs leading-relaxed max-h-48 overflow-y-auto">
+              {/* Description Details */}
+              <div className="border-t border-slate-100 pt-4">
+                <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-2">Description details</span>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 text-xs leading-relaxed max-h-48 overflow-y-auto">
                   {selectedCase.description}
                 </div>
               </div>
 
               {/* Current Status Update controls */}
-              <div className="border-t border-slate-800 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <span className="text-slate-505 font-semibold block text-[10px] uppercase tracking-wider">Current Status</span>
+                  <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Current Status</span>
                   <span className={`inline-block mt-1 px-3 py-0.5 border text-[10px] font-bold rounded-full ${
-                    selectedCase.status === 'New' ? 'bg-blue-950 text-blue-300 border-blue-900' :
-                    selectedCase.status === 'In Progress' ? 'bg-amber-950 text-amber-300 border-amber-900' :
-                    'bg-emerald-950 text-emerald-300 border-emerald-900'
+                    selectedCase.status === 'New' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                    selectedCase.status === 'In Progress' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                    'bg-emerald-50 text-emerald-700 border-emerald-100'
                   }`}>
                     {selectedCase.status}
                   </span>
@@ -948,7 +1152,7 @@ export default function ComplaintBoxPage() {
                   {selectedCase.status !== 'New' && (
                     <button
                       onClick={() => handleUpdateStatus(selectedCase.id, 'New')}
-                      className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-[11px] font-bold cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-bold cursor-pointer transition-colors"
                     >
                       Set New
                     </button>
@@ -956,7 +1160,7 @@ export default function ComplaintBoxPage() {
                   {selectedCase.status !== 'In Progress' && selectedCase.status !== 'Closed' && (
                     <button
                       onClick={() => handleUpdateStatus(selectedCase.id, 'In Progress')}
-                      className="px-3 py-1.5 rounded-lg border border-amber-900 bg-amber-950/40 text-amber-400 hover:bg-amber-900/60 text-[11px] font-bold cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-lg border border-amber-200 text-amber-750 bg-amber-50/20 hover:bg-amber-50 text-[11px] font-bold cursor-pointer transition-colors"
                     >
                       Investigate
                     </button>
@@ -964,7 +1168,7 @@ export default function ComplaintBoxPage() {
                   {selectedCase.status !== 'Closed' && (
                     <button
                       onClick={() => handleUpdateStatus(selectedCase.id, 'Closed')}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold cursor-pointer transition-colors"
                     >
                       Resolve Case
                     </button>
@@ -974,10 +1178,10 @@ export default function ComplaintBoxPage() {
             </div>
 
             {/* Modal Footer block */}
-            <div className="bg-slate-850 px-6 py-4 border-t border-slate-800 flex justify-end">
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => setSelectedCase(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer transition-colors"
               >
                 Close View
               </button>

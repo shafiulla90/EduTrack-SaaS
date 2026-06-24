@@ -15,6 +15,7 @@ import { CommunicationsModule } from './communications/communications.module';
 import { ActivityLogModule } from './common/activity-log.module';
 import { TimetableModule } from './timetable/timetable.module';
 import { ComplaintBoxModule } from './complaint-box/complaint-box.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ComplaintBoxModule } from './complaint-box/complaint-box.module';
     ActivityLogModule,
     TimetableModule,
     ComplaintBoxModule,
+    DashboardModule,
   ],
   controllers: [],
   providers: [],

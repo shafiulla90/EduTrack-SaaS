@@ -601,14 +601,14 @@ export default function TimetablePage() {
         {activeTab === 'grid' && (
           <div className="flex flex-col gap-6 animate-in">
             {/* Filters panel */}
-            <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-950/20 flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex flex-col">
+            <div className="glass-panel p-5 rounded-2xl border border-slate-800 bg-slate-950/20 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
+                <div className="flex flex-col w-full sm:w-auto">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Class Section</label>
                   <select
                     value={selectedClassSectionId}
                     onChange={(e) => setSelectedClassSectionId(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 min-w-[200px] outline-none"
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 w-full sm:min-w-[200px] outline-none focus:border-brand-500"
                   >
                     <option value="">Select Class Section</option>
                     {classSections.map((cs) => (
@@ -616,12 +616,12 @@ export default function TimetablePage() {
                     ))}
                   </select>
                 </div>
-                <div className="flex flex-col">
+                <div className="flex flex-col w-full sm:w-auto">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Academic Year</label>
                   <select
                     value={selectedAcademicYearId}
                     onChange={(e) => setSelectedAcademicYearId(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 min-w-[150px] outline-none"
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 w-full sm:min-w-[150px] outline-none focus:border-brand-500"
                   >
                     {academicYears.map((ay) => (
                       <option key={ay.id} value={ay.id}>{ay.name}</option>
@@ -629,10 +629,10 @@ export default function TimetablePage() {
                   </select>
                 </div>
               </div>
-              <div>
+              <div className="w-full sm:w-auto">
                 <button
                   onClick={handleSaveTimetable}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg transition-transform hover:scale-[1.02]"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg transition-transform hover:scale-[1.02] min-h-[44px]"
                 >
                   Save Timetable
                 </button>

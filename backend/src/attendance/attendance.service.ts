@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
-import { AttendanceStatus } from '@prisma/client';
+import { AttendanceStatus, Role } from '@prisma/client';
 
 @Injectable()
 export class AttendanceService {
@@ -15,12 +15,94 @@ export class AttendanceService {
     return tenantId;
   }
 
-  async getRecentSubmissions() {
-    const tenantId = this.getTenantId();
+  private formatTime(date: Date): string {
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+    const hoursStr = hours < 10 ? '0' + hours : hours;
+    return `${hoursStr}:${minutesStr} ${ampm}`;
+  }
 
-    return this.prisma.attendanceSession.findMany({
+  // Salesforce parity: get classes associated with tenant
+  async getClasses() {
+    const tenantId = this.getTenantId();
+    const classes = await this.prisma.class.findMany({
+      where: { tenantId },
+      orderBy: { name: 'asc' },
+      take: 500,
+    });
+    return classes.map(c => ({
+      label: c.name,
+      value: c.name,
+    }));
+  }
+
+  // Salesforce parity: get sections associated with tenant
+  async getSections() {
+    const tenantId = this.getTenantId();
+    const sections = await this.prisma.section.findMany({
+      where: { tenantId },
+      orderBy: { name: 'asc' },
+      take: 500,
+    });
+    return sections.map(s => ({
+      label: s.name,
+      value: s.name,
+    }));
+  }
+
+  // Salesforce parity: get teachers associated with tenant
+  async getTeachers() {
+    const tenantId = this.getTenantId();
+    const staff = await this.prisma.staffProfile.findMany({
       where: {
         tenantId,
+        user: {
+          role: { in: [Role.TEACHER, Role.STAFF] },
+          isActive: true,
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        user: {
+          name: 'asc',
+        },
+      },
+      take: 1000,
+    });
+
+    return staff.map(s => ({
+      id: s.id,
+      name: s.user.name,
+      subject: s.subjectsTaught[0] || 'N/A',
+    }));
+  }
+
+  // Salesforce parity: get today's recent submissions
+  async getRecentSubmissions() {
+    const tenantId = this.getTenantId();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const todaySessions = await this.prisma.attendanceSession.findMany({
+      where: {
+        tenantId,
+        date: {
+          gte: todayStart,
+          lte: todayEnd,
+        },
       },
       include: {
         classSection: {
@@ -37,21 +119,173 @@ export class AttendanceService {
           },
         },
       },
-      orderBy: { date: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: 10,
+    });
+
+    if (todaySessions.length === 0) {
+      return [
+        {
+          id: 'pending',
+          text: "Today's attendance is currently pending",
+        },
+      ];
+    }
+
+    return todaySessions.map(s => {
+      const className = s.classSection?.class?.name || 'N/A';
+      const sectionName = s.classSection?.section?.name || 'N/A';
+      const teacherName = s.takenBy?.user?.name || 'N/A';
+      return {
+        id: s.id,
+        text: `${className} - ${sectionName} submitted by ${teacherName}`,
+      };
     });
   }
 
-  async getSessionData(classSectionId: string, dateStr: string) {
+  // Salesforce parity: get all historical sessions
+  async getHistory() {
     const tenantId = this.getTenantId();
-    const date = new Date(dateStr);
-    date.setHours(0, 0, 0, 0);
+    const sessions = await this.prisma.attendanceSession.findMany({
+      where: { tenantId },
+      include: {
+        classSection: {
+          include: {
+            class: true,
+            section: true,
+          },
+        },
+        takenBy: {
+          include: {
+            user: {
+              select: { name: true },
+            },
+          },
+        },
+      },
+      orderBy: { date: 'desc' },
+      take: 100,
+    });
+
+    return sessions.map(s => {
+      return {
+        id: s.id,
+        date: s.date.toISOString().split('T')[0],
+        classSection: {
+          class: { name: s.classSection?.class?.name || 'N/A' },
+          section: { name: s.classSection?.section?.name || 'N/A' },
+        },
+        presentCount: s.presentCount,
+        absentCount: s.absentCount,
+        totalStudents: s.totalStudents,
+        teacherId: s.takenById,
+        teacherName: s.takenBy?.user?.name || 'N/A',
+      };
+    });
+  }
+
+
+  // Salesforce parity: resolve names and get students
+  async getStudents(classVal: string, sectionVal: string) {
+    const tenantId = this.getTenantId();
+    if (!classVal || !sectionVal) return [];
+
+    const cls = await this.prisma.class.findFirst({
+      where: {
+        tenantId,
+        name: { equals: classVal.trim(), mode: 'insensitive' },
+      },
+    });
+
+    const sec = await this.prisma.section.findFirst({
+      where: {
+        tenantId,
+        name: { equals: sectionVal.trim(), mode: 'insensitive' },
+      },
+    });
+
+    if (!cls || !sec) return [];
+
+    const classSection = await this.prisma.classSection.findUnique({
+      where: {
+        classId_sectionId: {
+          classId: cls.id,
+          sectionId: sec.id,
+        },
+      },
+    });
+
+    if (!classSection) return [];
+
+    const studentList = await this.prisma.studentProfile.findMany({
+      where: {
+        tenantId,
+        classSectionId: classSection.id,
+      },
+      include: {
+        user: {
+          select: { name: true },
+        },
+      },
+      orderBy: {
+        user: { name: 'asc' },
+      },
+      take: 1000,
+    });
+
+    return studentList.map(s => ({
+      Id: s.id,
+      Name: s.user.name,
+      Roll_No__c: s.rollNo || '',
+    }));
+  }
+
+  // Salesforce parity: resolve names and get session data
+  async getSessionData(classVal: string, sectionVal: string, dateStr: string) {
+    const tenantId = this.getTenantId();
+    if (!classVal || !sectionVal || !dateStr) {
+      return { sessionExists: false, absentIds: [], total: 0, present: 0, absent: 0 };
+    }
+
+    const cls = await this.prisma.class.findFirst({
+      where: {
+        tenantId,
+        name: { equals: classVal.trim(), mode: 'insensitive' },
+      },
+    });
+
+    const sec = await this.prisma.section.findFirst({
+      where: {
+        tenantId,
+        name: { equals: sectionVal.trim(), mode: 'insensitive' },
+      },
+    });
+
+    if (!cls || !sec) {
+      return { sessionExists: false, absentIds: [], total: 0, present: 0, absent: 0 };
+    }
+
+    const classSection = await this.prisma.classSection.findUnique({
+      where: {
+        classId_sectionId: {
+          classId: cls.id,
+          sectionId: sec.id,
+        },
+      },
+    });
+
+    if (!classSection) {
+      return { sessionExists: false, absentIds: [], total: 0, present: 0, absent: 0 };
+    }
+
+    const searchDate = new Date(dateStr);
+    searchDate.setHours(0, 0, 0, 0);
 
     const session = await this.prisma.attendanceSession.findFirst({
       where: {
         tenantId,
-        classSectionId,
-        date,
+        classSectionId: classSection.id,
+        date: searchDate,
       },
       include: {
         attendances: true,
@@ -63,6 +297,7 @@ export class AttendanceService {
           },
         },
       },
+      orderBy: { updatedAt: 'desc' },
     });
 
     if (!session) {
@@ -77,6 +312,8 @@ export class AttendanceService {
       sessionExists: true,
       sessionId: session.id,
       teacherName: session.takenBy?.user?.name || 'Unknown',
+      createdTime: this.formatTime(session.createdAt),
+      lastUpdatedTime: this.formatTime(session.updatedAt),
       total: session.totalStudents,
       present: session.presentCount,
       absent: session.absentCount,
@@ -84,83 +321,326 @@ export class AttendanceService {
     };
   }
 
+  // Salesforce parity: save attendance with name resolution, auto-creation, duplication removal, past-date read-only validation
   async saveAttendance(data: any) {
     const tenantId = this.getTenantId();
-    const date = new Date(data.date);
+    const date = new Date(data.dateStr || data.date);
     date.setHours(0, 0, 0, 0);
 
+    // Validate historical date lock
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today) {
+      throw new BadRequestException('Historical records are in Read-Only mode.');
+    }
+
+    const classVal = (data.classVal || '').trim();
+    const sectionVal = (data.sectionVal || '').trim();
     const absentStudentIds = data.absentStudentIds || [];
+    const totalStudents = data.totalStudents || 0;
+    const presentCount = data.presentCount || 0;
+    const absentCount = data.absentCount || 0;
+    const teacherId = data.teacherId;
+
+    if (!classVal || !sectionVal) {
+      throw new BadRequestException('Class and Section names are required.');
+    }
 
     return this.prisma.$transaction(async (tx) => {
-      // Find or create the Attendance Session
-      let session = await tx.attendanceSession.findFirst({
+      // 1. Find or create Class record
+      let cls = await tx.class.findFirst({
         where: {
           tenantId,
-          classSectionId: data.classSectionId,
-          date,
+          name: { equals: classVal, mode: 'insensitive' },
         },
       });
 
-      if (!session) {
-        session = await tx.attendanceSession.create({
-          data: {
-            classSectionId: data.classSectionId,
-            date,
-            takenById: data.teacherId,
-            presentCount: data.presentCount,
-            absentCount: data.absentCount,
-            totalStudents: data.totalStudents,
-            tenantId,
-          },
+      if (!cls) {
+        // Find default active Academic Year
+        const acadYear = await tx.academicYear.findFirst({
+          where: { tenantId, isActive: true },
         });
-      } else {
-        session = await tx.attendanceSession.update({
-          where: { id: session.id },
+        if (!acadYear) {
+          throw new BadRequestException('No active Academic Year found for setup.');
+        }
+        cls = await tx.class.create({
           data: {
-            presentCount: data.presentCount,
-            absentCount: data.absentCount,
-            totalStudents: data.totalStudents,
-            takenById: data.teacherId,
+            name: classVal,
+            tenantId,
+            academicYearId: acadYear.id,
           },
         });
       }
 
-      // Delete existing individual attendance records for this session
-      await tx.attendance.deleteMany({
+      // 2. Find or create Section record
+      let sec = await tx.section.findFirst({
         where: {
-          attendanceSessionId: session.id,
+          tenantId,
+          name: { equals: sectionVal, mode: 'insensitive' },
         },
       });
 
-      // Insert new records for absent students
-      if (absentStudentIds.length > 0) {
-        const attendanceData = absentStudentIds.map((studentId: string) => ({
+      if (!sec) {
+        sec = await tx.section.create({
+          data: {
+            name: sectionVal,
+            tenantId,
+          },
+        });
+      }
+
+      // 3. Find or create ClassSection record
+      let classSection = await tx.classSection.findUnique({
+        where: {
+          classId_sectionId: {
+            classId: cls.id,
+            sectionId: sec.id,
+          },
+        },
+      });
+
+      if (!classSection) {
+        classSection = await tx.classSection.create({
+          data: {
+            classId: cls.id,
+            sectionId: sec.id,
+            tenantId,
+          },
+        });
+      }
+
+      // 4. Duplicate prevention: find duplicate sessions and delete all except first
+      const existingSessions = await tx.attendanceSession.findMany({
+        where: {
+          tenantId,
+          classSectionId: classSection.id,
+          date,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      let session;
+      if (existingSessions.length === 0) {
+        session = await tx.attendanceSession.create({
+          data: {
+            classSectionId: classSection.id,
+            date,
+            takenById: teacherId,
+            presentCount,
+            absentCount,
+            totalStudents,
+            tenantId,
+          },
+        });
+      } else {
+        session = existingSessions[0];
+        
+        // Clean up duplicate sessions
+        if (existingSessions.length > 1) {
+          const duplicateIds = existingSessions.slice(1).map(s => s.id);
+          await tx.attendanceSession.deleteMany({
+            where: {
+              id: { in: duplicateIds },
+            },
+          });
+        }
+
+        // Update active session stats
+        session = await tx.attendanceSession.update({
+          where: { id: session.id },
+          data: {
+            presentCount,
+            absentCount,
+            totalStudents,
+            takenById: teacherId,
+          },
+        });
+      }
+
+      // 5. Implicit present storage management:
+      // Delete existing records that are NOT in the new absent list (they are now present)
+      await tx.attendance.deleteMany({
+        where: {
+          attendanceSessionId: session.id,
+          NOT: {
+            studentId: { in: absentStudentIds },
+          },
+        },
+      });
+
+      // Fetch already stored absent records to avoid duplicates
+      const storedAbsents = await tx.attendance.findMany({
+        where: {
+          attendanceSessionId: session.id,
+          studentId: { in: absentStudentIds },
+        },
+        select: { studentId: true },
+      });
+      const storedAbsentIds = new Set(storedAbsents.map(a => a.studentId));
+
+      // Insert new records for newly absent students
+      const newAbsents = absentStudentIds.filter(id => !storedAbsentIds.has(id));
+      if (newAbsents.length > 0) {
+        const attendanceData = newAbsents.map(studentId => ({
           attendanceSessionId: session.id,
           studentId,
           status: AttendanceStatus.ABSENT,
-          reason: data.reason || null,
           tenantId,
         }));
-
         await tx.attendance.createMany({
           data: attendanceData,
         });
       }
 
-      return this.getSessionData(data.classSectionId, data.date);
-    });
+      return this.getSessionData(classVal, sectionVal, data.dateStr || data.date);
+    }, { timeout: 25000 });
   }
 
-  // Retrieve a single attendance record by its ID
+  // Salesforce parity: get bundled attendance data for reports
+  async getAttendanceData(startDateStr: string, endDateStr: string) {
+    const tenantId = this.getTenantId();
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(endDateStr);
+    endDate.setHours(23, 59, 59, 999);
+
+    // 1. Fetch Students
+    const rawStudents = await this.prisma.studentProfile.findMany({
+      where: { tenantId },
+      include: {
+        user: { select: { name: true } },
+        classSection: {
+          include: {
+            class: true,
+            section: true,
+          },
+        },
+      },
+    });
+
+    const students = rawStudents.map(s => ({
+      id: s.id,
+      name: s.user.name,
+      rollNo: s.rollNo || '',
+      section: s.classSection?.section?.name || '',
+      classValue: s.classSection?.class?.name || '',
+      className: s.classSection?.class?.name || '',
+    }));
+
+    // 2. Fetch Attendance Records (Absent Only)
+    const rawAttendance = await this.prisma.attendance.findMany({
+      where: {
+        tenantId,
+        attendanceSession: {
+          date: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+      },
+      include: {
+        student: {
+          select: {
+            rollNo: true,
+            user: { select: { name: true } },
+            classSection: {
+              include: {
+                class: true,
+                section: true,
+              },
+            },
+          },
+        },
+        attendanceSession: {
+          include: {
+            classSection: {
+              include: {
+                class: true,
+                section: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const attendanceRecords = rawAttendance.map(a => {
+      const studentName = a.student?.user?.name || 'Unknown';
+      const rollNo = a.student?.rollNo || '';
+      const section = a.attendanceSession?.classSection?.section?.name || '';
+      const classValue = a.attendanceSession?.classSection?.class?.name || '';
+      return {
+        id: a.id,
+        studentId: a.studentId,
+        studentName,
+        rollNo,
+        section,
+        classValue,
+        className: classValue,
+        attendanceDate: a.attendanceSession.date.toISOString().split('T')[0],
+        status: a.status === AttendanceStatus.ABSENT ? 'Absent' : 'Present',
+      };
+    });
+
+    // 3. Fetch Classes
+    const uniqueClasses = Array.from(new Set(students.map(s => s.classValue).filter(Boolean)));
+
+    // 4. Fetch Sections
+    const uniqueSections = Array.from(new Set(students.map(s => s.section).filter(Boolean)));
+
+    // 5. Fetch Sessions
+    const rawSessions = await this.prisma.attendanceSession.findMany({
+      where: {
+        tenantId,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      include: {
+        classSection: {
+          include: {
+            class: true,
+            section: true,
+          },
+        },
+      },
+    });
+
+    const sessions = rawSessions.map(s => ({
+      id: s.id,
+      classId: s.classSection?.class?.id || '',
+      className: s.classSection?.class?.name || '',
+      classValue: s.classSection?.class?.name || '',
+      attendanceDate: s.date.toISOString().split('T')[0],
+      section: s.classSection?.section?.name || '',
+      totalStudents: s.totalStudents,
+      presentCount: s.presentCount,
+      absentCount: s.absentCount,
+    }));
+
+    // 6. Debug stats
+    const totalAcc = await this.prisma.studentProfile.count({ where: { tenantId } });
+    const debugStats = `Total StudentProfiles: ${totalAcc} | Matches: ${students.length}`;
+
+    return {
+      students,
+      attendanceRecords,
+      classes: uniqueClasses,
+      sections: uniqueSections,
+      sessions,
+      debugStats,
+    };
+  }
+
+  // Fallback REST endpoint helpers (retaining generic routes from old controllers)
   async getAttendanceById(id: string) {
     const tenantId = this.getTenantId();
     return this.prisma.attendance.findUnique({
       where: { id, tenantId },
-      include: { attendanceSession: true },
     });
   }
 
-  // Update an attendance record (status, reason, etc.)
   async updateAttendance(id: string, updateDto: any) {
     const tenantId = this.getTenantId();
     return this.prisma.attendance.update({
@@ -172,7 +652,6 @@ export class AttendanceService {
     });
   }
 
-  // Delete an attendance record
   async deleteAttendance(id: string) {
     const tenantId = this.getTenantId();
     return this.prisma.attendance.delete({
@@ -180,22 +659,16 @@ export class AttendanceService {
     });
   }
 
-  // Daily summary – totals for a given date (defaults to today)
   async getDailySummary(date?: string) {
     const tenantId = this.getTenantId();
-    const targetDate = date ? new Date(date) : new Date();
-    targetDate.setHours(0, 0, 0, 0);
+    const searchDate = date ? new Date(date) : new Date();
+    searchDate.setHours(0, 0, 0, 0);
+
     const sessions = await this.prisma.attendanceSession.findMany({
-      where: { tenantId, date: targetDate },
-      select: {
-        id: true,
-        totalStudents: true,
-        presentCount: true,
-        absentCount: true,
-      },
+      where: { tenantId, date: searchDate },
     });
-    // Aggregate totals across sessions
-    const summary = sessions.reduce(
+
+    return sessions.reduce(
       (acc, s) => {
         acc.totalStudents += s.totalStudents;
         acc.present += s.presentCount;
@@ -204,32 +677,24 @@ export class AttendanceService {
       },
       { totalStudents: 0, present: 0, absent: 0 },
     );
-    return summary;
   }
 
-  // Monthly summary – totals for a month/year (defaults to current month)
   async getMonthlySummary(month?: string, year?: string) {
     const tenantId = this.getTenantId();
     const now = new Date();
-    const targetMonth = month ? parseInt(month, 10) - 1 : now.getMonth();
-    const targetYear = year ? parseInt(year, 10) : now.getFullYear();
-    const start = new Date(targetYear, targetMonth, 1);
-    const end = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+    const m = month ? parseInt(month, 10) - 1 : now.getMonth();
+    const y = year ? parseInt(year, 10) : now.getFullYear();
+    const start = new Date(y, m, 1);
+    const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+
     const sessions = await this.prisma.attendanceSession.findMany({
       where: {
         tenantId,
-        date: {
-          gte: start,
-          lte: end,
-        },
-      },
-      select: {
-        totalStudents: true,
-        presentCount: true,
-        absentCount: true,
+        date: { gte: start, lte: end },
       },
     });
-    const summary = sessions.reduce(
+
+    return sessions.reduce(
       (acc, s) => {
         acc.totalStudents += s.totalStudents;
         acc.present += s.presentCount;
@@ -238,27 +703,19 @@ export class AttendanceService {
       },
       { totalStudents: 0, present: 0, absent: 0 },
     );
-    return summary;
   }
 
-  // Class‑wise attendance report – optionally for a specific date
   async getClassAttendanceReport(classSectionId: string, date?: string) {
     const tenantId = this.getTenantId();
-    const whereClause: any = { tenantId, classSectionId };
+    const where: any = { tenantId, classSectionId };
     if (date) {
       const d = new Date(date);
       d.setHours(0, 0, 0, 0);
-      whereClause.date = d;
+      where.date = d;
     }
-    const sessions = await this.prisma.attendanceSession.findMany({
-      where: whereClause,
-      select: {
-        totalStudents: true,
-        presentCount: true,
-        absentCount: true,
-      },
-    });
-    const report = sessions.reduce(
+
+    const sessions = await this.prisma.attendanceSession.findMany({ where });
+    return sessions.reduce(
       (acc, s) => {
         acc.totalStudents += s.totalStudents;
         acc.present += s.presentCount;
@@ -267,22 +724,18 @@ export class AttendanceService {
       },
       { totalStudents: 0, present: 0, absent: 0 },
     );
-    return report;
   }
 
-  // Student‑wise attendance report – optionally for a specific date
   async getStudentAttendanceReport(studentId: string, date?: string) {
     const tenantId = this.getTenantId();
-    const whereClause: any = { tenantId, studentId };
+    const where: any = { tenantId, studentId };
     if (date) {
       const d = new Date(date);
       d.setHours(0, 0, 0, 0);
-      whereClause.attendanceSession = { date: d };
+      where.attendanceSession = { date: d };
     }
-    const records = await this.prisma.attendance.findMany({
-      where: whereClause,
-      select: { status: true },
-    });
+
+    const records = await this.prisma.attendance.findMany({ where });
     const total = records.length;
     const present = records.filter(r => r.status === AttendanceStatus.PRESENT).length;
     const absent = records.filter(r => r.status === AttendanceStatus.ABSENT).length;

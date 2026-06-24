@@ -143,6 +143,14 @@ export default function ComplaintsPage() {
       alert('Please search and select a valid student from the suggestions list.');
       return;
     }
+    if (!submittedByTeacherId) {
+      alert('Please select a submitting teacher.');
+      return;
+    }
+    if (description.length < 10) {
+      alert('Description must be at least 10 characters long.');
+      return;
+    }
 
     try {
       const res = await api.post('/complaint-box/submit-behavior', {
@@ -151,7 +159,7 @@ export default function ComplaintsPage() {
         category,
         description,
         academicYear,
-        teacherId: submittedByTeacherId || undefined
+        teacherId: submittedByTeacherId
       });
 
       setShowAddForm(false);
@@ -399,11 +407,16 @@ export default function ComplaintsPage() {
                   <textarea
                     required
                     rows={4}
-                    placeholder="Provide description of behavior incident, location, time, and immediate actions taken..."
+                    placeholder="Provide description of behavior incident, location, time, and immediate actions taken (minimum 10 characters required)..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF] focus:bg-white resize-none"
                   />
+                  {description && description.length < 10 && (
+                    <p className="text-[11px] font-bold text-rose-600 mt-1">
+                      Description must be at least 10 characters (currently: {description.length}).
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -418,7 +431,8 @@ export default function ComplaintsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#2E5BFF] text-white hover:bg-blue-600 font-semibold text-[13px] cursor-pointer text-center shadow-md shadow-blue-500/15"
+                  disabled={description.length < 10}
+                  className="flex-1 py-2.5 rounded-xl bg-[#2E5BFF] text-white hover:bg-blue-600 font-semibold text-[13px] cursor-pointer text-center shadow-md shadow-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Save Case Record
                 </button>
@@ -488,7 +502,7 @@ export default function ComplaintsPage() {
         </div>
 
         {/* Ledger Table */}
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/35 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -584,6 +598,90 @@ export default function ComplaintsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="block md:hidden space-y-4 border-t border-slate-100">
+          {filteredCases.length === 0 ? (
+            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-16 text-center text-slate-400 font-medium text-[13px]">
+              No student behavior logs found matching filters.
+            </div>
+          ) : (
+            filteredCases.map(c => {
+              const isComplaint = c.behaviorType === 'Complaint';
+              const statusColors = {
+                New: 'bg-blue-50 text-blue-700 border-blue-100',
+                'In Progress': 'bg-amber-50 text-amber-700 border-amber-100',
+                Closed: 'bg-emerald-50 text-emerald-700 border-emerald-100'
+              };
+
+              return (
+                <div key={c.id} className="p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="font-semibold text-slate-900 block text-sm">{c.caseNumber}</span>
+                      <span className="text-[11px] text-slate-400 font-mono mt-0.5">By: {c.submittedBy} • {c.createdDate}</span>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      isComplaint ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                    }`}>
+                      {isComplaint ? <AlertCircle className="w-3.5 h-3.5" /> : <Award className="w-3.5 h-3.5" />}
+                      {c.behaviorType}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-205/10">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold uppercase">Student & Class</span>
+                      <span className="font-bold text-slate-700 block mt-0.5">{c.studentName}</span>
+                      <span className="text-slate-500 block text-[10px] mt-0.5">{c.className}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold uppercase">Category & Priority</span>
+                      <span className="font-bold text-slate-700 block mt-0.5">{c.category}</span>
+                      <span className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase mt-1 ${
+                        c.priority === 'High' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-slate-100 border-slate-200 text-slate-700'
+                      }`}>
+                        {c.priority}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                    <span className={`inline-flex px-2 py-0.5 border text-[10px] font-semibold rounded-full ${statusColors[c.status]}`}>
+                      {c.status}
+                    </span>
+
+                    <div className="flex gap-2">
+                      {c.status !== 'Closed' && (
+                        <button
+                          onClick={() => handleUpdateStatus(c.id, 'Closed')}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 hover:bg-emerald-50 border border-emerald-200 min-h-[44px] cursor-pointer"
+                        >
+                          Resolve
+                        </button>
+                      )}
+                      {c.status === 'New' && (
+                        <button
+                          onClick={() => handleUpdateStatus(c.id, 'In Progress')}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-700 hover:bg-amber-50 border border-amber-200 min-h-[44px] cursor-pointer"
+                        >
+                          Investigate
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setSelectedCase(c)}
+                        className="flex items-center justify-center p-2 rounded-xl hover:bg-slate-100 text-slate-450 hover:text-slate-700 min-h-[44px] min-w-[44px] cursor-pointer"
+                        title="View Details"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

@@ -326,62 +326,64 @@ function SettingsPageContent() {
       )}
 
       {/* Tabs Layout */}
-      <div className="flex border-b border-slate-200 gap-6">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'profile'
-              ? 'border-[#2E5BFF] text-[#2E5BFF]'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Building2 className="w-4 h-4" />
-            School Profile
-          </span>
-        </button>
+      <div className="overflow-x-auto w-full scrollbar-none border-b border-slate-200">
+        <div className="flex gap-6 min-w-max pb-px">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`pb-3 pt-2 min-h-[44px] text-[14px] font-bold border-b-2 transition-all cursor-pointer flex items-center ${
+              activeTab === 'profile'
+                ? 'border-[#2E5BFF] text-[#2E5BFF]'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Building2 className="w-4 h-4" />
+              School Profile
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('banking')}
-          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'banking'
-              ? 'border-[#2E5BFF] text-[#2E5BFF]'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Landmark className="w-4 h-4" />
-            Bank Registry
-          </span>
-        </button>
+          <button
+            onClick={() => setActiveTab('banking')}
+            className={`pb-3 pt-2 min-h-[44px] text-[14px] font-bold border-b-2 transition-all cursor-pointer flex items-center ${
+              activeTab === 'banking'
+                ? 'border-[#2E5BFF] text-[#2E5BFF]'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Landmark className="w-4 h-4" />
+              Bank Registry
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('upi')}
-          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'upi'
-              ? 'border-[#2E5BFF] text-[#2E5BFF]'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <QrCode className="w-4 h-4" />
-            UPI Gateways
-          </span>
-        </button>
+          <button
+            onClick={() => setActiveTab('upi')}
+            className={`pb-3 pt-2 min-h-[44px] text-[14px] font-bold border-b-2 transition-all cursor-pointer flex items-center ${
+              activeTab === 'upi'
+                ? 'border-[#2E5BFF] text-[#2E5BFF]'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <QrCode className="w-4 h-4" />
+              UPI Gateways
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('terms')}
-          className={`pb-3 text-[14px] font-bold border-b-2 transition-all cursor-pointer ${
-            activeTab === 'terms'
-              ? 'border-[#2E5BFF] text-[#2E5BFF]'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            Academic Terms
-          </span>
-        </button>
+          <button
+            onClick={() => setActiveTab('terms')}
+            className={`pb-3 pt-2 min-h-[44px] text-[14px] font-bold border-b-2 transition-all cursor-pointer flex items-center ${
+              activeTab === 'terms'
+                ? 'border-[#2E5BFF] text-[#2E5BFF]'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Academic Terms
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Tab Contents */}
@@ -396,7 +398,7 @@ function SettingsPageContent() {
                 Organization Branding & Details
               </h3>
 
-              <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <form onSubmit={handleSaveSettings} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[12px] text-slate-500 font-semibold mb-1">Organization Name *</label>
                   <input
@@ -404,7 +406,7 @@ function SettingsPageContent() {
                     required
                     value={schoolName}
                     onChange={(e) => setSchoolName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
                   />
                 </div>
 
@@ -414,21 +416,21 @@ function SettingsPageContent() {
                     type="text"
                     value={schoolSubtitle}
                     onChange={(e) => setSchoolSubtitle(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[12px] text-slate-500 font-semibold mb-1">Tenant Subdomain *</label>
-                  <div className="flex">
+                  <div className="flex h-[44px]">
                     <input
                       type="text"
                       required
                       value={subdomain}
                       onChange={(e) => setSubdomain(e.target.value)}
-                      className="bg-slate-50 border border-slate-200 border-r-0 rounded-l-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF] w-1/2"
+                      className="bg-slate-50 border border-slate-200 border-r-0 rounded-l-xl px-4 h-full text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF] w-1/2"
                     />
-                    <span className="bg-slate-100 border border-slate-200 border-l-0 rounded-r-xl px-4 py-2.5 text-[13px] text-slate-400 w-1/2 select-none truncate flex items-center justify-center">
+                    <span className="bg-slate-100 border border-slate-200 border-l-0 rounded-r-xl px-4 h-full text-[13px] text-slate-400 w-1/2 select-none truncate flex items-center justify-center">
                       .edutrack.com
                     </span>
                   </div>
@@ -441,7 +443,7 @@ function SettingsPageContent() {
                     required
                     value={schoolEmail}
                     onChange={(e) => setSchoolEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
                   />
                 </div>
 
@@ -451,7 +453,7 @@ function SettingsPageContent() {
                     type="text"
                     value={schoolPhone}
                     onChange={(e) => setSchoolPhone(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
                   />
                 </div>
 
@@ -461,11 +463,11 @@ function SettingsPageContent() {
                     type="text"
                     value={schoolLogo}
                     onChange={(e) => setSchoolLogo(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-[12px] text-slate-500 font-semibold mb-1">Mailing Address</label>
                   <textarea
                     rows={2}
@@ -475,10 +477,10 @@ function SettingsPageContent() {
                   />
                 </div>
 
-                <div className="md:col-span-2 pt-4">
+                <div className="sm:col-span-2 pt-4">
                   <button
                     type="submit"
-                    className="px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                    className="min-h-[44px] px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
                   >
                     <Save className="w-4 h-4" />
                     Save Organization Branding
@@ -498,7 +500,7 @@ function SettingsPageContent() {
                   Add School Bank Account
                 </h3>
 
-                <form onSubmit={handleAddBankAccount} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <form onSubmit={handleAddBankAccount} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-[12px] text-slate-500 font-semibold mb-1">Account Display Name *</label>
                     <input
@@ -506,7 +508,7 @@ function SettingsPageContent() {
                       placeholder="e.g. Trust Account"
                       value={newBank.name}
                       onChange={(e) => setNewBank({ ...newBank, name: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
                     />
                   </div>
 
@@ -517,7 +519,7 @@ function SettingsPageContent() {
                       placeholder="e.g. State Bank of India"
                       value={newBank.bankName}
                       onChange={(e) => setNewBank({ ...newBank, bankName: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
                     />
                   </div>
 
@@ -528,7 +530,7 @@ function SettingsPageContent() {
                       placeholder="Enter numbers only"
                       value={newBank.accountNumber}
                       onChange={(e) => setNewBank({ ...newBank, accountNumber: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 font-mono focus:outline-none"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 font-mono focus:outline-none"
                     />
                   </div>
 
@@ -539,7 +541,7 @@ function SettingsPageContent() {
                       placeholder="e.g. SBIN0001234"
                       value={newBank.ifscCode}
                       onChange={(e) => setNewBank({ ...newBank, ifscCode: e.target.value.toUpperCase() })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 font-mono focus:outline-none"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 font-mono focus:outline-none"
                     />
                   </div>
 
@@ -550,7 +552,7 @@ function SettingsPageContent() {
                       placeholder="e.g. Rohini Sec 9"
                       value={newBank.branch}
                       onChange={(e) => setNewBank({ ...newBank, branch: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
                     />
                   </div>
 
@@ -567,10 +569,10 @@ function SettingsPageContent() {
                     </label>
                   </div>
 
-                  <div className="md:col-span-3 pt-2">
+                  <div className="sm:col-span-2 md:col-span-3 pt-2">
                     <button
                       type="submit"
-                      className="px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                      className="min-h-[44px] px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
                     >
                       <Plus className="w-4 h-4" />
                       Add Bank Account Row
@@ -643,14 +645,14 @@ function SettingsPageContent() {
               </h3>
 
               <form onSubmit={handleSaveSettings} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[12px] text-slate-500 font-semibold mb-1">GooglePay Business UPI ID</label>
                     <input
                       type="text"
                       value={gpayId}
                       onChange={(e) => setGpayId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
                     />
                   </div>
 
@@ -660,7 +662,7 @@ function SettingsPageContent() {
                       type="text"
                       value={phonepeId}
                       onChange={(e) => setPhonepeId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
                     />
                   </div>
                 </div>
@@ -671,7 +673,7 @@ function SettingsPageContent() {
                     type="text"
                     value={upiQrId}
                     onChange={(e) => setUpiQrId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 font-mono focus:outline-none focus:border-[#2E5BFF]"
                   />
                   <p className="text-[10px] text-slate-400 font-semibold mt-1">
                     Used to generate customized UPI dynamic QR standees on the student fee billing pages.
@@ -681,7 +683,7 @@ function SettingsPageContent() {
                 <div className="pt-4">
                   <button
                     type="submit"
-                    className="px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                    className="min-h-[44px] px-5 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
                   >
                     <Save className="w-4 h-4" />
                     Save UPI Integration Keys
@@ -710,12 +712,12 @@ function SettingsPageContent() {
                       placeholder="e.g. 2027-2028"
                       value={newYearRange}
                       onChange={(e) => setNewYearRange(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none focus:border-[#2E5BFF]"
                     />
                   </div>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold h-[38px] flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
+                    className="px-5 py-2 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-[13px] font-semibold min-h-[44px] flex items-center gap-2 cursor-pointer shadow-md shadow-blue-500/10"
                   >
                     <Plus className="w-4 h-4" />
                     Configure Year

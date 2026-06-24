@@ -61,4 +61,14 @@ export class TeachersController {
   async remove(@Param('id') id: string) {
     return this.teachersService.deleteTeacher(id);
   }
+
+  @Post(':id/pay-salary')
+  async paySalary(@Param('id') id: string, @Body('month') month: string) {
+    return this.teachersService.paySalary(id, month);
+  }
+
+  @Post('pay-all-salaries')
+  async payAllSalaries(@Body('month') month: string) {
+    return this.teachersService.payAllSalaries(month);
+  }
 }

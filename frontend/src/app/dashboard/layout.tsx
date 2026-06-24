@@ -198,7 +198,7 @@ export default function DashboardLayout({
 
   return (
     <ToastProvider>
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans overflow-x-hidden">
       {/* Sidebar - Fix position matching .sidebar in LWC CSS */}
       <aside className="hidden lg:block w-[280px] bg-white border-r border-slate-200 h-screen fixed top-0 left-0 overflow-y-auto z-50 py-6 select-none shadow-sm">
         {/* Sidebar Nav section blocks */}
@@ -215,7 +215,7 @@ export default function DashboardLayout({
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] font-medium transition-all ${
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] font-medium transition-all min-h-[44px] ${
                         isActive
                           ? 'bg-blue-50 text-[#2E5BFF] font-semibold'
                           : 'text-slate-500 hover:text-blue-600 hover:bg-slate-50'
@@ -235,14 +235,15 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main panel viewport - Match margin-left from LWC sidebar */}
-      <div className="flex-1 flex flex-col min-h-screen lg:pl-[280px]">
+      <div className="flex-1 flex flex-col min-h-screen lg:pl-[280px] w-full min-w-0">
         {/* Top bar matching top-bar of LWC */}
-        <header className="h-[72px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm relative">
-          <div className="flex items-center gap-4">
+        <header className="h-[72px] bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40 shadow-sm">
+          <div className="flex items-center gap-3">
             {/* Mobile Menu trigger */}
             <button
-              onClick={() => setMobileOpen(!mobileOpen)}
-              className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100"
+              onClick={() => setMobileOpen(true)}
+              className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
+              aria-label="Open navigation menu"
             >
               <svg className="w-6 h-6 stroke-slate-700" viewBox="0 0 24 24" fill="none">
                 <line x1="3" y1="12" x2="21" y2="12" strokeWidth="2" strokeLinecap="round" />
@@ -251,8 +252,25 @@ export default function DashboardLayout({
               </svg>
             </button>
 
-            {/* Salesforce search box style */}
-            <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-[240px] xl:w-[320px] focus-within:border-[#2E5BFF] focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+            {/* Mobile Logo & School Name */}
+            <div className="flex lg:hidden items-center gap-2">
+              <div className="w-[30px] h-[30px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-[16px] h-[16px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
+                    <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
+                  </svg>
+                )}
+              </div>
+              <h1 className="font-extrabold text-[12px] sm:text-[14px] text-indigo-900 leading-none uppercase tracking-wide truncate max-w-[120px] sm:max-w-none">
+                {schoolName}
+              </h1>
+            </div>
+
+            {/* Salesforce search box style - Desktop only */}
+            <div className="hidden lg:flex relative items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-[240px] xl:w-[320px] focus-within:border-[#2E5BFF] focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all">
               <svg className="w-4 h-4 stroke-slate-400 fill-none mr-2" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" strokeWidth="2"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65" strokeWidth="2"></line>
@@ -268,8 +286,8 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          {/* Center: logo and school name (ST. ANNE'S HIGH SCHOOL) */}
-          <div className="absolute left-[45%] lg:left-[43%] xl:left-[44%] top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 px-4 text-center">
+          {/* Center: logo and school name (Desktop/Tablet only) */}
+          <div className="hidden lg:flex items-center gap-2 px-4 text-center">
             <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
               {logoUrl ? (
                 <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
@@ -280,7 +298,7 @@ export default function DashboardLayout({
                 </svg>
               )}
             </div>
-            <div className="hidden md:block text-left">
+            <div className="text-left">
               <h1 className="font-extrabold text-[14px] text-indigo-900 leading-none uppercase tracking-wide">
                 {schoolName}
               </h1>
@@ -292,12 +310,12 @@ export default function DashboardLayout({
 
           {/* User Profile widget */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-slate-50 cursor-pointer">
-              <div className="text-right">
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-slate-50 cursor-pointer min-h-[44px]">
+              <div className="text-right hidden sm:block">
                 <p className="text-[13px] font-semibold text-slate-800 leading-none">{adminName}</p>
                 <p className="text-[11px] text-slate-400 font-medium mt-1">Admin</p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-sm">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-sm select-none">
                 {adminName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
             </div>
@@ -305,71 +323,76 @@ export default function DashboardLayout({
         </header>
 
         {/* Page content panel viewport */}
-        <main className="p-8 flex-1 max-w-7xl w-full mx-auto">
+        <main className="p-4 sm:p-8 flex-1 max-w-7xl w-full mx-auto min-w-0">
           {children}
         </main>
       </div>
 
-      {/* Mobile Drawer Overlay */}
-      {mobileOpen && (
+      {/* Mobile Drawer Overlay Backdrop & Drawer with transitions */}
+      <div
+        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 lg:hidden transition-opacity duration-300 ${
+          mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setMobileOpen(false)}
+      >
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          className={`w-[280px] bg-white h-full py-6 select-none overflow-y-auto flex flex-col justify-between transition-transform duration-300 ease-in-out transform ${
+            mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="w-[280px] bg-white h-full py-6 select-none overflow-y-auto flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 px-6 mb-6">
-                <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
-                  {logoUrl ? (
-                    <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
-                  ) : (
-                    <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
-                      <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
-                      <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
-                    </svg>
-                  )}
-                </div>
-                <div>
-                  <h1 className="font-extrabold text-[14px] text-indigo-900 leading-none uppercase tracking-wide">
-                    {schoolName}
-                  </h1>
-                </div>
+          <div>
+            <div className="flex items-center gap-3 px-6 mb-6">
+              <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
+                    <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
+                  </svg>
+                )}
               </div>
-              <nav className="space-y-6 px-4">
-                {navSections.map((section) => (
-                  <div key={section.title}>
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
-                      {section.title}
-                    </div>
-                    <div className="space-y-1">
-                      {section.items.map((item) => {
-                        const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-                        return (
-                          <Link
-                            key={item.name}
-                            href={item.href}
-                            onClick={() => setMobileOpen(false)}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] font-medium transition-all ${
-                              isActive
-                                ? 'bg-blue-50 text-[#2E5BFF] font-semibold'
-                                : 'text-slate-500 hover:text-blue-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            <span className="shrink-0 w-5 h-5 flex items-center justify-center">
-                              {item.svg}
-                            </span>
-                            <span className="truncate">{item.name}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </nav>
+              <div>
+                <h1 className="font-extrabold text-[14px] text-indigo-900 leading-none uppercase tracking-wide">
+                  {schoolName}
+                </h1>
+              </div>
             </div>
+            <nav className="space-y-6 px-4">
+              {navSections.map((section) => (
+                <div key={section.title}>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                    {section.title}
+                  </div>
+                  <div className="space-y-1">
+                    {section.items.map((item) => {
+                      const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                      return (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] font-medium transition-all min-h-[44px] ${
+                            isActive
+                              ? 'bg-blue-50 text-[#2E5BFF] font-semibold'
+                              : 'text-slate-500 hover:text-blue-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="shrink-0 w-5 h-5 flex items-center justify-center">
+                            {item.svg}
+                          </span>
+                          <span className="truncate">{item.name}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
           </div>
         </div>
-      )}
+      </div>
     </div>
     </ToastProvider>
   );

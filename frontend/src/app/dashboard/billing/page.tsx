@@ -178,6 +178,9 @@ export default function FeesBillingPage() {
 
       setToastMessage(`Success: Payment of ₹${billingTotal.toLocaleString()} logged for ${selectedStudent.account.name}.`);
       
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+
       // Clear select & reload history
       setSelectedStudent(null);
       setFeeItems([]);
@@ -199,6 +202,8 @@ export default function FeesBillingPage() {
     try {
       setIsLoading(true);
       await api.post(`/billing/invoices/${id}/void`);
+      // Dispatch event to refresh dashboard in real-time
+      window.dispatchEvent(new CustomEvent('school-setup-updated'));
       alert(`Rollback: Transaction invoice voided successfully.`);
       
       const txRes = await api.get('/billing/invoices/recent');

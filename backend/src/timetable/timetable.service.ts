@@ -364,6 +364,7 @@ export class TimetableService {
           deductions: data.deductions || null,
           pfDeduction: data.pfDeduction || null,
           subjectsTaught: data.skills.map((s: any) => s.subjectId),
+          tenantId,
         },
       });
 
@@ -468,6 +469,7 @@ export class TimetableService {
               allowances: row.allowances || null,
               deductions: row.deductions || null,
               pfDeduction: row.pf || null,
+              tenantId,
             },
           });
 

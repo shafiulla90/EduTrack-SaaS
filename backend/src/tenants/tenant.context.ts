@@ -7,8 +7,8 @@ export interface TenantStore {
 export class TenantContext {
   private static storage = new AsyncLocalStorage<TenantStore>();
 
-  static run(tenantId: string, callback: () => void) {
-    this.storage.run({ tenantId }, callback);
+  static run<T>(tenantId: string, callback: () => T): T {
+    return this.storage.run({ tenantId }, callback);
   }
 
   static getTenantId(): string | null {

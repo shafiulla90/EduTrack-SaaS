@@ -1,5 +1,5 @@
 // src/complaint-box/dto/create-behavior.dto.ts
-import { IsNotEmpty, IsString, IsEnum, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsEnum, MinLength } from 'class-validator';
 
 export enum BehaviorTypeEnum {
   COMPLAINT = 'Complaint',
@@ -19,15 +19,16 @@ export class CreateBehaviorDto {
   @IsString()
   category: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  description?: string;
+  @MinLength(10)
+  description: string;
 
   @IsNotEmpty()
   @IsString()
   academicYear: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  teacherId?: string;
+  teacherId: string;
 }
