@@ -55,13 +55,14 @@ export class StudentsService {
         }
       }
 
+      const normalizedPhone = data.phone ? data.phone.replace(/\D/g, '').slice(-10) : null;
       const user = await tx.user.create({
         data: {
           email: emailLower,
           name: `${data.firstName} ${data.lastName}`,
           passwordHash,
           role: Role.STUDENT,
-          phone: data.phone,
+          phone: normalizedPhone,
           tenantId,
         },
       });
@@ -283,13 +284,14 @@ export class StudentsService {
 
         // Perform user creation transaction
         await this.prisma.$transaction(async (tx) => {
+          const normalizedPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
           const user = await tx.user.create({
             data: {
               email: emailLower,
               name: `${firstName || ''} ${lastName}`.trim(),
               passwordHash,
               role: Role.STUDENT,
-              phone: phone ? String(phone) : null,
+              phone: normalizedPhone,
               tenantId,
             }
           });

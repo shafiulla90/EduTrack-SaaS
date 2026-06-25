@@ -95,6 +95,14 @@ export class AcademicsController {
     return this.academicsService.getClassSubjects(classSectionId);
   }
 
+  @Delete('class-sections/:classSectionId/subjects/:subjectId')
+  async removeSubjectFromClassSection(
+    @Param('classSectionId') classSectionId: string,
+    @Param('subjectId') subjectId: string,
+  ) {
+    return this.academicsService.removeSubjectFromClassSection(classSectionId, subjectId);
+  }
+
   // ── Timetable Timings ──────────────────────────────────────────────────────
   @Post('period-timings')
   async createTiming(

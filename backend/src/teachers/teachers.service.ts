@@ -26,9 +26,10 @@ export class TeachersService {
       throw new ConflictException('Email already registered');
     }
 
-    if (data.phone) {
+    const normalizedPhone = data.phone ? data.phone.replace(/\D/g, '').slice(-10) : undefined;
+    if (normalizedPhone) {
       const existingPhone = await this.prisma.user.findFirst({
-        where: { phone: data.phone },
+        where: { phone: normalizedPhone },
       });
       if (existingPhone) {
         throw new ConflictException('Phone number already registered');
@@ -48,7 +49,7 @@ export class TeachersService {
           name: data.name,
           passwordHash,
           role: userRole,
-          phone: data.phone,
+          phone: normalizedPhone,
           tenantId,
         },
       });
@@ -147,7 +148,7 @@ export class TeachersService {
   ) {
     const tenantId = this.getTenantId();
 
-    return this.prisma.teacherAssignment.upsert({
+    const assignment = await this.prisma.teacherAssignment.upsert({
       where: {
         teacherId_classSectionId_subjectId: {
           teacherId,
@@ -166,6 +167,24 @@ export class TeachersService {
         periodsPerWeek,
       },
     });
+    // Ensure a TeacherSkill record exists for this subject/teacher
+    await this.prisma.teacherSkill.upsert({
+      where: {
+        teacherId_subjectId: {
+          teacherId,
+          subjectId,
+        },
+      },
+      create: {
+        teacherId,
+        subjectId,
+        skillLevel: 'Beginner',
+        yearsOfExperience: 0,
+        tenantId,
+      },
+      update: {}, // no changes needed if already exists
+    });
+    return assignment;
   }
 
   async getAssignments(teacherId: string) {
@@ -276,11 +295,12 @@ export class TeachersService {
 
     return this.prisma.$transaction(async (tx) => {
       if (data.name !== undefined || data.phone !== undefined || data.email !== undefined) {
+        const normalizedPhone = data.phone ? data.phone.replace(/\D/g, '').slice(-10) : data.phone;
         await tx.user.update({
           where: { id: profile.userId },
           data: {
             name: data.name !== undefined ? data.name : undefined,
-            phone: data.phone !== undefined ? data.phone : undefined,
+            phone: data.phone !== undefined ? normalizedPhone : undefined,
             email: data.email !== undefined ? data.email.toLowerCase().trim() : undefined,
           }
         });

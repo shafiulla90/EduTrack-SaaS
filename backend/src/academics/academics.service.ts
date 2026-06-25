@@ -295,6 +295,21 @@ export class AcademicsService {
     });
   }
 
+  async removeSubjectFromClassSection(classSectionId: string, subjectId: string) {
+    const tenantId = this.getTenantId();
+    await this.prisma.teacherAssignment.deleteMany({
+      where: { classSectionId, subjectId, tenantId },
+    });
+    return this.prisma.classSubject.delete({
+      where: {
+        classSectionId_subjectId: {
+          classSectionId,
+          subjectId,
+        },
+      },
+    });
+  }
+
   // ── TIMETABLE / PERIOD SERVICES ──────────────────────────────────────────────
 
   async createPeriodTiming(periodNumber: number, startTime: string, endTime: string, isActive: boolean) {

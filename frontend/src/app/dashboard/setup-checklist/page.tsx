@@ -7,6 +7,7 @@ import {
   Award, Globe, CheckCircle2, ArrowLeft, Loader2, Save 
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 export default function SetupChecklistPage() {
   const router = useRouter();
@@ -84,8 +85,8 @@ export default function SetupChecklistPage() {
       await api.put('/school-setup', formData);
       setSuccess('School setup updated successfully!');
       
-      // Dispatch custom event for real-time branding update
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+       // Dispatch custom event for real-time branding update
+      dispatchSchoolSetupUpdated();
 
       // Refresh status to update percentage/checklist status
       await fetchStatus();

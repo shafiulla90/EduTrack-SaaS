@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useSchoolSetupUpdate } from '@/lib/events';
 
 interface TenantContextType {
   schoolName: string;
@@ -43,17 +44,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchTenantData();
-
-    // Listen to custom event for dynamic updates
-    const handleUpdate = () => {
-      fetchTenantData();
-    };
-
-    window.addEventListener('school-setup-updated', handleUpdate);
-    return () => {
-      window.removeEventListener('school-setup-updated', handleUpdate);
-    };
   }, []);
+
+  // Use the centralized school-setup-updated listener
+  useSchoolSetupUpdate(fetchTenantData);
 
   return (
     <TenantContext.Provider value={{

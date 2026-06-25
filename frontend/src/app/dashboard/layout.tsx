@@ -319,6 +319,22 @@ export default function DashboardLayout({
                 {adminName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
             </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('tenantId');
+                window.location.href = '/auth/login';
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 min-h-[40px] cursor-pointer"
+              title="Logout"
+            >
+              <svg className="w-4 h-4 stroke-red-600 fill-none" viewBox="0 0 24 24">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+                <polyline points="16 17 21 12 16 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></line>
+              </svg>
+              <span className="hidden md:inline">Logout</span>
+            </button>
           </div>
         </header>
 
@@ -390,6 +406,24 @@ export default function DashboardLayout({
                 </div>
               ))}
             </nav>
+          </div>
+          {/* Mobile Logout Button */}
+          <div className="px-6 pt-4 border-t border-slate-100">
+            <button
+              onClick={() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('tenantId');
+                window.location.href = '/auth/login';
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[14px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all cursor-pointer"
+            >
+              <svg className="w-5 h-5 stroke-red-600 fill-none" viewBox="0 0 24 24">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+                <polyline points="16 17 21 12 16 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></line>
+              </svg>
+              <span>Logout</span>
+            </button>
           </div>
         </div>
       </div>

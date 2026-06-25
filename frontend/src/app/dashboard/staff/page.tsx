@@ -52,6 +52,7 @@ interface StaffMember {
 
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 export default function SchoolStaffPage() {
   const { showToast } = useToast();
@@ -71,7 +72,7 @@ export default function SchoolStaffPage() {
       await api.delete(`/teachers/${deleteConfirm.id}`);
       showToast('Staff member deleted successfully.', 'success');
       // Dispatch event to refresh dashboard in real-time
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
       setSelectedStaff(null);
       setDeleteConfirm({ show: false, id: '', name: '' });
       loadStaff();
@@ -182,7 +183,7 @@ export default function SchoolStaffPage() {
       await api.post(`/teachers/${id}/pay-salary`, { month: selectedPayrollMonth });
       showToast('Salary disbursed successfully.', 'success');
       // Dispatch event to refresh dashboard in real-time
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
       setStaff(prev => prev.map(m => m.id === id ? { ...m, salaryStatus: 'Paid' } : m));
     } catch (err: any) {
       console.error('Error paying salary:', err);
@@ -195,7 +196,7 @@ export default function SchoolStaffPage() {
       await api.post('/teachers/pay-all-salaries', { month: selectedPayrollMonth });
       showToast('All salaries processed successfully!', 'success');
       // Dispatch event to refresh dashboard in real-time
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
       setStaff(prev => prev.map(m => ({ ...m, salaryStatus: 'Paid' })));
     } catch (err: any) {
       console.error('Error processing all salaries:', err);
@@ -248,7 +249,7 @@ export default function SchoolStaffPage() {
       setPhotoPreview(null);
       loadStaff();
       // Dispatch event to refresh dashboard in real-time
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
       showToast('Staff member registered successfully.', 'success');
     } catch (err: any) {
       console.error('Failed to save staff member:', err);
@@ -276,7 +277,7 @@ export default function SchoolStaffPage() {
       setEditingStaff(null);
       loadStaff();
       // Dispatch event to refresh dashboard in real-time
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
       showToast('Staff member updated successfully.', 'success');
     } catch (err: any) {
       console.error('Failed to update staff:', err);

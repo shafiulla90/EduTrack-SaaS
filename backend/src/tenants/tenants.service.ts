@@ -56,6 +56,18 @@ export class TenantsService {
   }
 
   async registerTenant(data: any): Promise<any> {
+    const normalizedPhone = data.mobileNumber.replace(/\D/g, '').slice(-10);
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        phone: {
+          endsWith: normalizedPhone,
+        },
+      },
+    });
+    if (existingUser) {
+      throw new ConflictException('A user with this mobile number is already registered. Please log in instead.');
+    }
+
     const slug = data.schoolName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
@@ -78,7 +90,7 @@ export class TenantsService {
           subDomain,
           address: data.address,
           email: data.email,
-          phone: data.mobileNumber,
+          phone: normalizedPhone,
           setupCompleted: false,
         },
       });
@@ -90,7 +102,7 @@ export class TenantsService {
           schoolName: data.schoolName,
           schoolType: data.schoolType,
           adminName: data.adminName,
-          mobileNumber: data.mobileNumber,
+          mobileNumber: normalizedPhone,
           email: data.email,
           address: data.address,
           academicYear: data.academicYear,
@@ -120,7 +132,7 @@ export class TenantsService {
         data: {
           name: data.adminName,
           email: data.email,
-          phone: data.mobileNumber,
+          phone: normalizedPhone,
           passwordHash,
           role: 'SCHOOL_ADMIN',
           tenantId: tenant.id,

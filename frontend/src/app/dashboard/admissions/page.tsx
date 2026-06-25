@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 interface Product {
   id: string;
@@ -215,7 +216,7 @@ export default function AdmissionsPage() {
             selectedPricebookEntryIds: selectedProductIds,
             concessionAmount: concessionVal
           });
-          window.dispatchEvent(new CustomEvent('school-setup-updated'));
+          dispatchSchoolSetupUpdated();
           setCurrentStep(5);
         } catch (err: any) {
           console.error('Admission failed:', err);

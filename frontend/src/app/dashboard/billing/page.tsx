@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 import { 
   Receipt, Search, CreditCard, Sparkles, X, CheckCircle2, 
   QrCode, User, ArrowRight, CornerDownRight, RotateCcw,
@@ -179,7 +180,7 @@ export default function FeesBillingPage() {
       setToastMessage(`Success: Payment of ₹${billingTotal.toLocaleString()} logged for ${selectedStudent.account.name}.`);
       
       // Dispatch event to refresh dashboard in real-time
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
 
       // Clear select & reload history
       setSelectedStudent(null);
@@ -203,7 +204,7 @@ export default function FeesBillingPage() {
       setIsLoading(true);
       await api.post(`/billing/invoices/${id}/void`);
       // Dispatch event to refresh dashboard in real-time
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
       alert(`Rollback: Transaction invoice voided successfully.`);
       
       const txRes = await api.get('/billing/invoices/recent');

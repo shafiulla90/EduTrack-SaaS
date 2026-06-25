@@ -41,6 +41,7 @@ export class AuthService {
   }
 
   async sendOtp(phone: string): Promise<{ success: boolean; message: string; otpCode?: string }> {
+    const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
     const otpCode = process.env.NODE_ENV === 'production'
       ? Math.floor(100000 + Math.random() * 900000).toString()
       : '123456'; // Static fallback for dev/testing
@@ -50,13 +51,13 @@ export class AuthService {
 
     await this.prisma.otpRequest.create({
       data: {
-        phone,
+        phone: normalizedPhone,
         otpCode,
         expiresAt,
       },
     });
 
-    console.log(`[OTP DISPATCH] Phone: ${phone} | Code: ${otpCode}`);
+    console.log(`[OTP DISPATCH] Phone: ${phone} (Normalized: ${normalizedPhone}) | Code: ${otpCode}`);
 
     return {
       success: true,
@@ -66,9 +67,10 @@ export class AuthService {
   }
 
   async verifyOtp(phone: string, otpCode: string): Promise<any> {
+    const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
     const request = await this.prisma.otpRequest.findFirst({
       where: {
-        phone,
+        phone: normalizedPhone,
         otpCode,
         expiresAt: { gt: new Date() },
       },
@@ -84,8 +86,12 @@ export class AuthService {
       where: { id: request.id },
     }).catch(() => {}); // ignore cleanup error if any
 
-    const user = await this.prisma.user.findUnique({
-      where: { phone },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        phone: {
+          endsWith: normalizedPhone,
+        },
+      },
     });
 
     if (!user) {
@@ -112,6 +118,7 @@ export class AuthService {
     }
 
     const passwordHash = await this.hashPassword(data.password);
+    const normalizedPhone = data.phone ? data.phone.replace(/\D/g, '').slice(-10) : data.phone;
     
     // Create user and profile extensions within a single ACID database transaction
     return this.prisma.$transaction(async (tx) => {
@@ -121,7 +128,7 @@ export class AuthService {
           passwordHash,
           name: data.name,
           role: data.role,
-          phone: data.phone,
+          phone: normalizedPhone,
           tenantId,
         },
       });

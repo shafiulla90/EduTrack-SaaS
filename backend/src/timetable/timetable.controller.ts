@@ -143,9 +143,9 @@ export class TimetableController {
     return this.timetableService.createClassSection(dto);
   }
 
-  @Get('class-sections')
-  getAllClassSections() {
-    return this.timetableService.getAllClassSections();
+  @Get('class-sections/:id/subjects')
+  getSubjectsForClassSection(@Param('id') classSectionId: string) {
+    return this.timetableService.getSubjectsForClassSection(classSectionId);
   }
 
   @Get('teachers')

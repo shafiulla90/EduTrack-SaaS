@@ -1,556 +1,467 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { TenantContext } from '../tenants/tenant.context';
-import { randomUUID } from 'crypto';
+import { PeriodTimingDto, SaveTimetablePeriodsDto, SaveSubstituteDto } from './dto/timetable.dto';
 import * as bcrypt from 'bcrypt';
+import { Role } from '@prisma/client';
+import { TenantContext } from '../tenants/tenant.context';
 
 @Injectable()
 export class TimetableService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Retrieve tenantId from the active AsyncLocalStorage context set by TenantMiddleware
   private getTenantId(): string {
     const tenantId = TenantContext.getTenantId();
     if (!tenantId) {
-      throw new BadRequestException('No active school tenant context found');
+      throw new BadRequestException('No active school tenant context found. Ensure X-Tenant-ID header or subdomain is provided.');
     }
     return tenantId;
   }
 
-  // ACADEMIC YEARS
+  // ---------- Academic Years ----------
   async getAcademicYears() {
     const tenantId = this.getTenantId();
-    return this.prisma.academicYear.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { startDate: 'desc' },
-    });
+    return this.prisma.academicYear.findMany({ where: { tenantId } });
   }
 
-  // CLASSES
+  // ---------- Classes ----------
   async getClasses() {
     const tenantId = this.getTenantId();
-    return this.prisma.class.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { name: 'asc' },
-    });
+    return this.prisma.class.findMany({ where: { tenantId } });
   }
 
   async createClass(name: string) {
-    if (!name) throw new BadRequestException('Class Name is required.');
     const tenantId = this.getTenantId();
-
-    const existing = await this.prisma.class.findFirst({
-      where: { tenantId, name },
-    });
-    if (existing) {
-      throw new BadRequestException(`A class named "${name}" already exists.`);
-    }
-
     const activeYear = await this.prisma.academicYear.findFirst({
-      where: { tenantId, isActive: true },
+      where: { tenantId },
+      orderBy: { isActive: 'desc' },
     });
     if (!activeYear) {
-      throw new BadRequestException('No active academic year found.');
+      throw new NotFoundException('Please create an Academic Year first.');
     }
-
     return this.prisma.class.create({
       data: {
-        id: randomUUID(),
         name,
-        tenantId,
         academicYearId: activeYear.id,
-        isActive: true,
+        tenantId,
       },
     });
   }
 
-  async deleteClass(classId: string) {
-    const linked = await this.prisma.classSection.findFirst({
-      where: { classId },
-    });
-    if (linked) {
-      throw new BadRequestException('Cannot delete this class because it is linked to one or more class sections.');
-    }
-
-    return this.prisma.class.delete({
-      where: { id: classId },
-    });
+  async deleteClass(id: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.class.delete({ where: { id, tenantId } });
   }
 
-  // SECTIONS
+  // ---------- Sections ----------
   async getSections() {
     const tenantId = this.getTenantId();
-    return this.prisma.section.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { name: 'asc' },
-    });
+    return this.prisma.section.findMany({ where: { tenantId } });
   }
 
   async createSection(name: string) {
-    if (!name) throw new BadRequestException('Section Name is required.');
     const tenantId = this.getTenantId();
+    return this.prisma.section.create({ data: { name, tenantId } });
+  }
 
-    const existing = await this.prisma.section.findFirst({
-      where: { tenantId, name },
+  async deleteSection(id: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.section.delete({ where: { id, tenantId } });
+  }
+
+  // ---------- Class Sections ----------
+  async getClassSections() {
+    const tenantId = this.getTenantId();
+    return this.prisma.classSection.findMany({
+      where: { tenantId },
+      include: { class: true, section: true },
     });
-    if (existing) {
-      throw new BadRequestException(`A section named "${name}" already exists.`);
-    }
+  }
 
-    return this.prisma.section.create({
+  async createClassSection(dto: any) {
+    const tenantId = this.getTenantId();
+    const classSection = await this.prisma.classSection.create({
       data: {
-        id: randomUUID(),
-        name,
+        classId: dto.classId,
+        sectionId: dto.sectionId,
+        strength: dto.classStrength ?? 0,
         tenantId,
-        isActive: true,
+        // Map subject and teacher assignments
+        teacherAssigns: {
+          create: Object.entries(dto.subjectTeacherMap || {}).flatMap(([subjectId, teacherIds]) =>
+            (Array.isArray(teacherIds) ? teacherIds : [teacherIds]).map((teacherId: string) => ({
+              teacherId,
+              subjectId,
+              periodsPerWeek: (dto.subjectPeriodsMap && dto.subjectPeriodsMap[subjectId]) || 0,
+              tenantId,
+            })),
+          ),
+        },
+        // Map class subjects
+        classSubjects: {
+          create: Object.keys(dto.subjectTeacherMap || {}).map((subjectId) => ({
+            subjectId,
+            tenantId,
+          })),
+        },
       },
     });
-  }
 
-  async deleteSection(sectionId: string) {
-    const linked = await this.prisma.classSection.findFirst({
-      where: { sectionId },
-    });
-    if (linked) {
-      throw new BadRequestException('Cannot delete this section because it is linked to one or more class sections.');
+    // Automatically create or update TeacherSkill records for all assigned teachers
+    if (dto.subjectTeacherMap) {
+      for (const [subjectId, teacherIds] of Object.entries(dto.subjectTeacherMap)) {
+        const ids = Array.isArray(teacherIds) ? teacherIds : [teacherIds];
+        for (const teacherId of ids) {
+          if (!teacherId) continue;
+          await this.prisma.teacherSkill.upsert({
+            where: {
+              teacherId_subjectId: {
+                teacherId,
+                subjectId,
+              },
+            },
+            create: {
+              teacherId,
+              subjectId,
+              skillLevel: 'Beginner',
+              yearsOfExperience: 0,
+              tenantId,
+            },
+            update: {},
+          });
+        }
+      }
     }
 
-    return this.prisma.section.delete({
-      where: { id: sectionId },
+    return classSection;
+  }
+
+  // ---------- Subjects ----------
+  async getSubjects() {
+    const tenantId = this.getTenantId();
+    return this.prisma.subject.findMany({ where: { tenantId } });
+  }
+
+  async createSubject(dto: any) {
+    const tenantId = this.getTenantId();
+    return this.prisma.subject.create({ data: { name: dto.name, tenantId } });
+  }
+
+  async bulkCreateSubjects(subjects: any[]) {
+    const tenantId = this.getTenantId();
+    const created: any[] = [];
+    const skipped: any[] = [];
+    for (const sub of subjects) {
+      const existing = await this.prisma.subject.findFirst({ where: { name: sub.name, tenantId } });
+      if (existing) {
+        skipped.push(sub.name);
+        continue;
+      }
+      const rec = await this.prisma.subject.create({ data: { name: sub.name, tenantId } });
+      created.push(rec.name);
+    }
+    return { created: created.length, skipped: skipped.length };
+  }
+
+  // ---------- Class Section Subjects ----------
+  async getSubjectsForClassSection(classSectionId: string) {
+    const tenantId = this.getTenantId();
+    const cs = await this.prisma.classSection.findUnique({
+      where: { id: classSectionId },
+      include: { class: true, section: true },
+    });
+    if (!cs) throw new NotFoundException('Class section not found.');
+    const classSubjects = await this.prisma.classSubject.findMany({
+      where: { classSectionId, tenantId },
+      include: { subject: true },
+      orderBy: { subject: { name: 'asc' } },
+    });
+    return classSubjects.map(cs => ({ subjectId: cs.subjectId, subjectName: cs.subject?.name ?? '' }));
+  }
+
+  // ---------- Teachers ----------
+  async getAllTeachers() {
+    const tenantId = this.getTenantId();
+    return this.prisma.staffProfile.findMany({
+      where: { tenantId },
+      include: { user: true },
     });
   }
 
-  // PERIOD TIMINGS
-  async getPeriodTimings() {
+  async createTeacherWithSkills(dto: any) {
     const tenantId = this.getTenantId();
-    const list = await this.prisma.periodTiming.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { periodNumber: 'asc' },
+    const fullName = `${dto.firstName} ${dto.lastName}`.trim();
+    const emailLower = dto.email.toLowerCase().trim();
+    const passwordHash = await bcrypt.hash('StaffPass@123', 10);
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: emailLower,
+          name: fullName,
+          passwordHash,
+          role: Role.TEACHER,
+          phone: dto.phone,
+          tenantId,
+        },
+      });
+
+      const teacher = await tx.staffProfile.create({
+        data: {
+          userId: user.id,
+          employeeId: dto.employeeId,
+          designation: dto.designation || 'Teacher',
+          basicSalary: dto.basicSalary,
+          allowances: dto.allowances,
+          deductions: dto.deductions,
+          pfDeduction: dto.pfDeduction,
+          status: 'Active',
+          qualification: dto.qualification,
+          tenantId,
+        },
+      });
+
+      if (dto.skills && Array.isArray(dto.skills)) {
+        for (const skill of dto.skills) {
+          if (!skill.subjectId) continue;
+          await tx.teacherSkill.create({
+            data: {
+              teacherId: teacher.id,
+              subjectId: skill.subjectId,
+              skillLevel: skill.skillLevel,
+              yearsOfExperience: skill.yearsOfExperience,
+              tenantId,
+            },
+          });
+        }
+      }
+      return teacher;
     });
-    return list.map(pt => ({
-      id: pt.id,
-      num: pt.periodNumber,
-      label: `Period ${pt.periodNumber}`,
-      startTime: pt.startTime,
-      endTime: pt.endTime,
-      timeLabel: `${pt.startTime}${pt.endTime ? ' – ' + pt.endTime : ''}`,
+  }
+
+  async bulkCreateTeachers(dto: any) {
+    const tenantId = this.getTenantId();
+    const created: any[] = [];
+    const skipped: any[] = [];
+    const passwordHash = await bcrypt.hash('StaffPass@123', 10);
+
+    for (const t of dto.teachers) {
+      const emailLower = t.email.toLowerCase().trim();
+      const existing = await this.prisma.user.findUnique({ where: { email: emailLower } });
+      if (existing) {
+        skipped.push(t.email);
+        continue;
+      }
+
+      const fullName = `${t.firstName} ${t.lastName}`.trim();
+      const teacher = await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email: emailLower,
+            name: fullName,
+            passwordHash,
+            role: Role.TEACHER,
+            phone: t.phone,
+            tenantId,
+          },
+        });
+
+        const prof = await tx.staffProfile.create({
+          data: {
+            userId: user.id,
+            employeeId: t.employeeId,
+            designation: t.designation || 'Teacher',
+            basicSalary: t.basicSalary,
+            allowances: t.allowances,
+            deductions: t.deductions,
+            pfDeduction: t.pfDeduction,
+            status: 'Active',
+            qualification: t.qualification,
+            tenantId,
+          },
+        });
+
+        if (t.skills && Array.isArray(t.skills)) {
+          for (const skill of t.skills) {
+            if (!skill.subjectId) continue;
+            await tx.teacherSkill.create({
+              data: {
+                teacherId: prof.id,
+                subjectId: skill.subjectId,
+                skillLevel: skill.skillLevel,
+                yearsOfExperience: skill.yearsOfExperience,
+                tenantId,
+              },
+            });
+          }
+        }
+        return prof;
+      });
+
+      created.push(teacher.id);
+    }
+    return { created: created.length, skipped: skipped.length };
+  }
+
+  async getTeachersForSubject(subjectIds: string[]) {
+    const tenantId = this.getTenantId();
+    // Query TeacherSkill to find teachers who have skills in any of the requested subjects
+    const skills = await this.prisma.teacherSkill.findMany({
+      where: { subjectId: { in: subjectIds }, tenantId },
+      include: { teacher: { include: { user: true } } },
+      distinct: ['teacherId', 'subjectId'],
+    });
+
+    // Group unique teachers per subject
+    const bySubject: Record<string, any[]> = {};
+    for (const sk of skills) {
+      if (!bySubject[sk.subjectId]) bySubject[sk.subjectId] = [];
+      bySubject[sk.subjectId].push({
+        Id: sk.teacherId,
+        Name: sk.teacher?.user?.name ?? '',
+        teacherId: sk.teacherId,
+        teacherName: sk.teacher?.user?.name ?? '',
+        skillLevel: sk.skillLevel,
+      });
+    }
+    return bySubject;
+  }
+
+  async getTeachersForSubjectInClass(subjectId: string, classSectionId: string) {
+    const tenantId = this.getTenantId();
+    // Find teachers who have a skill for this subject (TeacherSkill), not just those assigned to the class.
+    // This ensures any teacher added with a matching skill appears in the timetable teacher dropdown.
+    const skills = await this.prisma.teacherSkill.findMany({
+      where: { subjectId, tenantId },
+      include: { teacher: { include: { user: true } } },
+      distinct: ['teacherId'],
+    });
+
+    return skills.map(sk => ({
+      Id: sk.teacherId,
+      Name: sk.teacher?.user?.name ?? '',
+      teacherId: sk.teacherId,
+      teacherName: sk.teacher?.user?.name ?? '',
+      skillLevel: sk.skillLevel,
     }));
   }
 
-  async savePeriodTimings(timings: any[]) {
+  // ---------- Period Timings ----------
+  async getPeriodTimings() {
     const tenantId = this.getTenantId();
-    for (const t of timings) {
-      if (!t.periodNumber || !t.startTime || !t.endTime) {
-        throw new BadRequestException('Invalid period timing data');
-      }
+    return this.prisma.periodTiming.findMany({ where: { tenantId }, orderBy: { periodNumber: 'asc' } });
+  }
+
+  async savePeriodTimings(dto: PeriodTimingDto[]) {
+    const tenantId = this.getTenantId();
+    // Simplistic approach: delete existing and recreate
+    await this.prisma.periodTiming.deleteMany({ where: { tenantId } });
+    const created = [];
+    for (const pt of dto) {
+      created.push(
+        await this.prisma.periodTiming.create({
+          data: { ...pt, tenantId },
+        })
+      );
     }
+    return created;
+  }
 
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.periodTiming.findMany({
-        where: { tenantId },
+  // ---------- Timetable Periods ----------
+  async getTimetableForClass(classSectionId: string, academicYearId: string, startDate?: string, endDate?: string) {
+    const tenantId = this.getTenantId();
+    const periods = await this.prisma.period.findMany({
+      where: { classSectionId, tenantId },
+      include: {
+        subject: true,
+        teacher: { include: { user: true } },
+        substituteTeacher: { include: { user: true } },
+        periodTiming: true,
+      },
+    });
+
+    // Return a flat array so the frontend can call .filter() / .forEach() on it
+    return periods.map(p => ({
+      periodId: p.id,
+      day: p.dayOfWeek,
+      periodNumber: p.periodTiming?.periodNumber ?? 0,
+      subjectId: p.subjectId,
+      subjectName: p.subject?.name ?? '—',
+      teacherId: p.teacherId,
+      teacherName: p.teacher?.user?.name ?? 'Unassigned',
+      classSectionId: p.classSectionId ?? '',
+      academicYearId: '',
+      startTime: p.periodTiming?.startTime ?? '',
+      endTime: p.periodTiming?.endTime ?? '',
+      frequency: 'Weekly',
+      isSubstitute: !!p.substituteTeacherId,
+      substituteTeacherId: p.substituteTeacherId ?? null,
+      substituteTeacherName: (p as any).substituteTeacher?.user?.name ?? null,
+      originalTeacherName: p.teacher?.user?.name ?? null,
+    }));
+  }
+
+
+  async saveTimetablePeriods(dto: SaveTimetablePeriodsDto) {
+    const tenantId = this.getTenantId();
+    // Remove existing periods for the classSection & academicYear (simple approach)
+    await this.prisma.period.deleteMany({
+      where: { classSectionId: dto.classSectionId, tenantId },
+    });
+    const created = [];
+    for (const period of dto.periods) {
+      const timing = await this.prisma.periodTiming.findFirst({
+        where: { periodNumber: period.periodNumber, tenantId },
       });
+      if (!timing) continue;
+      created.push(
+        await this.prisma.period.create({
+          data: {
+            classSectionId: dto.classSectionId,
+            subjectId: period.subjectId,
+            teacherId: period.teacherId,
+            periodTimingId: timing.id,
+            dayOfWeek: period.day,
+            tenantId,
+          },
+        })
+      );
+    }
+    return created;
+  }
 
-      const incomingIds = timings.filter(t => t.id).map(t => t.id);
-      const toDelete = existing.filter(e => !incomingIds.includes(e.id));
+  async saveSubstituteForPeriod(periodId: string, substituteTeacherId: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.period.update({
+      where: { id: periodId, tenantId },
+      data: { substituteTeacherId },
+    });
+  }
 
-      if (toDelete.length > 0) {
-        await tx.periodTiming.deleteMany({
-          where: { id: { in: toDelete.map(d => d.id) } },
-        });
-      }
+  // ---------- Workload & Assignments (implemented) ----------
+  async getWorkloadSummary(academicYearId: string) {
+    const tenantId = this.getTenantId();
+    
+    const totalClassSections = await this.prisma.classSection.count({ where: { tenantId } });
+    const totalTeachers = await this.prisma.staffProfile.count({
+      where: { tenantId, user: { role: 'TEACHER' } },
+    });
+    const totalAssignments = await this.prisma.teacherAssignment.count({ where: { tenantId } });
 
-      const results = [];
-      for (const t of timings) {
-        if (t.id) {
-          results.push(
-            await tx.periodTiming.update({
-              where: { id: t.id },
-              data: {
-                periodNumber: Number(t.periodNumber),
-                startTime: t.startTime,
-                endTime: t.endTime,
-              },
-            }),
-          );
-        } else {
-          results.push(
-            await tx.periodTiming.create({
-              data: {
-                id: randomUUID(),
-                tenantId,
-                periodNumber: Number(t.periodNumber),
-                startTime: t.startTime,
-                endTime: t.endTime,
-                isActive: true,
-              },
-            }),
-          );
+    // Calculate avgLoadPercent (simple aggregation based on total periods scheduled vs standard load)
+    const teachers = await this.prisma.staffProfile.findMany({
+      where: { tenantId, user: { role: 'TEACHER' } },
+      include: {
+        _count: {
+          select: { teacherAssignments: true }
         }
       }
-      return results;
     });
-  }
-
-  // SUBJECTS
-  async getSubjects() {
-    const tenantId = this.getTenantId();
-    return this.prisma.subject.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { name: 'asc' },
-    });
-  }
-
-  async createSubject(data: { name: string; code?: string; description?: string }) {
-    if (!data.name) throw new BadRequestException('Subject Name is required.');
-    const tenantId = this.getTenantId();
-
-    const existing = await this.prisma.subject.findFirst({
-      where: { tenantId, name: data.name, isActive: true },
-    });
-    if (existing) {
-      throw new BadRequestException(`A subject with the name "${data.name}" already exists.`);
+    let totalLoad = 0;
+    for (const t of teachers) {
+      totalLoad += Math.min(100, (t._count?.teacherAssignments || 0) * 15);
     }
-
-    return this.prisma.subject.create({
-      data: {
-        id: randomUUID(),
-        tenantId,
-        name: data.name,
-        isActive: true,
-      },
-    });
-  }
-
-  async bulkCreateSubjects(subjectsData: any[]) {
-    if (!subjectsData || subjectsData.length === 0) {
-      throw new BadRequestException('No subject data provided.');
-    }
-    const tenantId = this.getTenantId();
-
-    const activeSubjects = await this.prisma.subject.findMany({
-      where: { tenantId, isActive: true },
-    });
-    const existingNames = new Set(activeSubjects.map(s => s.name.toLowerCase()));
-
-    const skipped: string[] = [];
-    const errorDetails: string[] = [];
-    let created = 0;
-
-    for (let i = 0; i < subjectsData.length; i++) {
-      const row = subjectsData[i];
-      const name = row.name ? row.name.trim() : '';
-
-      if (!name) {
-        errorDetails.push(`Row ${i + 1}: Subject name is required.`);
-        continue;
-      }
-
-      if (existingNames.has(name.toLowerCase())) {
-        skipped.push(name);
-        continue;
-      }
-
-      try {
-        await this.prisma.subject.create({
-          data: {
-            id: randomUUID(),
-            tenantId,
-            name,
-            isActive: true,
-          },
-        });
-        created++;
-        existingNames.add(name.toLowerCase());
-      } catch (err: any) {
-        errorDetails.push(`${name}: ${err.message}`);
-      }
-    }
-
-    return {
-      created,
-      skipped: skipped.length,
-      errors: errorDetails.length,
-      errorDetails,
-      skippedNames: skipped,
-    };
-  }
-
-  // TEACHERS FOR SUBJECTS
-  async getTeachersForSubject(subjectIds: string[]) {
-    if (!subjectIds || subjectIds.length === 0) return {};
-    const tenantId = this.getTenantId();
-
-    const skills = await this.prisma.teacherSkill.findMany({
-      where: {
-        tenantId,
-        subjectId: { in: subjectIds },
-      },
-      include: {
-        teacher: {
-          include: { user: true },
-        },
-      },
-      orderBy: {
-        teacher: {
-          user: { name: 'asc' },
-        },
-      },
-    });
-
-    const result: Record<string, any[]> = {};
-    for (const ts of skills) {
-      if (!result[ts.subjectId]) {
-        result[ts.subjectId] = [];
-      }
-      result[ts.subjectId].push({
-        Id: ts.teacher.id,
-        Name: ts.teacher.user.name,
-        Teacher_Skill__c: ts.skillLevel || 'Expert',
-      });
-    }
-    return result;
-  }
-
-  // CREATE TEACHER WITH SKILLS
-  async createTeacherWithSkills(data: any) {
-    if (!data.firstName || !data.lastName) {
-      throw new BadRequestException('First Name and Last Name are required.');
-    }
-    if (!data.email) {
-      throw new BadRequestException('Email is required.');
-    }
-    if (!data.skills || data.skills.length === 0) {
-      throw new BadRequestException('At least one subject skill is required.');
-    }
-    const tenantId = this.getTenantId();
-
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: data.email },
-    });
-    if (existingUser) {
-      throw new BadRequestException('A user with this email already exists.');
-    }
-
-    const hashedPassword = await bcrypt.hash('Welcome2026!', 10);
-    const userId = randomUUID();
-    const teacherId = randomUUID();
-
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Create User
-      await tx.user.create({
-        data: {
-          id: userId,
-          email: data.email,
-          passwordHash: hashedPassword,
-          name: `${data.firstName} ${data.lastName}`,
-          role: 'TEACHER',
-          phone: data.phone || null,
-          isActive: true,
-          tenantId,
-        },
-      });
-
-      // 2. Create StaffProfile
-      await tx.staffProfile.create({
-        data: {
-          id: teacherId,
-          userId,
-          employeeId: data.employeeId || null,
-          designation: data.designation || null,
-          qualification: data.qualification || null,
-          joiningDate: data.joiningDate ? new Date(data.joiningDate) : null,
-          status: data.staffStatus || 'Active',
-          basicSalary: data.basicSalary || null,
-          allowances: data.allowances || null,
-          deductions: data.deductions || null,
-          pfDeduction: data.pfDeduction || null,
-          subjectsTaught: data.skills.map((s: any) => s.subjectId),
-          tenantId,
-        },
-      });
-
-      // 3. Create Skills
-      const skillRecords = data.skills.map((s: any) => ({
-        id: randomUUID(),
-        tenantId,
-        teacherId,
-        subjectId: s.subjectId,
-        skillLevel: s.skillLevel,
-        yearsOfExperience: s.yearsOfExperience || 0,
-      }));
-
-      if (skillRecords.length > 0) {
-        await tx.teacherSkill.createMany({
-          data: skillRecords,
-        });
-      }
-
-      return {
-        teacherId,
-        teacherName: `${data.firstName} ${data.lastName}`,
-        skillsCount: skillRecords.length,
-      };
-    });
-  }
-
-  // BULK CREATE TEACHERS
-  async bulkCreateTeachers(teachersData: any[]) {
-    if (!teachersData || teachersData.length === 0) {
-      throw new BadRequestException('No teacher data provided.');
-    }
-    const tenantId = this.getTenantId();
-
-    const subjects = await this.prisma.subject.findMany({
-      where: { tenantId, isActive: true },
-    });
-    const subjectNameToId: Record<string, string> = {};
-    for (const s of subjects) {
-      subjectNameToId[s.name.toLowerCase().trim()] = s.id;
-    }
-
-    const incomingEmails = teachersData.filter(t => t.email).map(t => t.email.trim().toLowerCase());
-    const existingUsers = await this.prisma.user.findMany({
-      where: { email: { in: incomingEmails } },
-    });
-    const existingEmails = new Set(existingUsers.map(u => u.email.toLowerCase()));
-
-    const skipped: string[] = [];
-    const errorDetails: string[] = [];
-    let created = 0;
-    let skillsCreated = 0;
-
-    const hashedPassword = await bcrypt.hash('Welcome2026!', 10);
-
-    for (let i = 0; i < teachersData.length; i++) {
-      const row = teachersData[i];
-      const firstName = row.firstName ? row.firstName.trim() : '';
-      const lastName = row.lastName ? row.lastName.trim() : '';
-      const email = row.email ? row.email.trim() : '';
-
-      if (!firstName || !lastName || !email) {
-        errorDetails.push(`Row ${i + 1}: Name and Email are required.`);
-        continue;
-      }
-
-      if (existingEmails.has(email.toLowerCase())) {
-        skipped.push(`${firstName} ${lastName} (${email})`);
-        continue;
-      }
-
-      try {
-        await this.prisma.$transaction(async (tx) => {
-          const userId = randomUUID();
-          const teacherId = randomUUID();
-
-          // 1. Create User
-          await tx.user.create({
-            data: {
-              id: userId,
-              email,
-              passwordHash: hashedPassword,
-              name: `${firstName} ${lastName}`,
-              role: 'TEACHER',
-              phone: row.phone || null,
-              isActive: true,
-              tenantId,
-            },
-          });
-
-          // 2. Create StaffProfile
-          await tx.staffProfile.create({
-            data: {
-              id: teacherId,
-              userId,
-              employeeId: row.employeeId || null,
-              designation: row.designation || null,
-              qualification: row.qualification || null,
-              joiningDate: row.joiningDate ? new Date(row.joiningDate) : null,
-              status: 'Active',
-              basicSalary: row.basicSalary || null,
-              allowances: row.allowances || null,
-              deductions: row.deductions || null,
-              pfDeduction: row.pf || null,
-              tenantId,
-            },
-          });
-
-          // 3. Process skills from row keys
-          const skillRecords = [];
-          for (let skillIdx = 1; skillIdx <= 3; skillIdx++) {
-            const subKey = `subject${skillIdx}`;
-            const lvlKey = `skillLevel${skillIdx}`;
-            if (row[subKey] && row[subKey].trim()) {
-              const subName = row[subKey].trim();
-              const subjectId = subjectNameToId[subName.toLowerCase()];
-              if (subjectId) {
-                skillRecords.push({
-                  id: randomUUID(),
-                  tenantId,
-                  teacherId,
-                  subjectId,
-                  skillLevel: row[lvlKey] || 'Expert',
-                  yearsOfExperience: 0,
-                });
-              }
-            }
-          }
-
-          if (skillRecords.length > 0) {
-            await tx.teacherSkill.createMany({
-              data: skillRecords,
-            });
-            skillsCreated += skillRecords.length;
-          }
-        });
-        created++;
-        existingEmails.add(email.toLowerCase());
-      } catch (err: any) {
-        errorDetails.push(`${firstName} ${lastName}: ${err.message}`);
-      }
-    }
-
-    return {
-      created,
-      skipped: skipped.length,
-      errors: errorDetails.length,
-      errorDetails,
-      skippedNames: skipped,
-      skillsCreated,
-    };
-  }
-
-  // WORKLOAD SUMMARY
-  async getWorkloadSummary(academicYearId?: string) {
-    const tenantId = this.getTenantId();
-    const activeYear = academicYearId
-      ? await this.prisma.academicYear.findUnique({ where: { id: academicYearId } })
-      : await this.prisma.academicYear.findFirst({ where: { tenantId, isActive: true } });
-
-    if (!activeYear) return { totalClassSections: 0, totalTeachers: 0, totalAssignments: 0, avgLoadPercent: 0 };
-
-    const sections = await this.prisma.classSection.findMany({
-      where: {
-        tenantId,
-        class: { academicYearId: activeYear.id },
-      },
-    });
-    const sectionIds = sections.map(s => s.id);
-    const totalClassSections = sections.length;
-
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: {
-        tenantId,
-        classSectionId: { in: sectionIds },
-      },
-    });
-
-    const totalAssignments = assignments.length;
-    const uniqueTeachers = new Set(assignments.map(a => a.teacherId));
-    const totalTeachers = uniqueTeachers.size;
-
-    let avgLoadPercent = 0;
-    if (totalTeachers > 0 && totalAssignments > 0) {
-      avgLoadPercent = Math.min(Math.round((totalAssignments / totalTeachers / 8) * 100), 100);
-    }
+    const avgLoadPercent = teachers.length > 0 ? Math.round(totalLoad / teachers.length) : 0;
 
     return {
       totalClassSections,
@@ -560,731 +471,283 @@ export class TimetableService {
     };
   }
 
-  // GET ALL TEACHER WORKLOADS
   async getAllTeacherWorkloads() {
     const tenantId = this.getTenantId();
     const teachers = await this.prisma.staffProfile.findMany({
-      where: { user: { tenantId, role: 'TEACHER' } },
-      include: { user: true },
-      orderBy: { user: { name: 'asc' } },
+      where: { tenantId, user: { role: 'TEACHER', isActive: true } },
+      include: {
+        user: true,
+        teacherAssignments: {
+          select: {
+            subjectId: true,
+            classSectionId: true,
+            periodsPerWeek: true,
+          }
+        }
+      }
     });
 
-    // 1. Get counts from actual scheduled periods in periods grid
-    const periods = await this.prisma.period.findMany({
-      where: { tenantId, teacherId: { not: null } },
-      select: {
-        teacherId: true,
-        subjectId: true,
-        classSectionId: true,
-      },
-    });
-
-    const periodCountMap = new Map<string, { totalPeriods: number; subjects: Set<string>; classes: Set<string> }>();
-    for (const p of periods) {
-      if (!p.teacherId) continue;
-      if (!periodCountMap.has(p.teacherId)) {
-        periodCountMap.set(p.teacherId, {
-          totalPeriods: 0,
-          subjects: new Set(),
-          classes: new Set(),
-        });
-      }
-      const data = periodCountMap.get(p.teacherId)!;
-      data.totalPeriods += 1;
-      data.subjects.add(p.subjectId);
-      data.classes.add(p.classSectionId);
-    }
-
-    // 2. Get counts from teacher assignments as fallback
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { tenantId },
-      select: {
-        teacherId: true,
-        subjectId: true,
-        classSectionId: true,
-        periodsPerWeek: true,
-      },
-    });
-
-    const assignCountMap = new Map<string, { totalPeriods: number; subjects: Set<string>; classes: Set<string> }>();
-    for (const a of assignments) {
-      if (!assignCountMap.has(a.teacherId)) {
-        assignCountMap.set(a.teacherId, {
-          totalPeriods: 0,
-          subjects: new Set(),
-          classes: new Set(),
-        });
-      }
-      const data = assignCountMap.get(a.teacherId)!;
-      data.totalPeriods += a.periodsPerWeek || 0;
-      data.subjects.add(a.subjectId);
-      data.classes.add(a.classSectionId);
-    }
-
-    const MAX_WEEKLY_PERIODS = 48;
-
-    return teachers.map((t) => {
-      let totalPeriods = 0;
-      let subjectCount = 0;
-      let classCount = 0;
-
-      if (periodCountMap.has(t.id)) {
-        const data = periodCountMap.get(t.id)!;
-        totalPeriods = data.totalPeriods;
-        subjectCount = data.subjects.size;
-        classCount = data.classes.size;
-      } else if (assignCountMap.has(t.id)) {
-        const data = assignCountMap.get(t.id)!;
-        totalPeriods = data.totalPeriods;
-        subjectCount = data.subjects.size;
-        classCount = data.classes.size;
-      }
-
-      const loadPercent = Math.min(Math.round((totalPeriods / MAX_WEEKLY_PERIODS) * 100), 100);
+    return teachers.map(t => {
+      const uniqueSubjects = new Set(t.teacherAssignments.map(a => a.subjectId));
+      const uniqueClasses = new Set(t.teacherAssignments.map(a => a.classSectionId));
+      const totalPeriods = t.teacherAssignments.reduce((sum, a) => sum + (a.periodsPerWeek || 0), 0);
+      const loadPercent = Math.min(100, t.teacherAssignments.length * 15);
 
       return {
         teacherId: t.id,
-        teacherName: t.user.name,
-        subjectCount,
-        classCount,
+        teacherName: t.user?.name || 'Unknown Teacher',
+        subjectCount: uniqueSubjects.size,
+        classCount: uniqueClasses.size,
         totalPeriods,
         loadPercent,
       };
     });
   }
 
-  // GET ALL CLASS WORKLOADS
   async getAllClassWorkloads() {
     const tenantId = this.getTenantId();
-    const sections = await this.prisma.classSection.findMany({
+    const classSections = await this.prisma.classSection.findMany({
       where: { tenantId },
       include: {
-        class: { include: { academicYear: true } },
+        class: {
+          include: {
+            academicYear: true,
+          }
+        },
         section: true,
-      },
-      orderBy: { class: { name: 'asc' } },
+        classSubjects: true,
+        teacherAssigns: true,
+      }
     });
 
-    const classSubjects = await this.prisma.classSubject.groupBy({
-      by: ['classSectionId'],
-      where: { tenantId },
-      _count: { id: true },
-    });
-    const subjectCountMap = new Map(classSubjects.map(cs => [cs.classSectionId, cs._count.id]));
-
-    const staffed = await this.prisma.teacherAssignment.groupBy({
-      by: ['classSectionId'],
-      where: { tenantId },
-      _count: { subjectId: true },
-    });
-    const staffedCountMap = new Map(staffed.map(s => [s.classSectionId, s._count.subjectId]));
-
-    return sections.map((cs) => {
-      const totalSubjects = subjectCountMap.get(cs.id) || 0;
-      const staffedSubjects = staffedCountMap.get(cs.id) || 0;
-      const loadPercent = totalSubjects > 0 ? Math.round((staffedSubjects / totalSubjects) * 100) : 0;
+    return classSections.map(cs => {
+      const subjectCount = cs.classSubjects.length;
+      const staffedCount = cs.teacherAssigns.length;
+      const loadPercent = subjectCount > 0 ? Math.round((staffedCount / subjectCount) * 100) : 0;
 
       return {
         classSectionId: cs.id,
         name: `${cs.class.name} - ${cs.section.name}`,
-        academicYear: cs.class.academicYear.name,
-        subjectCount: totalSubjects,
-        staffedCount: staffedSubjects,
+        academicYear: cs.class.academicYear?.name || '2026-2027',
+        subjectCount,
+        staffedCount,
         loadPercent,
       };
     });
   }
 
-  // GET DETAILED WORKLOAD FOR TEACHER
-  async getTeacherWorkload(teacherId: string) {
+  async getTeacherWorkload(id: string) {
     const tenantId = this.getTenantId();
-    const teacher = await this.prisma.staffProfile.findUnique({
-      where: { id: teacherId },
-      include: { user: true },
-    });
-    if (!teacher) throw new NotFoundException('Teacher not found.');
-
     const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { teacherId, tenantId },
-      include: {
-        classSection: {
-          include: { class: { include: { academicYear: true } }, section: true },
-        },
-        subject: true,
-      },
-      orderBy: [
-        { classSection: { class: { name: 'asc' } } },
-        { subject: { name: 'asc' } },
-      ],
+      where: { teacherId: id, tenantId },
+      include: { subject: true, classSection: { include: { class: true, section: true } } },
     });
 
-    // Count periods scheduled for this teacher in periods grid
-    const periods = await this.prisma.period.groupBy({
-      by: ['classSectionId', 'subjectId'],
-      where: { tenantId, teacherId },
-      _count: { id: true },
-    });
-    const periodCountMap = new Map<string, number>();
-    for (const p of periods) {
-      periodCountMap.set(`${p.classSectionId}|${p.subjectId}`, p._count.id);
-    }
-
-    const bySection: Record<string, any[]> = {};
-    for (const ta of assignments) {
-      const secId = ta.classSectionId;
-      if (!bySection[secId]) bySection[secId] = [];
-      bySection[secId].push(ta);
-    }
-
-    const classes = [];
-    for (const secId in bySection) {
-      const list = bySection[secId];
-      const first = list[0];
-
-      const subjects = list.map((ta) => {
-        const countKey = `${ta.classSectionId}|${ta.subjectId}`;
-        const timetableCount = periodCountMap.get(countKey);
-        const periodsPerWeek = timetableCount !== undefined ? timetableCount : ta.periodsPerWeek;
-
-        return {
-          assignmentId: ta.id,
-          subjectId: ta.subjectId,
-          subjectName: ta.subject.name,
-          periodsPerWeek,
-          fromTimetable: timetableCount !== undefined,
+    // Group assignments by class section so the frontend can render classes -> subjects
+    const classMap: Record<string, any> = {};
+    for (const a of assignments) {
+      const csId = a.classSectionId;
+      if (!classMap[csId]) {
+        classMap[csId] = {
+          classSectionId: csId,
+          className: a.classSection?.class?.name && a.classSection?.section?.name
+            ? `${a.classSection.class.name} - ${a.classSection.section.name}`
+            : 'Unknown Class',
+          subjects: [],
         };
-      });
-
-      classes.push({
-        classSectionId: secId,
-        className: `${first.classSection.class.name} - ${first.classSection.section.name}`,
-        academicYear: first.classSection.class.academicYear.name,
-        subjects,
+      }
+      classMap[csId].subjects.push({
+        assignmentId: a.id,
+        subjectId: a.subjectId,
+        subjectName: a.subject?.name || 'Unknown Subject',
+        periodsPerWeek: a.periodsPerWeek || 5,
       });
     }
 
     return {
-      teacherName: teacher.user.name,
-      classes,
+      classes: Object.values(classMap),
+      totalAssignments: assignments.length,
     };
   }
 
-  // GET DETAILED WORKLOAD FOR CLASS SECTION
-  async getClassSectionWorkload(classSectionId: string) {
+  async getClassSectionWorkload(id: string) {
     const tenantId = this.getTenantId();
-    const cs = await this.prisma.classSection.findUnique({
-      where: { id: classSectionId },
+
+    // Fetch classSection with class, section, and academic year
+    const classSection = await this.prisma.classSection.findFirst({
+      where: { id, tenantId },
       include: {
         class: { include: { academicYear: true } },
         section: true,
       },
     });
-    if (!cs) throw new NotFoundException('Class section not found.');
 
+    // Get class subjects
     const classSubjects = await this.prisma.classSubject.findMany({
-      where: { classSectionId, tenantId },
+      where: { classSectionId: id, tenantId },
       include: { subject: true },
-      orderBy: { subject: { name: 'asc' } },
     });
 
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { classSectionId, tenantId },
-      include: { teacher: { include: { user: true } } },
-    });
-
-    const periodCounts = await this.prisma.period.groupBy({
-      by: ['subjectId', 'teacherId'],
-      where: { classSectionId, tenantId, teacherId: { not: undefined } },
-      _count: { id: true },
-    });
-    const periodCountMap = new Map<string, number>();
-    for (const pc of periodCounts) {
-      periodCountMap.set(`${pc.subjectId}|${pc.teacherId}`, pc._count.id);
-    }
-
-    const bySubject: Record<string, any[]> = {};
-    for (const a of assignments) {
-      if (!bySubject[a.subjectId]) bySubject[a.subjectId] = [];
-      bySubject[a.subjectId].push(a);
-    }
-
-    const uniqueTeachers = new Set(assignments.map(a => a.teacherId));
-
-    const subjects = classSubjects.map((csub) => {
-      const teachersList = bySubject[csub.subjectId] || [];
-      const teachers = teachersList.map((ta) => {
-        const countKey = `${ta.subjectId}|${ta.teacherId}`;
-        const timetableCount = periodCountMap.get(countKey);
-        const periodsPerWeek = timetableCount !== undefined ? timetableCount : ta.periodsPerWeek;
-
-        return {
-          teacherId: ta.teacherId,
-          teacherName: ta.teacher.user.name,
-          assignmentId: ta.id,
-          periodsPerWeek,
-          fromTimetable: timetableCount !== undefined,
-        };
+    const subjects = [];
+    let totalTeachers = 0;
+    for (const cs of classSubjects) {
+      // Find assigned teachers from TeacherAssignment
+      const assignments = await this.prisma.teacherAssignment.findMany({
+        where: { classSectionId: id, subjectId: cs.subjectId, tenantId },
+        include: {
+          teacher: {
+            include: {
+              user: true,
+            },
+          },
+        },
       });
 
-      return {
-        subjectId: csub.subjectId,
-        subjectName: csub.subject.name,
+      const teachers = assignments.map(a => ({
+        assignmentId: a.id,
+        teacherId: a.teacherId,
+        teacherName: a.teacher?.user?.name || 'Unknown Teacher',
+        periodsPerWeek: a.periodsPerWeek || 5,
+      }));
+
+      if (teachers.length > 0) totalTeachers++;
+
+      subjects.push({
+        subjectId: cs.subjectId,
+        subjectName: cs.subject?.name || 'Unknown Subject',
         teachers,
-      };
-    });
+      });
+    }
+
+    const subjectCount = subjects.length;
+    const loadPercent = subjectCount > 0 ? Math.round((totalTeachers / subjectCount) * 100) : 0;
 
     return {
-      name: `${cs.class.name} - ${cs.section.name}`,
-      academicYear: cs.class.academicYear.name,
-      teacherCount: uniqueTeachers.size,
+      name: classSection
+        ? `${classSection.class?.name || ''} - ${classSection.section?.name || ''}`
+        : 'Unknown Class',
+      academicYear: classSection?.class?.academicYear?.name || '2026-2027',
+      subjectCount,
+      teacherCount: totalTeachers,
+      loadPercent,
       subjects,
     };
   }
 
-  // UPDATE TEACHER ASSIGNMENT
-  async updateTeacherAssignment(id: string, newTeacherId?: string, periodsPerWeek?: number) {
-    const ta = await this.prisma.teacherAssignment.findUnique({
-      where: { id },
-    });
-    if (!ta) throw new NotFoundException('Assignment not found.');
-
-    const data: any = {};
-    if (newTeacherId) {
-      data.teacherId = newTeacherId;
-    }
-    if (periodsPerWeek !== undefined) {
-      data.periodsPerWeek = periodsPerWeek;
-    }
-
-    return this.prisma.teacherAssignment.update({
-      where: { id },
-      data,
-    });
-  }
-
-  // DELETE TEACHER ASSIGNMENT
-  async deleteTeacherAssignment(id: string) {
-    return this.prisma.teacherAssignment.delete({
-      where: { id },
-    });
-  }
-
-  // CREATE CLASS SECTION (JUNCTION)
-  async createClassSection(data: any) {
+  async updateTeacherAssignment(id: string, newTeacherId: string, periodsPerWeek: number) {
     const tenantId = this.getTenantId();
-    const existing = await this.prisma.classSection.findFirst({
-      where: {
-        tenantId,
-        classId: data.classId,
-        sectionId: data.sectionId,
-      },
+    const assignment = await this.prisma.teacherAssignment.update({
+      where: { id, tenantId },
+      data: { teacherId: newTeacherId, periodsPerWeek },
     });
-    if (existing) {
-      throw new BadRequestException('This Class and Section combination already exists.');
-    }
 
-    return this.prisma.$transaction(async (tx) => {
-      const classSectionId = randomUUID();
-
-      // 1. Create ClassSection
-      await tx.classSection.create({
-        data: {
-          id: classSectionId,
-          tenantId,
-          classId: data.classId,
-          sectionId: data.sectionId,
-          strength: data.classStrength || 0,
+    if (assignment.teacherId && assignment.subjectId) {
+      await this.prisma.teacherSkill.upsert({
+        where: {
+          teacherId_subjectId: {
+            teacherId: assignment.teacherId,
+            subjectId: assignment.subjectId,
+          },
         },
+        create: {
+          teacherId: assignment.teacherId,
+          subjectId: assignment.subjectId,
+          skillLevel: 'Beginner',
+          yearsOfExperience: 0,
+          tenantId,
+        },
+        update: {},
       });
+    }
 
-      // 2. Create ClassSubjects
-      const subjects = Object.keys(data.subjectTeacherMap);
-      const classSubjectRecords = subjects.map((subId) => ({
-        id: randomUUID(),
-        tenantId,
-        classSectionId,
-        subjectId: subId,
-      }));
-      if (classSubjectRecords.length > 0) {
-        await tx.classSubject.createMany({
-          data: classSubjectRecords,
-        });
-      }
-
-      // 3. Create TeacherAssignments
-      const assignments = [];
-      for (const subId of subjects) {
-        const teacherIds = data.subjectTeacherMap[subId] || [];
-        const periodsList = data.subjectPeriodsMap?.[subId] || [];
-
-        for (let i = 0; i < teacherIds.length; i++) {
-          const tId = teacherIds[i];
-          const periods = periodsList[i] !== undefined ? Number(periodsList[i]) : 5;
-
-          assignments.push({
-            id: randomUUID(),
-            tenantId,
-            classSectionId,
-            subjectId: subId,
-            teacherId: tId,
-            periodsPerWeek: periods,
-          });
-        }
-      }
-
-      if (assignments.length > 0) {
-        await tx.teacherAssignment.createMany({
-          data: assignments,
-        });
-      }
-
-      return {
-        classSectionId,
-        subjectCount: classSubjectRecords.length,
-        teacherAssignmentCount: assignments.length,
-      };
-    });
+    return assignment;
   }
 
-  // GET ALL CLASS SECTIONS
-  async getAllClassSections() {
+  async deleteTeacherAssignment(id: string) {
     const tenantId = this.getTenantId();
-    const sections = await this.prisma.classSection.findMany({
-      where: { tenantId },
-      include: {
-        class: true,
-        section: true,
-      },
-      orderBy: [
-        { class: { name: 'asc' } },
-        { section: { name: 'asc' } },
-      ],
-    });
+    return this.prisma.teacherAssignment.delete({ where: { id, tenantId } });
+  }
 
-    return sections.map((s) => ({
-      Id: s.id,
-      Name: `${s.class.name} - ${s.section.name}`,
-      className: s.class.name,
-      sectionName: s.section.name,
-      academicYear: '',
-      classId: s.classId,
+  async getTeacherSkills(id: string) {
+    const tenantId = this.getTenantId();
+    const skills = await this.prisma.teacherSkill.findMany({
+      where: { teacherId: id, tenantId },
+      include: { subject: true },  // Include subject so we get the subject name
+    });
+    return skills.map(sk => ({
+      id: sk.id,
+      subjectId: sk.subjectId,
+      subjectName: sk.subject?.name || 'Unknown Subject',
+      skillLevel: sk.skillLevel,
+      yearsOfExperience: sk.yearsOfExperience,
     }));
   }
 
-  // GET ALL TEACHERS
-  async getAllTeachers() {
-    const tenantId = this.getTenantId();
-    const list = await this.prisma.staffProfile.findMany({
-      where: { user: { tenantId, role: 'TEACHER' } },
-      include: { user: true },
-      orderBy: { user: { name: 'asc' } },
-    });
-    return list.map(t => ({ Id: t.id, Name: t.user.name }));
+  async getSkillLevelOptions() {
+    return ['Beginner', 'Intermediate', 'Expert'];
   }
 
-  // GET TIMETABLE FOR CLASS
-  async getTimetableForClass(
-    classSectionId: string,
-    academicYearId: string,
-    startDate?: string,
-    endDate?: string
-  ) {
+  async getPeriodsForTeacher(teacherId: string) {
     const tenantId = this.getTenantId();
-    // Find all periods scheduled for this section
     const periods = await this.prisma.period.findMany({
-      where: {
-        classSectionId,
-        tenantId,
-      },
+      where: { teacherId, tenantId },
       include: {
         subject: true,
-        teacher: { include: { user: true } },
+        classSection: { include: { class: true, section: true } },
+        periodTiming: true,
         substituteTeacher: { include: { user: true } },
       },
     });
 
-    const result: Record<string, any> = {};
-
-    for (const p of periods) {
-      const key = `${p.dayOfWeek}_${p.periodTimingId}`;
-
-      const regularTeacherId = p.teacherId;
-      const regularTeacherName = p.teacher?.user?.name || 'Unassigned';
-
-      let isOnLeave = false;
-      let onLeaveTeacherName = null;
-      let substituteTeacherIdStr = null;
-      let substituteTeacherName = null;
-
-      if (p.substituteTeacherId) {
-        isOnLeave = true;
-        onLeaveTeacherName = regularTeacherName;
-        substituteTeacherIdStr = p.substituteTeacherId;
-        substituteTeacherName = p.substituteTeacher?.user?.name || null;
-      }
-
-      result[key] = {
-        periodId: p.id,
-        subjectId: p.subjectId,
-        subjectName: p.subject?.name || '—',
-        teacherId: isOnLeave ? substituteTeacherIdStr : regularTeacherId,
-        teacherName: isOnLeave ? substituteTeacherName : regularTeacherName,
-        regularTeacherId,
-        isOnLeave,
-        onLeaveTeacherName,
-        substituteTeacherId: substituteTeacherIdStr,
-        substituteTeacherName,
-      };
-    }
-
-    return result;
+    // Normalize to the exact shape the frontend expects
+    return periods.map(p => ({
+      periodId: p.id,
+      day: p.dayOfWeek,                                             // frontend reads p.day
+      periodNumber: p.periodTiming?.periodNumber ?? 0,
+      subjectName: p.subject?.name ?? '—',
+      className: p.classSection?.class?.name && p.classSection?.section?.name
+        ? `${p.classSection.class.name} - ${p.classSection.section.name}`
+        : '—',
+      classSectionId: p.classSectionId ?? '',
+      academicYearId: '',                                           // Period model has no academicYearId; keep empty string
+      startTime: p.periodTiming?.startTime ?? '',
+      endTime: p.periodTiming?.endTime ?? '',
+      frequency: 'Weekly',
+      isFreePeriod: false,
+      substituteTeacherName: (p as any).substituteTeacher?.user?.name ?? null,
+    }));
   }
 
-  // LEASER PERIODS (TEACHER ON LEAVE / SUBSTITUTED)
+  async getPeriodsForTeacherWithGaps(teacherId: string) {
+    return this.getPeriodsForTeacher(teacherId);
+  }
+
   async getLeaserPeriodsForTeacher(teacherId: string) {
     const tenantId = this.getTenantId();
-    const list = await this.prisma.period.findMany({
-      where: {
-        tenantId,
-        substituteTeacherId: teacherId,
-      },
-      select: { id: true },
-    });
-    return list.map(item => item.id);
-  }
-
-  // GET PERIODS FOR TEACHER
-  async getPeriodsForTeacher(teacherId: string): Promise<any[]> {
-    const tenantId = this.getTenantId();
     const periods = await this.prisma.period.findMany({
-      where: {
-        tenantId,
-        OR: [
-          { teacherId },
-          { substituteTeacherId: teacherId },
-        ],
-      },
+      where: { substituteTeacherId: teacherId, tenantId },
       include: {
-        classSection: {
-          include: { class: true, section: true },
-        },
         subject: true,
+        classSection: { include: { class: true, section: true } },
         periodTiming: true,
-        teacher: { include: { user: true } },
-        substituteTeacher: { include: { user: true } },
-      },
-      orderBy: [
-        { dayOfWeek: 'asc' },
-        { periodTiming: { periodNumber: 'asc' } },
-      ],
-    });
-
-    return periods.map((p) => {
-      const isSubbed = p.substituteTeacherId === teacherId;
-      const regularTeacherName = p.teacher?.user?.name || 'Unassigned';
-      const substituteTeacherName = p.substituteTeacher?.user?.name || null;
-
-      return {
-        periodId: p.id,
-        day: p.dayOfWeek,
-        periodNumber: p.periodTiming.periodNumber,
-        classSectionId: p.classSectionId,
-        className: `${p.classSection.class.name} - ${p.classSection.section.name}`,
-        academicYear: p.classSection.class.academicYearId,
-        startTime: p.periodTiming.startTime,
-        endTime: p.periodTiming.endTime,
-        subjectId: p.subjectId,
-        subjectName: p.subject.name,
-        isLeaser: isSubbed,
-        isSubstitute: !!p.substituteTeacherId,
-        substituteTeacherId: p.substituteTeacherId,
-        substituteTeacherName,
-        originalTeacherName: regularTeacherName,
-        teacherId: isSubbed ? p.substituteTeacherId : p.teacherId,
-        teacherName: isSubbed ? substituteTeacherName : regularTeacherName,
-      };
-    });
-  }
-
-  // GET PERIODS FOR TEACHER WITH GAPS
-  async getPeriodsForTeacherWithGaps(teacherId: string): Promise<any[]> {
-    const tenantId = this.getTenantId();
-    const actualPeriods = await this.getPeriodsForTeacher(teacherId);
-
-    const totalPeriodsCount = await this.prisma.periodTiming.count({
-      where: { tenantId, isActive: true },
-    });
-    const totalPeriods = totalPeriodsCount || 8;
-
-    const existingKeys = new Set<string>();
-    const daySet = new Map<string, string>();
-    for (const p of actualPeriods) {
-      existingKeys.add(`${p.day}_${p.periodNumber}`);
-      daySet.set(p.day, p.day);
-    }
-
-    const schoolDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const resultList = [...actualPeriods];
-
-    for (const day of schoolDays) {
-      if (!daySet.has(day)) continue;
-      for (let i = 1; i <= totalPeriods; i++) {
-        const key = `${day}_${i}`;
-        if (!existingKeys.has(key)) {
-          resultList.push({
-            periodId: `free_${day}_${i}`,
-            day,
-            periodNumber: i,
-            classSectionId: '',
-            className: '',
-            academicYear: '',
-            startTime: '',
-            endTime: '',
-            subjectId: null,
-            subjectName: '',
-            isLeaser: false,
-            isFreePeriod: true,
-            substituteTeacherId: null,
-            substituteTeacherName: null,
-            originalTeacherName: '',
-            teacherId: '',
-            teacherName: '',
-          });
-        }
-      }
-    }
-
-    return resultList;
-  }
-
-  // SUBSTITUTE TEACHER MANAGEMENT
-  async saveSubstituteForPeriod(periodId: string, substituteTeacherId?: string) {
-    const p = await this.prisma.period.findUnique({
-      where: { id: periodId },
-    });
-    if (!p) throw new NotFoundException('Period not found.');
-
-    return this.prisma.period.update({
-      where: { id: periodId },
-      data: {
-        substituteTeacherId: substituteTeacherId || null,
-      },
-    });
-  }
-
-  // SAVE TIMETABLE PERIODS
-  async saveTimetablePeriods(data: any) {
-    if (!data.periods || data.periods.length === 0) {
-      throw new BadRequestException('No periods provided.');
-    }
-    const tenantId = this.getTenantId();
-
-    return this.prisma.$transaction(async (tx) => {
-      // Verify class section
-      const cs = await tx.classSection.findFirst({
-        where: { id: data.classSectionId, tenantId },
-      });
-      if (!cs) throw new NotFoundException('Class Section not found.');
-
-      // 1. Delete all existing periods for the classSectionId
-      await tx.period.deleteMany({
-        where: {
-          classSectionId: data.classSectionId,
-          tenantId,
-        },
-      });
-
-      // 2. Fetch period timings to map timing IDs
-      const timings = await tx.periodTiming.findMany({
-        where: { tenantId, isActive: true },
-      });
-      const timingNumToId: Record<number, string> = {};
-      for (const t of timings) {
-        timingNumToId[t.periodNumber] = t.id;
-      }
-
-      // 3. Create new Period records
-      const toInsert = [];
-      for (const p of data.periods) {
-        const timingId = timingNumToId[p.periodNumber];
-        if (!timingId) continue;
-        if (!p.subjectId || !p.teacherId) continue; // Skip unassigned cells
-
-        toInsert.push({
-          id: randomUUID(),
-          tenantId,
-          classSectionId: data.classSectionId,
-          periodTimingId: timingId,
-          dayOfWeek: p.day,
-          subjectId: p.subjectId,
-          teacherId: p.teacherId,
-          substituteTeacherId: null,
-        });
-      }
-
-      if (toInsert.length > 0) {
-        await tx.period.createMany({
-          data: toInsert,
-        });
-      }
-
-      return {
-        savedCount: toInsert.length,
-        success: true,
-      };
-    });
-  }
-
-  // GET TEACHER SKILLS
-  async getTeacherSkills(teacherId: string) {
-    const tenantId = this.getTenantId();
-    return this.prisma.teacherSkill.findMany({
-      where: { tenantId, teacherId },
-      include: { subject: true },
-      orderBy: [
-        { skillLevel: 'asc' },
-        { subject: { name: 'asc' } },
-      ],
-    });
-  }
-
-  // GET TEACHERS FOR SUBJECT IN CLASS
-  async getTeachersForSubjectInClass(subjectId: string, classSectionId: string) {
-    const tenantId = this.getTenantId();
-    
-    const skills = await this.prisma.teacherSkill.findMany({
-      where: { tenantId, subjectId },
-      include: {
-        teacher: {
-          include: { user: true },
-        },
-      },
-      orderBy: {
-        teacher: {
-          user: { name: 'asc' },
-        },
       },
     });
 
-    if (skills.length > 0) {
-      return skills.map(sk => ({
-        Id: sk.teacher.id,
-        Name: sk.teacher.user.name,
-        Teacher_Skill__c: sk.skillLevel || 'Expert',
-      }));
-    }
-
-    // Fallback: return all teachers
-    return this.getAllTeachers();
-  }
-
-  // GET SKILL LEVEL OPTIONS
-  async getSkillLevelOptions() {
-    return [
-      { label: 'Beginner', value: 'Beginner' },
-      { label: 'Intermediate', value: 'Intermediate' },
-      { label: 'Advanced', value: 'Advanced' },
-      { label: 'Expert', value: 'Expert' },
-    ];
+    return periods.map(p => ({
+      periodId: p.id,
+      day: p.dayOfWeek,
+      periodNumber: p.periodTiming?.periodNumber ?? 0,
+      subjectName: p.subject?.name ?? '—',
+      className: p.classSection?.class?.name && p.classSection?.section?.name
+        ? `${p.classSection.class.name} - ${p.classSection.section.name}`
+        : '—',
+      classSectionId: p.classSectionId ?? '',
+      startTime: p.periodTiming?.startTime ?? '',
+      endTime: p.periodTiming?.endTime ?? '',
+      frequency: 'Weekly',
+      isLeaser: true,
+      leaserType: 'LEASER',
+    }));
   }
 }
+

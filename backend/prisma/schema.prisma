@@ -471,6 +471,8 @@ model TeacherSkill {
   yearsOfExperience Int?
   tenantId          String
   tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, subjectId])
 }
 
 model Complaint {

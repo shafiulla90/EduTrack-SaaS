@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 import { 
   Building2, Landmark, CheckCircle, Save, QrCode, 
   Plus, Trash2, Calendar, ShieldAlert, Globe, Link as LinkIcon 
@@ -170,7 +171,7 @@ function SettingsPageContent() {
       setSaveSuccess(true);
 
       // Dispatch event to refresh branding instantly
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
 
       setTimeout(() => {
         setSaveSuccess(false);
@@ -457,14 +458,33 @@ function SettingsPageContent() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">School Logo URL</label>
+                {/* School Logo Upload */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">School Logo</label>
                   <input
-                    type="text"
-                    value={schoolLogo}
-                    onChange={(e) => setSchoolLogo(e.target.value)}
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        const result = reader.result as string;
+                        setSchoolLogo(result);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
                   />
+                  {schoolLogo && (
+                    <div className="mt-2 flex justify-center">
+                      <img
+                        src={schoolLogo}
+                        alt="School Logo Preview"
+                        className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="sm:col-span-2">

@@ -9,6 +9,7 @@ import {
   Users, BarChart3, Layers, Settings, X
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 type ClassSection = {
   Id: string;
@@ -69,6 +70,29 @@ export default function TimetablePage() {
   const [selectedClassSectionId, setSelectedClassSectionId] = useState('');
   const [selectedAcademicYearId, setSelectedAcademicYearId] = useState('');
   const [timetableData, setTimetableData] = useState<Record<string, any>>({});
+  const [classSectionSubjects, setClassSectionSubjects] = useState<Subject[]>([]);
+
+  // Load subjects for selected class section
+  useEffect(() => {
+    if (selectedClassSectionId) {
+      const loadSubjects = async () => {
+        try {
+          const res = await api.get(`/timetable/class-sections/${selectedClassSectionId}/subjects`);
+          const mapped = (res.data || []).map((s: any) => ({
+            id: s.subjectId,
+            name: s.subjectName,
+          }));
+          setClassSectionSubjects(mapped);
+        } catch (err) {
+          console.error('Error loading class section subjects', err);
+        }
+      };
+      loadSubjects();
+    } else {
+      setClassSectionSubjects([]);
+    }
+  }, [selectedClassSectionId]);
+
   
   // Workload and summary data
   const [workloadSummary, setWorkloadSummary] = useState<any>(null);
@@ -121,6 +145,9 @@ export default function TimetablePage() {
 
   const showAlert = (type: 'success' | 'error', message: string) => {
     setAlert({ type, message });
+    if (type === 'success') {
+      dispatchSchoolSetupUpdated();
+    }
     setTimeout(() => setAlert(null), 5000);
   };
 
@@ -146,12 +173,23 @@ export default function TimetablePage() {
 
       // Class Sections
       const csRes = await api.get('/timetable/class-sections');
-      setClassSections(csRes.data);
-      if (csRes.data.length > 0) setSelectedClassSectionId(csRes.data[0].Id);
+      const mappedClassSections = (csRes.data || []).map((cs: any) => ({
+        Id: cs.id,
+        Name: cs.class && cs.section ? `${cs.class.name} - ${cs.section.name}` : cs.id,
+        className: cs.class?.name || '',
+        sectionName: cs.section?.name || '',
+        classId: cs.classId
+      }));
+      setClassSections(mappedClassSections);
+      if (mappedClassSections.length > 0) setSelectedClassSectionId(mappedClassSections[0].Id);
 
       // Teachers
       const tRes = await api.get('/timetable/teachers');
-      setTeachers(tRes.data);
+      const mappedTeachers = (tRes.data || []).map((t: any) => ({
+        Id: t.id,
+        Name: `${t.firstName || ''} ${t.lastName || ''}`.trim()
+      }));
+      setTeachers(mappedTeachers);
 
       // Subjects
       const subRes = await api.get('/timetable/subjects');
@@ -260,8 +298,14 @@ export default function TimetablePage() {
 
   const fetchTeachersForSubject = async (subId: string) => {
     try {
-      const res = await api.get(`/timetable/teachers/subject?subjectIds=${subId}`);
-      setCellTeachersOptions(res.data[subId] || []);
+      const endpoint = `/timetable/teachers/subject-in-class?subjectId=${subId}&classSectionId=${selectedClassSectionId}`;
+      const res = await api.get(endpoint);
+      const mapped = (res.data || []).map((t: any) => ({
+        Id: t.teacherId,
+        Name: t.teacherName,
+        Teacher_Skill__c: ''
+      }));
+      setCellTeachersOptions(mapped);
     } catch (err) {
       console.error(err);
     }
@@ -1193,7 +1237,7 @@ export default function TimetablePage() {
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 outline-none"
               >
                 <option value="">Select Subject</option>
-                {subjects.map((s) => (
+                {classSectionSubjects.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>

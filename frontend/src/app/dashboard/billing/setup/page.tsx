@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, RefreshCw, CheckCircle, Package, Tag } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { useSchoolSetupUpdate, dispatchSchoolSetupUpdated } from '@/lib/events';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -80,11 +81,9 @@ export default function FeeSetupPage() {
 
   useEffect(() => {
     loadDropdownData();
-    // Listen for school-setup-updated events so dropdowns stay fresh
-    const handler = () => loadDropdownData();
-    window.addEventListener('school-setup-updated', handler);
-    return () => window.removeEventListener('school-setup-updated', handler);
   }, [loadDropdownData]);
+
+  useSchoolSetupUpdate(loadDropdownData);
 
   // ── Auto-load pricebook when class + year are both selected ──────────────
 
@@ -225,7 +224,7 @@ export default function FeeSetupPage() {
       });
 
       showToast('Price Book saved successfully.', 'success');
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
 
       // Re-fetch to confirm saved state
       const res = await api.get('/billing/pricebook', {

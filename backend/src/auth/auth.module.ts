@@ -5,13 +5,20 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaService } from '../prisma.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'edutrack-super-secret-key-change-in-production-19823612',
-      signOptions: { expiresIn: process.env.JWT_EXPIRATION || '15m' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET') || 'edutrack-super-secret-key-change-in-production-19823612',
+        signOptions: { 
+          expiresIn: configService.get<string>('JWT_EXPIRATION') || '365d' 
+        },
+      }),
     }),
   ],
   providers: [AuthService, JwtStrategy, PrismaService],

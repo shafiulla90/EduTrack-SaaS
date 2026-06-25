@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 interface Teacher {
   id: string;
@@ -180,7 +181,7 @@ export default function AcademicsManagement() {
       setActiveTab('workload');
       await loadData();
       showToast('Class Section created successfully.', 'success');
-      window.dispatchEvent(new CustomEvent('school-setup-updated'));
+      dispatchSchoolSetupUpdated();
     } catch (err: any) {
       console.error('Failed to create class section:', err);
       showToast(err.response?.data?.message || 'Failed to create class section.', 'error');

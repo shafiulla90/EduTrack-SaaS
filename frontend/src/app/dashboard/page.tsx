@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import BulkImportModal from '@/components/BulkImportModal';
 import { api } from '@/lib/api';
+import { useSchoolSetupUpdate } from '@/lib/events';
 
 export default function DashboardOverview() {
   const [admissionsLimit, setAdmissionsLimit] = useState(5);
@@ -32,30 +33,28 @@ export default function DashboardOverview() {
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        const [setupRes, summaryRes] = await Promise.all([
-          api.get('/tenant/setup-status'),
-          api.get('/dashboard/summary')
-        ]);
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const [setupRes, summaryRes] = await Promise.all([
+        api.get('/tenant/setup-status'),
+        api.get('/dashboard/summary')
+      ]);
 
-        setSetupStatus(setupRes.data);
-        setStats(summaryRes.data.stats);
-        setRecentAdmissions(summaryRes.data.recentAdmissions);
-        setRecentPayments(summaryRes.data.recentPayments);
-        setChartData(summaryRes.data.chartData);
-      } catch (err) {
-        console.error('Failed to load dashboard data', err);
-      }
-    };
-    loadDashboardData();
-
-    window.addEventListener('school-setup-updated', loadDashboardData);
-    return () => {
-      window.removeEventListener('school-setup-updated', loadDashboardData);
-    };
+      setSetupStatus(setupRes.data);
+      setStats(summaryRes.data.stats);
+      setRecentAdmissions(summaryRes.data.recentAdmissions);
+      setRecentPayments(summaryRes.data.recentPayments);
+      setChartData(summaryRes.data.chartData);
+    } catch (err) {
+      console.error('Failed to load dashboard data', err);
+    }
   }, []);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  useSchoolSetupUpdate(loadDashboardData);
 
   const formatCurrency = (val: number) => {
     return '₹' + val.toLocaleString('en-IN');
@@ -205,7 +204,7 @@ export default function DashboardOverview() {
                 <div className="text-xs font-semibold text-slate-800 mt-0.5">
                   {setupStatus.classesCount > 0 ? `${setupStatus.classesCount} Active Class(es)` : 'No classes added'}
                 </div>
-                <Link href="/dashboard/timetable" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
+                <Link href="/dashboard/teachers" className="text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block">
                   Add Classes
                 </Link>
               </div>
