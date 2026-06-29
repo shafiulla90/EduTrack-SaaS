@@ -95,15 +95,25 @@ export class SchoolSetupController {
     });
 
     // Sync admin name and avatar to User table for SCHOOL_ADMIN
-    if (setup.adminName || body.adminAvatarUrl !== undefined) {
+    if (setup.adminName) {
       await this.prisma.user.updateMany({
         where: {
           tenantId,
           role: 'SCHOOL_ADMIN',
         },
         data: {
-          name: setup.adminName || undefined,
-          avatarUrl: body.adminAvatarUrl !== undefined ? body.adminAvatarUrl : undefined,
+          name: setup.adminName,
+        },
+      });
+    }
+    if (body.adminAvatarUrl !== undefined) {
+      await this.prisma.user.updateMany({
+        where: {
+          tenantId,
+          role: 'SCHOOL_ADMIN',
+        },
+        data: {
+          avatarUrl: body.adminAvatarUrl,
         },
       });
     }
