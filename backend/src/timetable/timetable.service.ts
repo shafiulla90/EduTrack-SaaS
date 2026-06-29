@@ -88,14 +88,19 @@ export class TimetableService {
         tenantId,
         // Map subject and teacher assignments
         teacherAssigns: {
-          create: Object.entries(dto.subjectTeacherMap || {}).flatMap(([subjectId, teacherIds]) =>
-            (Array.isArray(teacherIds) ? teacherIds : [teacherIds]).map((teacherId: string) => ({
-              teacherId,
-              subjectId,
-              periodsPerWeek: (dto.subjectPeriodsMap && dto.subjectPeriodsMap[subjectId]) || 0,
-              tenantId,
-            })),
-          ),
+          create: Object.entries(dto.subjectTeacherMap || {}).flatMap(([subjectId, teacherIds]) => {
+            const ids = Array.isArray(teacherIds) ? teacherIds : [teacherIds];
+            return ids.map((teacherId: string, index: number) => {
+              const periodsVal = dto.subjectPeriodsMap && dto.subjectPeriodsMap[subjectId];
+              const periods = Array.isArray(periodsVal) ? (periodsVal[index] ?? 5) : (periodsVal ?? 5);
+              return {
+                teacherId,
+                subjectId,
+                periodsPerWeek: Number(periods) || 5,
+                tenantId,
+              };
+            });
+          }),
         },
         // Map class subjects
         classSubjects: {
