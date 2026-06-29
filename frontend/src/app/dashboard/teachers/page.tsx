@@ -617,11 +617,6 @@ export default function TeacherClassManagement() {
       if (subjectsRes.data && subjectsRes.data.length > 0) {
         setAllSubjects(subjectsRes.data);
       }
-      
-      const timingIdToNum: Record<string, number> = {};
-      for (const t of timingsRes.data) {
-        timingIdToNum[t.id] = t.periodNumber;
-      }
 
       // Initialize timetable grid using actual period numbers from timings data
       const formattedData: Record<string, { subject: string; teacherId: string }> = {};
@@ -633,26 +628,22 @@ export default function TeacherClassManagement() {
         }
       }
 
-      // Fill backend scheduled periods
-      const backendData = timetableRes.data;
+      // Fill backend scheduled periods (flat array mapping)
+      const backendData = Array.isArray(timetableRes.data) ? timetableRes.data : [];
       const cachedSubjectTeachers: Record<string, any[]> = {};
+      const dayMap: Record<string, string> = {
+        'Monday': 'MON', 'Tuesday': 'TUE', 'Wednesday': 'WED', 
+        'Thursday': 'THU', 'Friday': 'FRI', 'Saturday': 'SAT'
+      };
 
-      for (const key of Object.keys(backendData)) {
-        const parts = key.split('_'); // Format: Monday_timingId
-        if (parts.length < 2) continue;
-        const backDay = parts[0];
-        const timingId = parts[1];
-
-        const dayMap: Record<string, string> = {
-          'Monday': 'MON', 'Tuesday': 'TUE', 'Wednesday': 'WED', 
-          'Thursday': 'THU', 'Friday': 'FRI', 'Saturday': 'SAT'
-        };
+      for (const p of backendData) {
+        const backDay = p.day;
+        const periodNum = p.periodNumber;
         const frontDay = dayMap[backDay];
-        const periodNum = timingIdToNum[timingId];
 
         if (frontDay && periodNum) {
-          const subId = backendData[key].subjectId || '';
-          const tId = backendData[key].teacherId || '';
+          const subId = p.subjectId || '';
+          const tId = p.teacherId || '';
           formattedData[`${frontDay}-${periodNum}`] = {
             subject: subId,
             teacherId: tId
