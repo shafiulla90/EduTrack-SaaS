@@ -12,6 +12,7 @@ interface TenantContextType {
   logoUrl: string | null;
   loading: boolean;
   setupStats: any;
+  currentUser: any;
   refresh: () => Promise<void>;
 }
 
@@ -24,6 +25,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [setupStats, setSetupStats] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
   const pathname = usePathname();
 
@@ -35,6 +37,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setAdminName("Sarah Jenkins");
       setLogoUrl(null);
       setSetupStats(null);
+      setCurrentUser(null);
       setLoading(false);
       return;
     }
@@ -43,6 +46,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       const response = await api.get('/tenant/setup-status');
       const data = response.data;
       setSetupStats(data);
+      setCurrentUser(data.currentUser || null);
       
       const setupObj = data.setup;
       if (setupObj) {
@@ -62,6 +66,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setSchoolType("School");
       setAdminName("Sarah Jenkins");
       setLogoUrl(null);
+      setCurrentUser(null);
     } finally {
       setLoading(false);
     }
@@ -93,6 +98,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       logoUrl,
       loading,
       setupStats,
+      currentUser,
       refresh: fetchTenantData
     }}>
       {children}

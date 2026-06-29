@@ -14,7 +14,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const { schoolName, adminName, logoUrl } = useTenant();
+  const { schoolName, adminName, logoUrl, currentUser } = useTenant();
 
   // Categories as defined in eduProDashboard.html
   const navSections = [
@@ -312,12 +312,20 @@ export default function DashboardLayout({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-slate-50 cursor-pointer min-h-[44px]">
               <div className="text-right hidden sm:block">
-                <p className="text-[13px] font-semibold text-slate-800 leading-none">{adminName}</p>
-                <p className="text-[11px] text-slate-400 font-medium mt-1">Admin</p>
+                <p className="text-[13px] font-semibold text-slate-800 leading-none">{currentUser?.name || adminName}</p>
+                <p className="text-[11px] text-slate-400 font-medium mt-1">{currentUser?.role === 'SCHOOL_ADMIN' ? 'Admin' : (currentUser?.role || 'User')}</p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-sm select-none">
-                {adminName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-              </div>
+              {currentUser?.avatarUrl ? (
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.name || adminName}
+                  className="w-9 h-9 rounded-xl object-cover border border-slate-200"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-sm select-none">
+                  {(currentUser?.name || adminName).split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+              )}
             </div>
             <button
               onClick={() => {

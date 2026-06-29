@@ -51,6 +51,7 @@ export class TeachersService {
           role: userRole,
           phone: normalizedPhone,
           tenantId,
+          avatarUrl: data.avatarUrl || null,
         },
       });
 
@@ -93,6 +94,7 @@ export class TeachersService {
             email: true,
             phone: true,
             role: true,
+            avatarUrl: true,
           },
         },
         _count: {
@@ -126,6 +128,7 @@ export class TeachersService {
             email: true,
             phone: true,
             role: true,
+            avatarUrl: true,
           },
         },
         _count: {
@@ -294,7 +297,7 @@ export class TeachersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      if (data.name !== undefined || data.phone !== undefined || data.email !== undefined) {
+      if (data.name !== undefined || data.phone !== undefined || data.email !== undefined || data.avatarUrl !== undefined) {
         const normalizedPhone = data.phone ? data.phone.replace(/\D/g, '').slice(-10) : data.phone;
         await tx.user.update({
           where: { id: profile.userId },
@@ -302,6 +305,7 @@ export class TeachersService {
             name: data.name !== undefined ? data.name : undefined,
             phone: data.phone !== undefined ? normalizedPhone : undefined,
             email: data.email !== undefined ? data.email.toLowerCase().trim() : undefined,
+            avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : undefined,
           }
         });
       }

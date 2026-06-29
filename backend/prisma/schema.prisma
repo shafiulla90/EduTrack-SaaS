@@ -126,6 +126,7 @@ model User {
   isActive     Boolean @default(true)
   tenantId     String
   tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  avatarUrl    String?
 
   // Profiles for specific roles
   studentProfile StudentProfile?

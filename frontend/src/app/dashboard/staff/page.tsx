@@ -145,6 +145,7 @@ export default function SchoolStaffPage() {
           initials: (firstName[0] || '') + (lastName[0] || ''),
           email: t.user?.email || '',
           phone: t.user?.phone || '',
+          avatarUrl: t.user?.avatarUrl || null,
           employeeId: t.employeeId || `EMP-T-${t.id.substring(0, 4).toUpperCase()}`,
           designation: t.designation || 'Teacher',
           department: t.designation?.toLowerCase().includes('teacher') ? 'Teaching' : 'Administration',
@@ -220,7 +221,8 @@ export default function SchoolStaffPage() {
         qualification: formData.qualification,
         subjectsTaught: formSkills.map(s => s.subject).filter(Boolean),
         staffType: formType,
-        status: 'Active'
+        status: 'Active',
+        avatarUrl: photoPreview || null
       });
 
       setShowAddModal(false);
@@ -272,7 +274,8 @@ export default function SchoolStaffPage() {
         pfDeduction: Number(editingStaff.pf),
         joiningDate: editingStaff.joiningDate,
         qualification: editingStaff.qualification,
-        status: editingStaff.status
+        status: editingStaff.status,
+        avatarUrl: editingStaff.avatarUrl || null
       });
       setEditingStaff(null);
       loadStaff();

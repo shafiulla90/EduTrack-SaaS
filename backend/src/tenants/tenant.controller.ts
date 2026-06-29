@@ -49,6 +49,11 @@ export class TenantController {
   async getSetupStatus(@Req() req: any) {
     const tenantId = req.user.tenantId;
 
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, name: true, role: true, avatarUrl: true },
+    });
+
     const setup = await this.prisma.schoolSetup.findUnique({
       where: { tenantId },
       include: { tenant: true },
@@ -91,7 +96,8 @@ export class TenantController {
           postalCode: '',
           schoolLogo: null,
           isCompleted: false,
-        } : null
+        } : null,
+        currentUser,
       };
     }
 
@@ -148,6 +154,7 @@ export class TenantController {
       studentsCount,
       missingFields,
       setup,
+      currentUser,
     };
   }
 

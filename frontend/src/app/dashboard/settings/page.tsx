@@ -48,6 +48,7 @@ function SettingsPageContent() {
   const [schoolPhone, setSchoolPhone] = useState('');
   const [schoolAddress, setSchoolAddress] = useState('');
   const [schoolLogo, setSchoolLogo] = useState('');
+  const [userAvatar, setUserAvatar] = useState('');
   const [subdomain, setSubdomain] = useState('');
 
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -106,6 +107,9 @@ function SettingsPageContent() {
           setSchoolPhone(data.setup.mobileNumber || '');
           setSchoolAddress(data.setup.address || '');
           setSchoolLogo(data.setup.schoolLogo || '');
+          if (data.currentUser) {
+            setUserAvatar(data.currentUser.avatarUrl || '');
+          }
           if (data.setup.tenant) {
             setSubdomain(data.setup.tenant.subDomain || '');
             setGpayId(data.setup.tenant.googlePayId || '');
@@ -151,6 +155,7 @@ function SettingsPageContent() {
           address: schoolAddress,
           schoolLogo,
           mobileNumber: schoolPhone,
+          adminAvatarUrl: userAvatar,
         };
 
         await api.put('/school-setup', payload);
@@ -481,6 +486,35 @@ function SettingsPageContent() {
                       <img
                         src={schoolLogo}
                         alt="School Logo Preview"
+                        className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Admin Profile Photo Upload */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[12px] text-slate-500 font-semibold mb-1">Admin Profile Photo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        const result = reader.result as string;
+                        setUserAvatar(result);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
+                  />
+                  {userAvatar && (
+                    <div className="mt-2 flex justify-center">
+                      <img
+                        src={userAvatar}
+                        alt="Admin Profile Preview"
                         className="w-24 h-24 rounded-2xl object-cover border border-slate-200 shadow-sm"
                       />
                     </div>
