@@ -2084,6 +2084,7 @@ export default function TeacherClassManagement() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none"
                 >
                   <option>Weekly</option>
+                  <option>Yearly</option>
                   <option>Daily</option>
                 </select>
               </div>
