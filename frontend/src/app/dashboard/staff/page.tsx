@@ -92,6 +92,31 @@ export default function SchoolStaffPage() {
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [staffSalaryInvoices, setStaffSalaryInvoices] = useState<any[]>([]);
+  const [staffSchedule, setStaffSchedule] = useState<any[]>([]);
+  const [staffCases, setStaffCases] = useState<any[]>([]);
+  const [staffDetailLoading, setStaffDetailLoading] = useState(false);
+
+  const loadStaffDetail = async (staffId: string, isTeaching: boolean) => {
+    setStaffDetailLoading(true);
+    setStaffSalaryInvoices([]);
+    setStaffSchedule([]);
+    setStaffCases([]);
+    try {
+      const [invoicesRes, casesRes, scheduleRes] = await Promise.allSettled([
+        api.get(`/teachers/${staffId}/salary-invoices`),
+        api.get(`/teachers/${staffId}/cases`),
+        isTeaching ? api.get(`/teachers/${staffId}/schedule`) : Promise.resolve({ data: [] }),
+      ]);
+      setStaffSalaryInvoices(invoicesRes.status === 'fulfilled' ? (invoicesRes.value.data || []) : []);
+      setStaffCases(casesRes.status === 'fulfilled' ? (casesRes.value.data || []) : []);
+      setStaffSchedule(scheduleRes.status === 'fulfilled' ? (scheduleRes.value.data || []) : []);
+    } catch {
+      // silently ignore — empty state shown
+    } finally {
+      setStaffDetailLoading(false);
+    }
+  };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -186,6 +211,10 @@ export default function SchoolStaffPage() {
       // Dispatch event to refresh dashboard in real-time
       dispatchSchoolSetupUpdated();
       setStaff(prev => prev.map(m => m.id === id ? { ...m, salaryStatus: 'Paid' } : m));
+      // If this staff member's profile modal is open, refresh the invoice list
+      if (selectedStaff?.id === id) {
+        loadStaffDetail(id, selectedStaff.staffType === 'Teaching');
+      }
     } catch (err: any) {
       console.error('Error paying salary:', err);
       showToast(err.response?.data?.message || 'Failed to disburse salary.', 'error');
@@ -436,7 +465,7 @@ export default function SchoolStaffPage() {
               return (
                 <div
                   key={member.id}
-                  onClick={() => setSelectedStaff(member)}
+                  onClick={() => { setSelectedStaff(member); loadStaffDetail(member.id, member.staffType === 'Teaching'); }}
                   className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 cursor-pointer transition-all group"
                 >
                   {/* Color Band */}
@@ -808,9 +837,47 @@ export default function SchoolStaffPage() {
                 <h4 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                   📄 Salary Invoices
                 </h4>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400 italic">
-                  No salary invoices found.
-                </div>
+                {staffDetailLoading ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto" />
+                  </div>
+                ) : staffSalaryInvoices.length === 0 ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400 italic">
+                    No salary invoices found. Pay the salary to generate an invoice.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          <th className="px-4 py-2.5">Month / Description</th>
+                          <th className="px-4 py-2.5 text-right">Net Salary</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="px-4 py-2.5">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {staffSalaryInvoices.map((inv: any) => {
+                          const desc = inv.description || '';
+                          const monthMatch = desc.match(/for (.+)$/);
+                          const monthLabel = monthMatch ? monthMatch[1] : new Date(inv.date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+                          return (
+                            <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-2.5 font-semibold text-slate-700">{monthLabel}</td>
+                              <td className="px-4 py-2.5 text-right font-bold text-emerald-600">₹{Number(inv.amount).toLocaleString('en-IN')}</td>
+                              <td className="px-4 py-2.5">
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                  {inv.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-400">{new Date(inv.date).toLocaleDateString('en-IN')}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* Schedule */}
@@ -818,11 +885,44 @@ export default function SchoolStaffPage() {
                 <h4 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-blue-500" /> Schedule
                 </h4>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400 italic">
-                  {selectedStaff.staffType === 'Teaching'
-                    ? 'No periods assigned for this week.'
-                    : 'No schedule assigned.'}
-                </div>
+                {staffDetailLoading ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto" />
+                  </div>
+                ) : selectedStaff.staffType !== 'Teaching' ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400 italic">
+                    Schedule not applicable for non-teaching staff.
+                  </div>
+                ) : staffSchedule.length === 0 ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400 italic">
+                    No timetable periods assigned yet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          <th className="px-4 py-2.5">Day</th>
+                          <th className="px-4 py-2.5">Period</th>
+                          <th className="px-4 py-2.5">Subject</th>
+                          <th className="px-4 py-2.5">Class</th>
+                          <th className="px-4 py-2.5">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {staffSchedule.map((p: any) => (
+                          <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-2.5 font-semibold text-slate-700">{p.dayOfWeek}</td>
+                            <td className="px-4 py-2.5 text-slate-500">Period {p.periodTiming?.periodNumber}</td>
+                            <td className="px-4 py-2.5 font-bold text-blue-700">{p.subject?.name || '—'}</td>
+                            <td className="px-4 py-2.5 text-slate-600">{p.classSection?.class?.name} {p.classSection?.section?.name}</td>
+                            <td className="px-4 py-2.5 text-slate-400">{p.periodTiming?.startTime} – {p.periodTiming?.endTime}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* Student Cases */}
@@ -830,9 +930,58 @@ export default function SchoolStaffPage() {
                 <h4 className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                   📝 Student Cases
                 </h4>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400 italic">
-                  No cases submitted by this staff member.
-                </div>
+                {staffDetailLoading ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto" />
+                  </div>
+                ) : staffCases.length === 0 ? (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400 italic">
+                    No cases submitted by this staff member.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          <th className="px-4 py-2.5">Type</th>
+                          <th className="px-4 py-2.5">Category</th>
+                          <th className="px-4 py-2.5">Student</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="px-4 py-2.5">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {staffCases.map((c: any) => (
+                          <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-2.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                c.behaviorType === 'Complaint'
+                                  ? 'bg-rose-50 text-rose-600 border-rose-100'
+                                  : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                              }`}>
+                                {c.behaviorType}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-600">{c.category}</td>
+                            <td className="px-4 py-2.5 font-semibold text-slate-700">{c.student?.user?.name || '—'}</td>
+                            <td className="px-4 py-2.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                c.status === 'Resolved'
+                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                  : c.status === 'New'
+                                  ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                  : 'bg-slate-50 text-slate-500 border-slate-200'
+                              }`}>
+                                {c.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-400">{new Date(c.createdAt).toLocaleDateString('en-IN')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* Actions */}

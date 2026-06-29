@@ -71,4 +71,19 @@ export class TeachersController {
   async payAllSalaries(@Body('month') month: string) {
     return this.teachersService.payAllSalaries(month);
   }
+
+  @Get(':id/salary-invoices')
+  async getSalaryInvoices(@Param('id') id: string) {
+    return this.teachersService.getSalaryInvoices(id);
+  }
+
+  @Get(':id/cases')
+  async getTeacherCases(@Param('id') id: string) {
+    return this.teachersService.getTeacherCases(id);
+  }
+
+  @Get(':id/schedule')
+  async getTeacherSchedule(@Param('id') id: string) {
+    return this.teachersService.getTeacherSchedule(id);
+  }
 }

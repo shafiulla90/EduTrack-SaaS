@@ -352,6 +352,74 @@ export class TeachersService {
     });
   }
 
+  async getSalaryInvoices(staffProfileId: string) {
+    const tenantId = this.getTenantId();
+    // Look up the staff member to get their name and employeeId for description matching
+    const profile = await this.prisma.staffProfile.findFirst({
+      where: { id: staffProfileId, user: { tenantId } },
+      include: { user: true },
+    });
+    if (!profile) return [];
+
+    // Expense records store staff info in the description field.
+    // Filter by category=Salary AND description containing the staff's name or employeeId.
+    const nameFragment = profile.user.name;
+    const empId = profile.employeeId || '';
+
+    return this.prisma.expense.findMany({
+      where: {
+        tenantId,
+        category: 'Salary',
+        description: {
+          contains: nameFragment,
+          mode: 'insensitive',
+        },
+      },
+      orderBy: { date: 'desc' },
+      select: {
+        id: true,
+        amount: true,
+        category: true,
+        date: true,
+        description: true,
+        status: true,
+      },
+    });
+  }
+
+  async getTeacherCases(teacherId: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.behaviorCase.findMany({
+      where: { tenantId, teacherId },
+      include: {
+        student: {
+          include: {
+            user: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getTeacherSchedule(teacherId: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.period.findMany({
+      where: { tenantId, teacherId },
+      include: {
+        subject: { select: { name: true } },
+        classSection: {
+          include: {
+            class: { select: { name: true } },
+            section: { select: { name: true } },
+          },
+        },
+        periodTiming: { select: { startTime: true, endTime: true, periodNumber: true } },
+      },
+      orderBy: [{ dayOfWeek: 'asc' }, { periodTiming: { periodNumber: 'asc' } }],
+    });
+  }
+
   async payAllSalaries(month: string) {
     const tenantId = this.getTenantId();
     const staffMembers = await this.prisma.staffProfile.findMany({
