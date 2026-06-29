@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useSchoolSetupUpdate } from '@/lib/events';
 
@@ -23,28 +24,63 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [setupStats, setSetupStats] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const pathname = usePathname();
 
   const fetchTenantData = async () => {
+    const currentToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!currentToken) {
+      setSchoolName("ST. ANNE'S HIGH SCHOOL");
+      setSchoolType("School");
+      setAdminName("Sarah Jenkins");
+      setLogoUrl(null);
+      setSetupStats(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await api.get('/tenant/setup-status');
       const data = response.data;
       setSetupStats(data);
-      if (data.setup) {
-        setSchoolName(data.setup.schoolName || "ST. ANNE'S HIGH SCHOOL");
-        setSchoolType(data.setup.schoolType || 'School');
-        setAdminName(data.setup.adminName || 'Sarah Jenkins');
-        setLogoUrl(data.setup.schoolLogo || null);
+      
+      const setupObj = data.setup;
+      if (setupObj) {
+        setSchoolName(setupObj.schoolName || "ST. ANNE'S HIGH SCHOOL");
+        setSchoolType(setupObj.schoolType || 'School');
+        setAdminName(setupObj.adminName || 'Sarah Jenkins');
+        setLogoUrl(setupObj.schoolLogo || null);
+      } else {
+        setSchoolName("ST. ANNE'S HIGH SCHOOL");
+        setSchoolType("School");
+        setAdminName("Sarah Jenkins");
+        setLogoUrl(null);
       }
     } catch (err) {
       console.error('Failed to fetch tenant setup status:', err);
+      setSchoolName("ST. ANNE'S HIGH SCHOOL");
+      setSchoolType("School");
+      setAdminName("Sarah Jenkins");
+      setLogoUrl(null);
     } finally {
       setLoading(false);
     }
   };
 
+  // Sync token from localStorage on routing/pathname changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const currentToken = localStorage.getItem('token');
+      if (currentToken !== token) {
+        setToken(currentToken);
+      }
+    }
+  }, [pathname, token]);
+
+  // Automatically fetch profile when the token state changes (login, logout, or startup)
   useEffect(() => {
     fetchTenantData();
-  }, []);
+  }, [token]);
 
   // Use the centralized school-setup-updated listener
   useSchoolSetupUpdate(fetchTenantData);

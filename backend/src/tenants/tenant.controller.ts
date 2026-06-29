@@ -55,6 +55,9 @@ export class TenantController {
     });
 
     if (!setup) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+      });
       return {
         setupCompleted: false,
         completionPercentage: 0,
@@ -70,6 +73,25 @@ export class TenantController {
           'address',
           'academicYear',
         ],
+        setup: tenant ? {
+          id: '',
+          tenantId: tenant.id,
+          schoolName: tenant.name,
+          schoolType: 'School',
+          adminName: tenant.name,
+          mobileNumber: tenant.phone || '',
+          email: tenant.email || '',
+          address: tenant.address || '',
+          academicYear: '2026-2027',
+          principalName: '',
+          country: '',
+          state: '',
+          district: '',
+          city: '',
+          postalCode: '',
+          schoolLogo: null,
+          isCompleted: false,
+        } : null
       };
     }
 

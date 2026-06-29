@@ -4,10 +4,12 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { School, User, Mail, MapPin, Calendar, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTenant } from '../providers/TenantContext';
 
 function RegisterSchoolContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refresh } = useTenant();
   
   const phone = searchParams.get('phone') || '';
 
@@ -69,6 +71,13 @@ function RegisterSchoolContent() {
         // Store JWT token and new Tenant ID in local storage
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('tenantId', data.user.tenantId);
+
+        // Fetch tenant details immediately to verify branding is ready
+        try {
+          await refresh();
+        } catch (err) {
+          console.error('Failed to pre-fetch school profile on registration:', err);
+        }
 
         // Redirect directly to the ERP dashboard
         router.push('/dashboard');

@@ -4,10 +4,12 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTenant } from '../../providers/TenantContext';
 
 function OtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refresh } = useTenant();
   
   const phone = searchParams.get('phone') || '';
   const devOtp = searchParams.get('dev_otp') || '';
@@ -65,15 +67,22 @@ function OtpContent() {
 
       const data = response.data;
       if (data.registered) {
-        setSuccessMsg('Authenticated! Redirecting...');
+        setSuccessMsg('Authenticated! Loading school profile...');
         // Store JWT token and Tenant ID in local storage
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('tenantId', data.user.tenantId);
         
-        // Redirect to main ERP dashboard
+        // Fetch tenant details immediately to verify branding is ready
+        try {
+          await refresh();
+        } catch (err) {
+          console.error('Failed to pre-fetch school profile on login:', err);
+        }
+
+        setSuccessMsg('Authenticated! Redirecting...');
         setTimeout(() => {
           router.push('/dashboard');
-        }, 800);
+        }, 500);
       } else {
         setSuccessMsg('Verification successful! Opening registration wizard...');
         // Redirect to School Onboarding Wizard
