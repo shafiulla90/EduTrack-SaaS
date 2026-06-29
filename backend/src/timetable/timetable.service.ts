@@ -305,44 +305,86 @@ export class TimetableService {
 
   async getTeachersForSubject(subjectIds: string[]) {
     const tenantId = this.getTenantId();
-    // Query TeacherSkill to find teachers who have skills in any of the requested subjects
+
+    // Step 1: Find teachers who have a recorded TeacherSkill for any of the requested subjects
     const skills = await this.prisma.teacherSkill.findMany({
       where: { subjectId: { in: subjectIds }, tenantId },
       include: { teacher: { include: { user: true } } },
       distinct: ['teacherId', 'subjectId'],
     });
 
-    // Group unique teachers per subject
+    // Step 2: Fetch ALL active teaching staff so we can fall back when skills are missing
+    const allTeachers = await this.prisma.staffProfile.findMany({
+      where: {
+        tenantId,
+        user: { role: 'TEACHER', isActive: true },
+      },
+      include: { user: true },
+      orderBy: { user: { name: 'asc' } },
+    });
+
+    const allTeacherOptions = allTeachers.map(t => ({
+      Id: t.id,
+      Name: t.user?.name ?? '',
+      teacherId: t.id,
+      teacherName: t.user?.name ?? '',
+      skillLevel: 'Expert',
+    }));
+
+    // Step 3: Group skilled teachers per subject; fall back to ALL teachers when none skilled
     const bySubject: Record<string, any[]> = {};
-    for (const sk of skills) {
-      if (!bySubject[sk.subjectId]) bySubject[sk.subjectId] = [];
-      bySubject[sk.subjectId].push({
-        Id: sk.teacherId,
-        Name: sk.teacher?.user?.name ?? '',
-        teacherId: sk.teacherId,
-        teacherName: sk.teacher?.user?.name ?? '',
-        skillLevel: sk.skillLevel,
-      });
+    for (const subjectId of subjectIds) {
+      const skilled = skills
+        .filter(sk => sk.subjectId === subjectId)
+        .map(sk => ({
+          Id: sk.teacherId,
+          Name: sk.teacher?.user?.name ?? '',
+          teacherId: sk.teacherId,
+          teacherName: sk.teacher?.user?.name ?? '',
+          skillLevel: sk.skillLevel,
+        }));
+      // If no teacher has a recorded skill for this subject, show all active teachers
+      bySubject[subjectId] = skilled.length > 0 ? skilled : allTeacherOptions;
     }
     return bySubject;
   }
 
   async getTeachersForSubjectInClass(subjectId: string, classSectionId: string) {
     const tenantId = this.getTenantId();
-    // Find teachers who have a skill for this subject (TeacherSkill), not just those assigned to the class.
-    // This ensures any teacher added with a matching skill appears in the timetable teacher dropdown.
+
+    // Find teachers who have a recorded TeacherSkill for this subject
     const skills = await this.prisma.teacherSkill.findMany({
       where: { subjectId, tenantId },
       include: { teacher: { include: { user: true } } },
       distinct: ['teacherId'],
     });
 
-    return skills.map(sk => ({
-      Id: sk.teacherId,
-      Name: sk.teacher?.user?.name ?? '',
-      teacherId: sk.teacherId,
-      teacherName: sk.teacher?.user?.name ?? '',
-      skillLevel: sk.skillLevel,
+    if (skills.length > 0) {
+      return skills.map(sk => ({
+        Id: sk.teacherId,
+        Name: sk.teacher?.user?.name ?? '',
+        teacherId: sk.teacherId,
+        teacherName: sk.teacher?.user?.name ?? '',
+        skillLevel: sk.skillLevel,
+      }));
+    }
+
+    // Fallback: return ALL active teaching staff so teacher dropdowns are never empty
+    const allTeachers = await this.prisma.staffProfile.findMany({
+      where: {
+        tenantId,
+        user: { role: 'TEACHER', isActive: true },
+      },
+      include: { user: true },
+      orderBy: { user: { name: 'asc' } },
+    });
+
+    return allTeachers.map(t => ({
+      Id: t.id,
+      Name: t.user?.name ?? '',
+      teacherId: t.id,
+      teacherName: t.user?.name ?? '',
+      skillLevel: 'Expert',
     }));
   }
 

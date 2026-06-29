@@ -1971,7 +1971,7 @@ export default function TeacherClassManagement() {
                               >
                                 <option value="">Select Teacher</option>
                                 {t.teacherOptions.map((opt: any) => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  <option key={opt.teacherId || opt.Id} value={opt.teacherId || opt.Id}>{opt.teacherName || opt.Name}</option>
                                 ))}
                               </select>
                             </div>
