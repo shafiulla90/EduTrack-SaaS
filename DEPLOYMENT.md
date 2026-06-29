@@ -24,7 +24,7 @@ We have configured the NestJS backend to run as a Vercel Serverless Function by 
      > [!TIP]
      > Note the addition of `&connection_limit=2` to the end of the `DATABASE_URL`. Since serverless functions scale horizontally and terminate after execution, limiting the connection count per function prevents exhausting the database connections of your AWS RDS instance.
    - `JWT_SECRET`: `edutrack-super-secret-key-change-in-production-19823612` (or a random secure string).
-   - `JWT_EXPIRATION`: `15m`
+   - `JWT_EXPIRATION`: `24h`
    - `JWT_REFRESH_SECRET`: `edutrack-super-refresh-secret-key-change-in-production-472619`
    - `JWT_REFRESH_EXPIRATION`: `7d`
    - `AWS_REGION`: `us-east-1`

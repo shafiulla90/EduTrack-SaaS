@@ -16,7 +16,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET') || 'edutrack-super-secret-key-change-in-production-19823612',
         signOptions: { 
-          expiresIn: configService.get<string>('JWT_EXPIRATION') || '365d' 
+          expiresIn: configService.get<string>('JWT_EXPIRATION') || '24h' 
         },
       }),
     }),

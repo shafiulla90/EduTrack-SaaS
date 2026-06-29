@@ -26,7 +26,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [setupStats, setSetupStats] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('token');
+    }
+    return null;
+  });
   const pathname = usePathname();
 
   const fetchTenantData = async () => {
