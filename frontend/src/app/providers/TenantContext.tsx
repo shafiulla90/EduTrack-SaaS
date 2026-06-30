@@ -19,30 +19,10 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
-  const [schoolName, setSchoolName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('schoolName') || '';
-    }
-    return '';
-  });
-  const [schoolType, setSchoolType] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('schoolType') || '';
-    }
-    return '';
-  });
-  const [adminName, setAdminName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('adminName') || '';
-    }
-    return '';
-  });
-  const [logoUrl, setLogoUrl] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('logoUrl') || null;
-    }
-    return null;
-  });
+  const [schoolName, setSchoolName] = useState('');
+  const [schoolType, setSchoolType] = useState('');
+  const [adminName, setAdminName] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [setupStats, setSetupStats] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -57,15 +37,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const fetchTenantData = async () => {
     const currentToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!currentToken) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('schoolName');
-        localStorage.removeItem('schoolType');
-        localStorage.removeItem('adminName');
-        localStorage.removeItem('logoUrl');
-      }
-      setSchoolName("ST. ANNE'S HIGH SCHOOL");
-      setSchoolType("School");
-      setAdminName("Sarah Jenkins");
+      setSchoolName("");
+      setSchoolType("");
+      setAdminName("");
       setLogoUrl(null);
       setSetupStats(null);
       setCurrentUser(null);
@@ -81,46 +55,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       
       const setupObj = data.setup;
       if (setupObj) {
-        const sName = setupObj.schoolName || "ST. ANNE'S HIGH SCHOOL";
-        const sType = setupObj.schoolType || 'School';
-        const aName = setupObj.adminName || 'Sarah Jenkins';
-        const logo = setupObj.schoolLogo || null;
-
-        setSchoolName(sName);
-        setSchoolType(sType);
-        setAdminName(aName);
-        setLogoUrl(logo);
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('schoolName', sName);
-          localStorage.setItem('schoolType', sType);
-          localStorage.setItem('adminName', aName);
-          if (logo) localStorage.setItem('logoUrl', logo);
-          else localStorage.removeItem('logoUrl');
-        }
+        setSchoolName(setupObj.schoolName || "");
+        setSchoolType(setupObj.schoolType || "");
+        setAdminName(setupObj.adminName || "");
+        setLogoUrl(setupObj.schoolLogo || null);
       } else {
-        setSchoolName("ST. ANNE'S HIGH SCHOOL");
-        setSchoolType("School");
-        setAdminName("Sarah Jenkins");
+        setSchoolName("");
+        setSchoolType("");
+        setAdminName("");
         setLogoUrl(null);
       }
     } catch (err) {
       console.error('Failed to fetch tenant setup status:', err);
-      if (typeof window !== 'undefined') {
-        const cachedName = localStorage.getItem('schoolName');
-        if (cachedName) {
-          setSchoolName(cachedName);
-          setSchoolType(localStorage.getItem('schoolType') || 'School');
-          setAdminName(localStorage.getItem('adminName') || 'Sarah Jenkins');
-          setLogoUrl(localStorage.getItem('logoUrl') || null);
-          setCurrentUser(null);
-          setLoading(false);
-          return;
-        }
-      }
-      setSchoolName("ST. ANNE'S HIGH SCHOOL");
-      setSchoolType("School");
-      setAdminName("Sarah Jenkins");
+      setSchoolName("");
+      setSchoolType("");
+      setAdminName("");
       setLogoUrl(null);
       setCurrentUser(null);
     } finally {
