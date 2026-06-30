@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, UseGuards, Req, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, UseGuards, Req, BadRequestException, NotFoundException } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma.service';
@@ -12,6 +12,34 @@ export class TenantController {
     private authService: AuthService,
     private prisma: PrismaService,
   ) {}
+
+  @Get('public-branding')
+  async getPublicBranding(@Req() req: any) {
+    const tenantId = req['tenantId'];
+    if (!tenantId) {
+      throw new BadRequestException('Tenant could not be resolved');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    const setup = await this.prisma.schoolSetup.findUnique({
+      where: { tenantId }
+    });
+
+    return {
+      id: tenant.id,
+      name: tenant.name,
+      subdomain: tenant.subDomain,
+      logoUrl: setup?.schoolLogo || tenant.logoUrl || null,
+      subtitle: tenant.subtitle || setup?.schoolType || 'Building Excellence for Futures'
+    };
+  }
 
   @Post('register')
   async register(@Body() body: any) {

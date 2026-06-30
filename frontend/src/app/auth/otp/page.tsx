@@ -9,7 +9,7 @@ import { useTenant } from '../../providers/TenantContext';
 function OtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refresh } = useTenant();
+  const { schoolName, logoUrl, refresh } = useTenant();
   
   const phone = searchParams.get('phone') || '';
   const devOtp = searchParams.get('dev_otp') || '';
@@ -132,15 +132,22 @@ function OtpContent() {
 
       {/* Main card wrapper */}
       <div className="w-full max-w-md z-10">
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+        <div className="flex flex-col items-center justify-center mb-8 text-center">
+          {logoUrl ? (
+            <div className="w-16 h-16 rounded-2xl bg-white border border-slate-800 p-2 overflow-hidden shadow-lg mb-3">
+              <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 mb-3">
               <span className="font-extrabold text-white text-xl tracking-tight">ET</span>
             </div>
-            <span className="font-bold text-xl bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              EduTrack <span className="text-brand-400 font-medium text-xs px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20 ml-1">SaaS</span>
-            </span>
-          </div>
+          )}
+          <h1 className="font-black text-2xl bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent tracking-tight max-w-sm">
+            {schoolName || 'EduTrack SaaS'}
+          </h1>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+            {schoolName ? 'School Portal' : 'SaaS Platform'}
+          </p>
         </div>
 
         <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl relative">

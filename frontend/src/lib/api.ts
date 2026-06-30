@@ -9,17 +9,46 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
     ? 'http://localhost:3001'          // Server-side rendering in dev: direct backend call
     : '/api';                          // Client-side on Vercel: use Next.js proxy route
 
-const DEFAULT_TENANT = 'demo-school';
+export function getTenantFromHostname(): string {
+  if (typeof window === 'undefined') return 'demo-school';
+
+  const hostname = window.location.hostname;
+  const hostParts = hostname.split('.');
+
+  const isVercelApp = hostname.includes('vercel.app');
+  const isEdutrackDomain = hostname.includes('edutrack.com');
+
+  if (isEdutrackDomain) {
+    if (hostParts.length > 2 && hostParts[0] !== 'www') {
+      return hostParts[0];
+    }
+  } else if (isVercelApp) {
+    if (hostParts.length > 3) {
+      return hostParts[0];
+    }
+  } else {
+    // Local development (e.g. school-subdomain.localhost)
+    if (hostParts.length > 1 && hostParts[0] !== 'localhost' && hostParts[0] !== 'www' && isNaN(Number(hostParts[0]))) {
+      return hostParts[0];
+    }
+  }
+
+  // Fallback to localStorage
+  const stored = localStorage.getItem('tenantId');
+  if (stored) return stored;
+
+  return 'demo-school';
+}
 
 export const api = axios.create({
   baseURL: BACKEND_URL,
   headers: {
     'Content-Type': 'application/json',
-    'X-Tenant-ID': DEFAULT_TENANT,
+    'X-Tenant-ID': 'demo-school',
   },
 });
 
-// Interceptor to inject JWT Token from local storage
+// Interceptor to inject JWT Token and correct Tenant ID
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
@@ -27,10 +56,7 @@ api.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
-      const tenantId = localStorage.getItem('tenantId');
-      if (tenantId) {
-        config.headers['X-Tenant-ID'] = tenantId;
-      }
+      config.headers['X-Tenant-ID'] = getTenantFromHostname();
     }
     return config;
   },

@@ -37,13 +37,29 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const fetchTenantData = async () => {
     const currentToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!currentToken) {
-      setSchoolName("");
-      setSchoolType("");
-      setAdminName("");
-      setLogoUrl(null);
-      setSetupStats(null);
-      setCurrentUser(null);
-      setLoading(false);
+      try {
+        const response = await api.get('/tenant/public-branding');
+        const data = response.data;
+        if (data) {
+          setSchoolName(data.name || "");
+          setSchoolType(data.subtitle || "School");
+          setAdminName(data.name || "");
+          setLogoUrl(data.logoUrl || null);
+          if (typeof window !== 'undefined' && data.id) {
+            localStorage.setItem('tenantId', data.id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch public tenant branding:', err);
+        setSchoolName("");
+        setSchoolType("");
+        setAdminName("");
+        setLogoUrl(null);
+      } finally {
+        setSetupStats(null);
+        setCurrentUser(null);
+        setLoading(false);
+      }
       return;
     }
 
@@ -59,6 +75,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setSchoolType(setupObj.schoolType || "");
         setAdminName(setupObj.adminName || "");
         setLogoUrl(setupObj.schoolLogo || null);
+        if (typeof window !== 'undefined' && setupObj.tenantId) {
+          localStorage.setItem('tenantId', setupObj.tenantId);
+        }
       } else {
         setSchoolName("");
         setSchoolType("");

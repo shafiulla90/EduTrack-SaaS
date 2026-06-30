@@ -1,4 +1,4 @@
-import { Controller, Put, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Put, Body, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -34,6 +34,26 @@ export class SchoolSetupController {
       if (body[field] !== undefined) {
         updateData[field] = body[field];
       }
+    }
+
+    if (body.subdomain) {
+      const cleanSubdomain = String(body.subdomain).trim().toLowerCase().replace(/[^a-z0-9\-]/g, '');
+      if (!cleanSubdomain) {
+        throw new BadRequestException('Subdomain must contain alphanumeric characters or hyphens');
+      }
+      const existing = await this.prisma.tenant.findFirst({
+        where: {
+          subDomain: cleanSubdomain,
+          NOT: { id: tenantId }
+        }
+      });
+      if (existing) {
+        throw new BadRequestException('This school subdomain is already in use.');
+      }
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { subDomain: cleanSubdomain }
+      });
     }
 
     const setup = await this.prisma.schoolSetup.upsert({

@@ -156,6 +156,7 @@ function SettingsPageContent() {
           schoolLogo,
           mobileNumber: schoolPhone,
           adminAvatarUrl: userAvatar,
+          subdomain,
         };
 
         await api.put('/school-setup', payload);
