@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Plus, RefreshCw, CheckCircle, Package, Tag } from 'lucide-react';
+import { X, RefreshCw, CheckCircle, Package, Tag } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { useSchoolSetupUpdate, dispatchSchoolSetupUpdated } from '@/lib/events';
@@ -251,20 +251,17 @@ export default function FeeSetupPage() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #43e97b 100%)' }}
-    >
+    <div className="min-h-[calc(100vh-140px)] flex items-center justify-center py-6 px-4">
       <div className="w-full max-w-lg">
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
           {/* Tab Header */}
           <div className="flex border-b border-slate-100">
             <button
               onClick={() => setActiveTab('addFees')}
               className={`flex-1 py-3.5 text-sm font-bold flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'addFees'
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-indigo-600 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -274,7 +271,7 @@ export default function FeeSetupPage() {
               onClick={() => setActiveTab('setPriceBook')}
               className={`flex-1 py-3.5 text-sm font-bold flex items-center justify-center gap-2 transition-all ${
                 activeTab === 'setPriceBook'
-                  ? 'bg-orange-500 text-white'
+                  ? 'bg-indigo-600 text-white'
                   : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
@@ -289,7 +286,7 @@ export default function FeeSetupPage() {
                 {!showSuccess ? (
                   <>
                     <div className="text-center mb-6">
-                      <h2 className="text-[22px] font-extrabold text-slate-800">Create Fee Products</h2>
+                      <h2 className="text-[22px] font-extrabold text-slate-850">Create Fee Products</h2>
                       <p className="text-sm text-slate-400 mt-1">
                         Add new fee items to your school&apos;s fee structure.
                       </p>
@@ -303,7 +300,7 @@ export default function FeeSetupPage() {
                               <label className="block text-xs text-slate-500 font-semibold mb-1">
                                 Product Name
                               </label>
-                              <div className="flex items-center border border-slate-200 rounded-xl bg-white overflow-hidden focus-within:border-purple-400 transition-all">
+                              <div className="flex items-center border border-slate-200 rounded-xl bg-white overflow-hidden focus-within:border-indigo-400 transition-all">
                                 <input
                                   type="text"
                                   value={field.value}
@@ -333,7 +330,7 @@ export default function FeeSetupPage() {
                                   <button
                                     type="button"
                                     onClick={handleAddField}
-                                    className="w-10 h-10 flex items-center justify-center bg-purple-600 text-white text-lg font-bold hover:bg-purple-700 transition-colors"
+                                    className="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white text-lg font-bold hover:bg-indigo-700 transition-colors"
                                   >
                                     +
                                   </button>
@@ -355,11 +352,11 @@ export default function FeeSetupPage() {
                                     <div
                                       key={s}
                                       onMouseDown={() => handleSuggestionClick(field.id, s)}
-                                      className="px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 cursor-pointer flex items-center gap-2"
+                                      className="px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 cursor-pointer flex items-center gap-2"
                                     >
                                       <span className="text-base">💡</span>
                                       <span>{s}</span>
-                                      <span className="ml-auto text-[10px] text-purple-500 font-bold bg-purple-50 px-1.5 py-0.5 rounded">
+                                      <span className="ml-auto text-[10px] text-indigo-500 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">
                                         Suggested
                                       </span>
                                     </div>
@@ -375,8 +372,7 @@ export default function FeeSetupPage() {
                     <button
                       onClick={handleSubmitProducts}
                       disabled={isLoading}
-                      className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, #43e97b, #38f9d7)' }}
+                      className="w-full py-3 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-750 text-white text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-60 shadow-md hover:shadow-indigo-500/10 cursor-pointer"
                     >
                       {isLoading ? (
                         <>
@@ -384,7 +380,7 @@ export default function FeeSetupPage() {
                           Creating products...
                         </>
                       ) : (
-                        <>✓ Submit Products</>
+                        <>Submit Products</>
                       )}
                     </button>
                   </>
@@ -420,9 +416,9 @@ export default function FeeSetupPage() {
                           setActiveTab('setPriceBook');
                           setShowSuccess(false);
                         }}
-                        className="flex-1 py-2.5 rounded-xl bg-orange-500 text-white font-bold text-sm hover:bg-orange-600"
+                        className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-750"
                       >
-                        Set Price Book 🔥
+                        Set Price Book
                       </button>
                     </div>
                   </div>
@@ -447,7 +443,7 @@ export default function FeeSetupPage() {
                     <select
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-slate-50 focus:border-orange-400"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-slate-50 focus:border-indigo-400"
                     >
                       <option value="">Select Year...</option>
                       {yearsList.map((y) => (
@@ -462,7 +458,7 @@ export default function FeeSetupPage() {
                     <select
                       value={selectedClass}
                       onChange={(e) => setSelectedClass(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-slate-50 focus:border-orange-400"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-slate-50 focus:border-indigo-400"
                     >
                       <option value="">Choose a class...</option>
                       {classesList.map((c) => (
@@ -501,11 +497,11 @@ export default function FeeSetupPage() {
                         </p>
                       </div>
                     ) : (
-                      <div className="space-y-2 mb-5 max-h-56 overflow-y-auto">
+                      <div className="space-y-2 mb-5 max-h-56 overflow-y-auto font-sans">
                         {priceItems.map((item, idx) => (
                           <div
                             key={item.productId}
-                            className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-orange-200 transition-colors"
+                            className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-colors"
                           >
                             <input
                               type="checkbox"
@@ -519,12 +515,12 @@ export default function FeeSetupPage() {
                                   ),
                                 )
                               }
-                              className="w-4 h-4 text-orange-500 rounded accent-orange-500"
+                              className="w-4 h-4 text-indigo-600 rounded accent-indigo-600 cursor-pointer"
                             />
                             <span className="flex-1 text-sm font-semibold text-slate-700">{item.name}</span>
                             {item.selected && (
                               <div className="flex items-center gap-1">
-                                <span className="text-xs text-slate-500">₹</span>
+                                <span className="text-xs text-slate-500 font-semibold">₹</span>
                                 <input
                                   type="number"
                                   value={item.price}
@@ -535,7 +531,7 @@ export default function FeeSetupPage() {
                                       ),
                                     )
                                   }
-                                  className="w-24 border border-orange-200 rounded-lg px-2 py-1 text-sm font-mono outline-none focus:border-orange-400"
+                                  className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-sm font-mono outline-none focus:border-indigo-400"
                                   placeholder="0"
                                   min={0}
                                 />
@@ -551,8 +547,7 @@ export default function FeeSetupPage() {
                 <button
                   onClick={handleSubmitPriceBook}
                   disabled={savingPriceBook || loadingPriceBook}
-                  className="w-full py-3 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 disabled:opacity-60 transition-all"
-                  style={{ background: 'linear-gradient(135deg, #fa709a, #fee140)' }}
+                  className="w-full py-3 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-750 text-white text-sm flex items-center justify-center gap-2 disabled:opacity-60 transition-all shadow-md hover:shadow-indigo-500/10 cursor-pointer"
                 >
                   {savingPriceBook ? (
                     <>
@@ -560,7 +555,7 @@ export default function FeeSetupPage() {
                       Saving...
                     </>
                   ) : (
-                    '🔥 Submit Price Book'
+                    'Submit Price Book'
                   )}
                 </button>
               </>
@@ -572,7 +567,7 @@ export default function FeeSetupPage() {
         <div className="text-center mt-4">
           <a
             href="/dashboard/billing"
-            className="text-white/80 text-sm font-semibold hover:text-white underline"
+            className="text-slate-500 hover:text-indigo-600 text-sm font-semibold underline"
           >
             ← Back to Fee Management
           </a>
