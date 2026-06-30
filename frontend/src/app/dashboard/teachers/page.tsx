@@ -9,6 +9,7 @@ import {
   Calendar, Layers, Trash2, Edit2, AlertCircle, ArrowLeft, ArrowRight, Check
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import BulkTeacherImportModal from '@/components/BulkTeacherImportModal';
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#667eea,#764ba2)',
@@ -2521,6 +2522,15 @@ export default function TeacherClassManagement() {
         </>
       )}
 
+      <BulkTeacherImportModal
+        isOpen={showImportTeachers}
+        onClose={() => setShowImportTeachers(false)}
+        onImportSuccess={(count) => {
+          showToast(`Successfully imported ${count} teachers.`, 'success');
+          loadWorkloadDashboard();
+        }}
+        allSubjects={allSubjects}
+      />
     </div>
   );
 }

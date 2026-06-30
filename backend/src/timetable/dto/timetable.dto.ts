@@ -181,6 +181,12 @@ export class BulkTeacherDto {
   @IsString()
   @IsOptional()
   skillLevel3?: string;
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTeacherSkillDto)
+  skills?: CreateTeacherSkillDto[];
 }
 
 export class BulkTeachersInputDto {

@@ -1,0 +1,415 @@
+'use client';
+
+import React, { useState, useRef } from 'react';
+import { Download, Upload, AlertCircle, RefreshCw, X, FileText } from 'lucide-react';
+import { api } from '@/lib/api';
+
+interface BulkTeacherImportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onImportSuccess: (importedCount: number) => void;
+  allSubjects: any[];
+}
+
+interface ParsedRecord {
+  [key: string]: string;
+}
+
+export default function BulkTeacherImportModal({ isOpen, onClose, onImportSuccess, allSubjects }: BulkTeacherImportModalProps) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [fileName, setFileName] = useState('');
+  const [parsedData, setParsedData] = useState<ParsedRecord[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [successCount, setSuccessCount] = useState(0);
+  const [errors, setErrors] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (!isOpen) return null;
+
+  const templateHeaders = [
+    'First Name', 'Last Name', 'Email', 'Phone', 'Qualification',
+    'Designation', 'Basic Salary', 'Allowances', 'Deductions', 'PF',
+    'Joining Date', 'Subject 1', 'Skill Level 1', 'Subject 2',
+    'Skill Level 2', 'Subject 3', 'Skill Level 3'
+  ];
+
+  // Triggers template download
+  const handleDownloadTemplate = () => {
+    const csvContent = templateHeaders.join(',') + '\n' +
+      'Ramesh,Kumar,ramesh.kumar@example.com,9876543210,M.Sc Mathematics,Mathematics Teacher,45000,5000,2000,1800,2026-06-01,Mathematics,Expert,Physics,Intermediate,,\n' +
+      'Suresh,Singh,suresh.singh@example.com,9998887776,MA English,English Teacher,40000,4000,1500,1500,2026-06-01,English,Expert,,,,';
+
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent));
+    element.setAttribute('download', 'EduTrack_Teacher_Import_Template.csv');
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  // CSV Parsing logic
+  const parseCSV = (text: string) => {
+    try {
+      const lines = text.split(/\r\n|\n/);
+      if (lines.length === 0 || !lines[0].trim()) {
+        alert('CSV file is empty.');
+        return;
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim());
+      
+      // Basic check for templates headers matching
+      const hasCorrectHeaders = templateHeaders.every(h => headers.includes(h));
+      if (!hasCorrectHeaders) {
+        alert('Invalid CSV template format. Please download and use the official template.');
+        return;
+      }
+
+      const rows: ParsedRecord[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const currentLine = line.split(',');
+        const obj: ParsedRecord = {};
+        
+        for (let j = 0; j < headers.length; j++) {
+          obj[headers[j]] = currentLine[j] ? currentLine[j].trim() : '';
+        }
+        rows.push(obj);
+      }
+
+      if (rows.length === 0) {
+        alert('No data rows found in CSV.');
+        return;
+      }
+
+      setParsedData(rows);
+      setStep(2); // Move to confirm step
+    } catch (err) {
+      alert('Error parsing CSV file: ' + (err as Error).message);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      parseCSV(reader.result as string);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmImport = async () => {
+    setStep(3);
+    setIsProcessing(true);
+    setErrors([]);
+
+    // We do validations and api call
+    setTimeout(async () => {
+      const teachersToUpload: any[] = [];
+      const errorLogs: string[] = [];
+
+      parsedData.forEach((row, index) => {
+        const rowNum = index + 2;
+        const firstName = row['First Name'];
+        const lastName = row['Last Name'];
+        const email = row['Email'];
+
+        if (!firstName) {
+          errorLogs.push(`Row ${rowNum}: First Name is missing.`);
+          return;
+        }
+        if (!lastName) {
+          errorLogs.push(`Row ${rowNum}: Last Name is missing.`);
+          return;
+        }
+        if (!email) {
+          errorLogs.push(`Row ${rowNum}: Email is missing.`);
+          return;
+        }
+        if (!email.includes('@')) {
+          errorLogs.push(`Row ${rowNum}: Invalid email format "${email}".`);
+          return;
+        }
+
+        const basicSalary = row['Basic Salary'] ? Number(row['Basic Salary']) : undefined;
+        const allowances = row['Allowances'] ? Number(row['Allowances']) : undefined;
+        const deductions = row['Deductions'] ? Number(row['Deductions']) : undefined;
+        const pf = row['PF'] ? Number(row['PF']) : undefined;
+
+        if (row['Basic Salary'] && isNaN(Number(row['Basic Salary']))) {
+          errorLogs.push(`Row ${rowNum}: Basic Salary must be a number.`);
+          return;
+        }
+        if (row['Allowances'] && isNaN(Number(row['Allowances']))) {
+          errorLogs.push(`Row ${rowNum}: Allowances must be a number.`);
+          return;
+        }
+        if (row['Deductions'] && isNaN(Number(row['Deductions']))) {
+          errorLogs.push(`Row ${rowNum}: Deductions must be a number.`);
+          return;
+        }
+        if (row['PF'] && isNaN(Number(row['PF']))) {
+          errorLogs.push(`Row ${rowNum}: PF must be a number.`);
+          return;
+        }
+
+        const skills: any[] = [];
+        const mapSkill = (subNameKey: string, skillLevelKey: string) => {
+          const sName = row[subNameKey];
+          if (sName) {
+            const matchedSub = allSubjects.find(s => s.name.toLowerCase() === sName.toLowerCase());
+            if (matchedSub) {
+              skills.push({
+                subjectId: matchedSub.id,
+                skillLevel: row[skillLevelKey] || 'Expert',
+                yearsOfExperience: 5
+              });
+            } else {
+              errorLogs.push(`Row ${rowNum}: Subject "${sName}" not found in database catalog.`);
+            }
+          }
+        };
+
+        mapSkill('Subject 1', 'Skill Level 1');
+        mapSkill('Subject 2', 'Skill Level 2');
+        mapSkill('Subject 3', 'Skill Level 3');
+
+        teachersToUpload.push({
+          firstName,
+          lastName,
+          email,
+          phone: row['Phone'] || undefined,
+          qualification: row['Qualification'] || undefined,
+          designation: row['Designation'] || undefined,
+          basicSalary: basicSalary ? Number(basicSalary) : undefined,
+          allowances: allowances ? Number(allowances) : undefined,
+          deductions: deductions ? Number(deductions) : undefined,
+          pf: pf ? Number(pf) : undefined,
+          joiningDate: row['Joining Date'] || undefined,
+          skills
+        });
+      });
+
+      if (errorLogs.length > 0) {
+        setErrors(errorLogs);
+        setIsProcessing(false);
+        return;
+      }
+
+      try {
+        const res = await api.post('/timetable/teachers/bulk', { teachers: teachersToUpload });
+        const createdCount = res.data.created || 0;
+        setSuccessCount(createdCount);
+        setIsProcessing(false);
+        if (createdCount > 0) {
+          onImportSuccess(createdCount);
+        }
+      } catch (err: any) {
+        console.error('Bulk teacher import failed:', err);
+        setErrors([err.response?.data?.message || 'Error occurred while calling bulk import API.']);
+        setIsProcessing(false);
+      }
+    }, 1500);
+  };
+
+  const handleBack = () => {
+    setStep(1);
+    setFileName('');
+    setParsedData([]);
+    setErrors([]);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in space-y-0">
+        
+        {/* Modal Header */}
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-[#2E5BFF]" />
+            <h2 className="text-[16px] font-bold text-slate-900">Bulk Teacher Import</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 font-bold text-[18px] cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6">
+          {/* STEP 1: UPLOAD ZONE */}
+          {step === 1 && (
+            <div className="space-y-6">
+              <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-[13px] text-slate-700 leading-relaxed">
+                Import teaching staff in bulk. Download the official CSV template, fill in details like qualification, designation, and up to 3 subject skills, and upload the file.
+              </div>
+
+              <div className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-all text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-blue-50 text-[#2E5BFF] flex items-center justify-center">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-[14px] font-bold text-slate-900">Upload Filled CSV Template</p>
+                  <p className="text-[11px] text-slate-400 font-semibold mt-1">Accepts UTF-8 formatted CSV rosters only</p>
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept=".csv"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[13px] shadow-xs cursor-pointer"
+                >
+                  Select CSV File
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <span className="text-[12px] text-slate-400 font-semibold uppercase tracking-wider">Instructions</span>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="px-4 py-2 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white font-semibold text-[13px] flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Download CSV Template
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: CONFIRM DATA ROWS */}
+          {step === 2 && (
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mx-auto">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <h3 className="text-[16px] font-bold text-slate-900">Confirm Data Import</h3>
+                <p className="text-[13px] text-slate-600">
+                  We parsed <strong>{parsedData.length}</strong> teacher records from <strong>{fileName}</strong>.
+                </p>
+              </div>
+
+              {/* Sample grid preview */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-slate-50/50">
+                <div className="px-4 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Teacher Preview (First 3 rows)
+                </div>
+                <div className="overflow-x-auto max-h-[160px]">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] text-slate-400 uppercase">
+                        <th className="px-4 py-2">Name</th>
+                        <th className="px-4 py-2">Email</th>
+                        <th className="px-4 py-2">Designation</th>
+                        <th className="px-4 py-2">Subject 1</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-[12px] text-slate-700">
+                      {parsedData.slice(0, 3).map((row, idx) => (
+                        <tr key={idx}>
+                          <td className="px-4 py-2 font-bold text-slate-900">
+                            {row['First Name']} {row['Last Name']}
+                          </td>
+                          <td className="px-4 py-2">{row['Email']}</td>
+                          <td className="px-4 py-2">{row['Designation'] || '—'}</td>
+                          <td className="px-4 py-2">{row['Subject 1'] || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[13px] cursor-pointer text-center"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmImport}
+                  className="flex-1 py-2.5 rounded-xl bg-[#2E5BFF] text-white hover:bg-blue-600 font-semibold text-[13px] cursor-pointer text-center shadow-md shadow-blue-500/10"
+                >
+                  Confirm and Upload
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: PROCESSING & ERROR RESOLUTION */}
+          {step === 3 && (
+            <div className="space-y-6">
+              {isProcessing ? (
+                <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                  <RefreshCw className="w-8 h-8 text-[#2E5BFF] animate-spin" />
+                  <div className="text-center">
+                    <p className="text-[14px] font-bold text-slate-900">Processing Bulk Import</p>
+                    <p className="text-[11px] text-slate-400 font-semibold mt-1">Creating Staff profiles and mapping qualifications...</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Results Overview */}
+                  <div className="text-center space-y-2">
+                    <span className="text-[32px] block">
+                      {successCount === parsedData.length ? '✅' : '⚠️'}
+                    </span>
+                    <h3 className="text-[16px] font-bold text-slate-900">
+                      {successCount === parsedData.length ? 'Import Complete' : 'Import Partially Completed'}
+                    </h3>
+                    <p className="text-[13px] text-slate-600">
+                      Successfully Imported: <strong>{successCount}</strong> / {parsedData.length} records.
+                    </p>
+                  </div>
+
+                  {/* Errors log box */}
+                  {errors.length > 0 && (
+                    <div className="border border-rose-200 rounded-xl bg-rose-50/50 p-4 space-y-2">
+                      <div className="text-[12px] font-bold text-rose-800 flex items-center gap-1.5 border-b border-rose-100 pb-2">
+                        <AlertCircle className="w-4 h-4" />
+                        Errors Encountered ({errors.length}):
+                      </div>
+                      <ul className="text-[11px] text-rose-700 font-mono space-y-1 max-h-[120px] overflow-y-auto pl-4 list-disc">
+                        {errors.map((err, i) => (
+                          <li key={i}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="pt-4 border-t border-slate-100 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-6 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold text-[13px] cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
