@@ -1,12 +1,78 @@
-import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { Role, PaymentStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
-export class StudentsService {
+export class StudentsService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
+
+  async onModuleInit() {
+    try {
+      // Find all students with missing or invalid roll numbers
+      const students = await this.prisma.studentProfile.findMany({
+        where: {
+          OR: [
+            { rollNo: null },
+            { rollNo: '' },
+            { rollNo: 'N/A' },
+            { rollNo: 'null' }
+          ]
+        },
+        include: {
+          classSection: true
+        }
+      });
+
+      if (students.length === 0) return;
+
+      console.log(`[RollNo Bootstrapper] Auto-assigning roll numbers for ${students.length} students...`);
+
+      // Group students by ClassSection
+      const groups: Record<string, typeof students> = {};
+      for (const s of students) {
+        if (!s.classSectionId) continue;
+        if (!groups[s.classSectionId]) {
+          groups[s.classSectionId] = [];
+        }
+        groups[s.classSectionId].push(s);
+      }
+
+      for (const [classSectionId, list] of Object.entries(groups)) {
+        // Get all current valid roll numbers for this class section
+        const existing = await this.prisma.studentProfile.findMany({
+          where: {
+            classSectionId,
+            NOT: [
+              { rollNo: null },
+              { rollNo: '' },
+              { rollNo: 'N/A' },
+              { rollNo: 'null' }
+            ]
+          },
+          select: { rollNo: true }
+        });
+
+        const parsedInts = existing
+          .map(s => parseInt(s.rollNo || '', 10))
+          .filter(val => !isNaN(val));
+
+        let currentNext = parsedInts.length > 0 ? Math.max(...parsedInts) + 1 : 1;
+
+        for (const student of list) {
+          await this.prisma.studentProfile.update({
+            where: { id: student.id },
+            data: { rollNo: String(currentNext) }
+          });
+          currentNext++;
+        }
+      }
+      console.log('[RollNo Bootstrapper] Successfully completed roll number auto-generation bootup hook.');
+    } catch (err) {
+      console.error('[RollNo Bootstrapper] Failed to run roll number bootstrapping hook:', err);
+    }
+  }
 
   private getTenantId(): string {
     const tenantId = TenantContext.getTenantId();
@@ -67,10 +133,27 @@ export class StudentsService {
         },
       });
 
+      let finalRollNo = data.rollNo ? String(data.rollNo).trim() : '';
+      if (classSectionId) {
+        const existingStudents = await tx.studentProfile.findMany({
+          where: { classSectionId, tenantId },
+          select: { rollNo: true }
+        });
+        const rollNumbersSet = new Set(existingStudents.map(s => s.rollNo?.trim()).filter(Boolean));
+
+        if (!finalRollNo || rollNumbersSet.has(finalRollNo)) {
+          const parsedInts = existingStudents
+            .map(s => parseInt(s.rollNo || '', 10))
+            .filter(val => !isNaN(val));
+          const nextRoll = parsedInts.length > 0 ? Math.max(...parsedInts) + 1 : 1;
+          finalRollNo = String(nextRoll);
+        }
+      }
+
       const profile = await tx.studentProfile.create({
         data: {
           userId: user.id,
-          rollNo: data.rollNo,
+          rollNo: finalRollNo || null,
           fatherName: data.fatherName,
           motherName: data.motherName,
           aadharNo: data.aadharNo,
@@ -341,10 +424,25 @@ export class StudentsService {
             }
           });
 
+          let finalRollNo = rollNo ? String(rollNo).trim() : '';
+          const existingInCS = await tx.studentProfile.findMany({
+            where: { classSectionId: matchedClassSection.id, tenantId },
+            select: { rollNo: true }
+          });
+          const existingRolls = new Set(existingInCS.map(s => s.rollNo?.trim()).filter(Boolean));
+
+          if (!finalRollNo || existingRolls.has(finalRollNo)) {
+            const parsedInts = existingInCS
+              .map(s => parseInt(s.rollNo || '', 10))
+              .filter(val => !isNaN(val));
+            const nextRoll = parsedInts.length > 0 ? Math.max(...parsedInts) + 1 : 1;
+            finalRollNo = String(nextRoll);
+          }
+
           const profile = await tx.studentProfile.create({
             data: {
               userId: user.id,
-              rollNo: rollNo ? String(rollNo) : null,
+              rollNo: finalRollNo || null,
               fatherName,
               motherName,
               aadharNo: aadharNo ? String(aadharNo) : null,
@@ -561,9 +659,21 @@ export class StudentsService {
           });
         }
 
+        const existingInCS = await tx.studentProfile.findMany({
+          where: { classSectionId: targetClassSection.id, tenantId },
+          select: { rollNo: true }
+        });
+        const parsedInts = existingInCS
+          .map(s => parseInt(s.rollNo || '', 10))
+          .filter(val => !isNaN(val));
+        const nextRoll = parsedInts.length > 0 ? Math.max(...parsedInts) + 1 : 1;
+
         await tx.studentProfile.update({
           where: { id: studentId },
-          data: { classSectionId: targetClassSection.id }
+          data: { 
+            classSectionId: targetClassSection.id,
+            rollNo: String(nextRoll)
+          }
         });
 
         const oldInvoices = await tx.invoice.findMany({
