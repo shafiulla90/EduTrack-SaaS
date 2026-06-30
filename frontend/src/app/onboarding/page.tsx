@@ -30,6 +30,7 @@ export default function OnboardingRouterPage() {
         // Clear corrupt storage and send to login
         localStorage.removeItem('token');
         localStorage.removeItem('tenantId');
+        localStorage.removeItem('userPhone');
         router.push('/auth/login');
       }
     };

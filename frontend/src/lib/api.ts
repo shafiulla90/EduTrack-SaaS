@@ -45,6 +45,7 @@ api.interceptors.response.use(
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
         localStorage.removeItem('tenantId');
+        localStorage.removeItem('userPhone');
         // Prevent redirect loop if already on login, otp, or onboarding pages
         const path = window.location.pathname;
         if (!path.includes('/auth/login') && !path.includes('/auth/otp') && !path.includes('/register-school')) {

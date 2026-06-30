@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Phone, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTenant } from '../../providers/TenantContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refresh } = useTenant();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,6 +22,43 @@ export default function LoginPage() {
     if (!cleanedPhone || cleanedPhone.length < 10) {
       setError('Please enter a valid 10-digit mobile number');
       return;
+    }
+
+    // Check if session is already active for this phone number
+    const cachedToken = localStorage.getItem('token');
+    const cachedTenant = localStorage.getItem('tenantId');
+    const cachedPhone = localStorage.getItem('userPhone');
+
+    if (cachedToken && cachedTenant && cachedPhone) {
+      const normCleaned = cleanedPhone.slice(-10);
+      const normCached = cachedPhone.replace(/\D/g, '').slice(-10);
+
+      if (normCleaned === normCached) {
+        setLoading(true);
+        try {
+          // Verify token validity by calling profile endpoint
+          await api.get('/auth/profile', {
+            headers: {
+              'Authorization': `Bearer ${cachedToken}`
+            }
+          });
+          // Session is valid, load tenant branding and go directly to dashboard
+          try {
+            await refresh();
+          } catch (e) {
+            console.error('Failed to pre-fetch school profile:', e);
+          }
+          router.push('/dashboard');
+          return;
+        } catch (err) {
+          // Token is expired or invalid, clear cache and proceed to normal OTP flow
+          localStorage.removeItem('token');
+          localStorage.removeItem('tenantId');
+          localStorage.removeItem('userPhone');
+        } finally {
+          setLoading(false);
+        }
+      }
     }
 
     setLoading(true);

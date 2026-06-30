@@ -71,6 +71,9 @@ function OtpContent() {
         // Store JWT token and Tenant ID in local storage
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('tenantId', data.user.tenantId);
+        if (data.user.phone) {
+          localStorage.setItem('userPhone', data.user.phone);
+        }
         
         // Fetch tenant details immediately to verify branding is ready
         try {
