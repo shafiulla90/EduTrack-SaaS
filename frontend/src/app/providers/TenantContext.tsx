@@ -92,6 +92,45 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     fetchTenantData();
   }, [token]);
 
+  // Background polling to sync data dynamically across multiple users
+  useEffect(() => {
+    if (!token) return;
+
+    let previousStats: any = null;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await api.get('/tenant/setup-status');
+        const data = response.data;
+        
+        // If stats changed, trigger a local custom event dispatch
+        // to update all listening pages automatically.
+        if (previousStats) {
+          const statsChanged = 
+            data.classesCount !== previousStats.classesCount ||
+            data.teachersCount !== previousStats.teachersCount ||
+            data.studentsCount !== previousStats.studentsCount ||
+            data.completionPercentage !== previousStats.completionPercentage;
+            
+          if (statsChanged) {
+            console.log('[TenantContext] Stats changed in DB, dispatching updates!');
+            setSetupStats(data);
+            const { dispatchSchoolSetupUpdated } = await import('@/lib/events');
+            dispatchSchoolSetupUpdated();
+          }
+        } else {
+          // Initialize first comparison baseline
+          setSetupStats(data);
+        }
+        previousStats = data;
+      } catch (err) {
+        console.error('Failed background sync of tenant data:', err);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [token]);
+
   // Use the centralized school-setup-updated listener
   useSchoolSetupUpdate(fetchTenantData);
 

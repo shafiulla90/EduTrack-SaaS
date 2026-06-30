@@ -1233,10 +1233,17 @@ export default function TeacherClassManagement() {
               {/* LEFT: Teacher Workload Panel */}
               <div className="panel">
                 <div className="panel-header">
-                  <div className="panel-title-row">
+                  <div className="panel-title-row w-full flex items-center">
                     <span className="panel-accent panel-accent-blue"></span>
                     <h3 className="panel-title">Teacher Workload</h3>
                     <span className="panel-badge">{teachers.length}</span>
+                    <button 
+                      onClick={() => setShowTeacherForm(true)}
+                      className="ml-auto p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg flex items-center justify-center cursor-pointer transition-all border border-blue-100"
+                      title="Add Teacher"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                    </button>
                   </div>
                   <div className="panel-searchbox">
                     <Search className="w-3.5 h-3.5 text-slate-400" />
@@ -1438,10 +1445,17 @@ export default function TeacherClassManagement() {
               {/* RIGHT: Class Workload Panel */}
               <div className="panel">
                 <div className="panel-header">
-                  <div className="panel-title-row">
+                  <div className="panel-title-row w-full flex items-center">
                     <span className="panel-accent panel-accent-green"></span>
                     <h3 className="panel-title">Class Workload</h3>
                     <span className="panel-badge panel-badge-green">{classes.length}</span>
+                    <button 
+                      onClick={enterSetupWizard}
+                      className="ml-auto p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg flex items-center justify-center cursor-pointer transition-all border border-emerald-100"
+                      title="Add Class Section"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                    </button>
                   </div>
                   <div className="panel-searchbox">
                     <Search className="w-3.5 h-3.5 text-slate-400" />

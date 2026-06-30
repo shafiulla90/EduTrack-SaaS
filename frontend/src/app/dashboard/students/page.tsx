@@ -8,6 +8,7 @@ import {
   Percent
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useSchoolSetupUpdate } from '@/lib/events';
 
 interface Student {
   id: string;
@@ -95,6 +96,8 @@ export default function StudentsDirectory() {
     loadFilterOptions();
     loadStudents();
   }, []);
+
+  useSchoolSetupUpdate(loadStudents);
 
   // Filters calculation
   const filteredStudents = useMemo(() => {

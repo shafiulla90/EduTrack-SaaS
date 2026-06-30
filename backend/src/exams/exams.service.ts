@@ -89,12 +89,107 @@ export class ExamsService {
   }
 
   async getExamTypes() {
-    return [
-      'First Term Mid-Term',
-      'Quarterly Session Exams',
-      'Final Semester Evaluation',
-      'Unit Test',
-    ];
+    const tenantId = this.getTenantId();
+    let types = await this.prisma.examType.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (types.length === 0) {
+      const defaults = [
+        'Unit Test',
+        'Monthly Test',
+        'Quarterly Exam',
+        'Half-Yearly Exam',
+        'Annual Exam',
+        'Pre-Final Exam'
+      ];
+      await this.prisma.examType.createMany({
+        data: defaults.map(name => ({ name, tenantId })),
+      });
+      types = await this.prisma.examType.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    return types.map(t => t.name);
+  }
+
+  async getExamTypesManage() {
+    const tenantId = this.getTenantId();
+    let types = await this.prisma.examType.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (types.length === 0) {
+      const defaults = [
+        'Unit Test',
+        'Monthly Test',
+        'Quarterly Exam',
+        'Half-Yearly Exam',
+        'Annual Exam',
+        'Pre-Final Exam'
+      ];
+      await this.prisma.examType.createMany({
+        data: defaults.map(name => ({ name, tenantId })),
+      });
+      types = await this.prisma.examType.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    return types;
+  }
+
+  async createExamType(name: string) {
+    const tenantId = this.getTenantId();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Exam type name cannot be empty');
+    }
+    const existing = await this.prisma.examType.findFirst({
+      where: { name: { equals: trimmed, mode: 'insensitive' }, tenantId }
+    });
+    if (existing) {
+      throw new BadRequestException('Exam type already exists');
+    }
+    return this.prisma.examType.create({
+      data: { name: trimmed, tenantId }
+    });
+  }
+
+  async updateExamType(id: string, name: string) {
+    const tenantId = this.getTenantId();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Exam type name cannot be empty');
+    }
+    const examType = await this.prisma.examType.findUnique({ where: { id } });
+    if (!examType || examType.tenantId !== tenantId) {
+      throw new BadRequestException('Exam type not found');
+    }
+    const existing = await this.prisma.examType.findFirst({
+      where: { name: { equals: trimmed, mode: 'insensitive' }, tenantId, id: { not: id } }
+    });
+    if (existing) {
+      throw new BadRequestException('Another exam type with this name already exists');
+    }
+    return this.prisma.examType.update({
+      where: { id },
+      data: { name: trimmed }
+    });
+  }
+
+  async deleteExamType(id: string) {
+    const tenantId = this.getTenantId();
+    const examType = await this.prisma.examType.findUnique({ where: { id } });
+    if (!examType || examType.tenantId !== tenantId) {
+      throw new BadRequestException('Exam type not found');
+    }
+    return this.prisma.examType.delete({ where: { id } });
   }
 
   // ── MARKS ENTRY & PROCESSING ───────────────────────────────────────────────

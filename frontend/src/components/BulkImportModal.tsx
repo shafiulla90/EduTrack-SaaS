@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Download, Upload, CheckCircle, AlertCircle, RefreshCw, X, FileText, ChevronRight } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface BulkImportModalProps {
   isOpen: boolean;
@@ -102,56 +103,30 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
     reader.readAsText(file);
   };
 
-  // Run mock validations on confirm
-  const handleConfirmImport = () => {
+  // Run validations and upload via backend API
+  const handleConfirmImport = async () => {
     setStep(3);
     setIsProcessing(true);
     setErrors([]);
 
-    setTimeout(() => {
-      let successes = 0;
-      const errorLogs: string[] = [];
-
-      parsedData.forEach((row, index) => {
-        const rowNum = index + 2; // 1-indexed header is row 1
-        const firstName = row['First Name'];
-        const email = row['Email'];
-        const aadhar = row['Aadhar No'];
-        const studentClass = row['Class'];
-
-        // Validation 1: Required First Name & Class
-        if (!firstName) {
-          errorLogs.push(`Row ${rowNum}: First Name is missing.`);
-          return;
-        }
-        if (!studentClass) {
-          errorLogs.push(`Row ${rowNum}: Class parameter is required.`);
-          return;
-        }
-
-        // Validation 2: Email format
-        if (email && !email.includes('@')) {
-          errorLogs.push(`Row ${rowNum}: Invalid email format "${email}".`);
-          return;
-        }
-
-        // Validation 3: Aadhar Length
-        if (aadhar && aadhar.length !== 12) {
-          errorLogs.push(`Row ${rowNum}: Aadhar No must be exactly 12 digits (found: ${aadhar}).`);
-          return;
-        }
-
-        successes++;
-      });
-
-      setSuccessCount(successes);
-      setErrors(errorLogs);
-      setIsProcessing(false);
-
-      if (successes > 0) {
-        onImportSuccess(successes);
+    try {
+      const response = await api.post('/students/import', { students: parsedData });
+      const { successCount, errors } = response.data;
+      
+      setSuccessCount(successCount || 0);
+      setErrors(errors || []);
+      
+      if (successCount > 0) {
+        onImportSuccess(successCount);
       }
-    }, 2000); // Simulate backend loading delay
+    } catch (err: any) {
+      console.error('Students bulk import error:', err);
+      const errMsg = err.response?.data?.message || err.message || 'Server failed to process bulk import';
+      setErrors([`Critical Error: ${errMsg}`]);
+      setSuccessCount(0);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleBack = () => {

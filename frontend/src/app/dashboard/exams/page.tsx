@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Award, FileText, CheckCircle, Save, Plus, ArrowRight, X,
-  PlusCircle, MinusCircle, Info, TrendingUp, Sparkles, RefreshCw
+  PlusCircle, MinusCircle, Info, TrendingUp, Sparkles, RefreshCw, Settings
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -46,6 +46,77 @@ export default function ExamsAndMarksPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Manage Exam Types State
+  const [isManageTypesOpen, setIsManageTypesOpen] = useState(false);
+  const [manageTypesList, setManageTypesList] = useState<any[]>([]);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
+  const [editingTypeName, setEditingTypeName] = useState('');
+  const [isSavingType, setIsSavingType] = useState(false);
+  const [typeError, setTypeError] = useState('');
+
+  // Fetch types for management modal
+  const fetchManageTypes = async () => {
+    try {
+      const res = await api.get('/exams/exam-types/manage');
+      setManageTypesList(res.data);
+    } catch (err) {
+      console.error('Error fetching manage exam types:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isManageTypesOpen) {
+      fetchManageTypes();
+    }
+  }, [isManageTypesOpen]);
+
+  const handleCreateType = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTypeError('');
+    if (!newTypeName.trim()) return;
+    setIsSavingType(true);
+    try {
+      await api.post('/exams/exam-types', { name: newTypeName });
+      setNewTypeName('');
+      await fetchManageTypes();
+      await fetchMetadata(); // Refresh parent dropdown options!
+    } catch (err: any) {
+      setTypeError(err.response?.data?.message || 'Failed to create exam type.');
+    } finally {
+      setIsSavingType(false);
+    }
+  };
+
+  const handleUpdateType = async (id: string) => {
+    setTypeError('');
+    if (!editingTypeName.trim()) return;
+    setIsSavingType(true);
+    try {
+      await api.put(`/exams/exam-types/${id}`, { name: editingTypeName });
+      setEditingTypeId(null);
+      setEditingTypeName('');
+      await fetchManageTypes();
+      await fetchMetadata(); // Refresh parent dropdown options!
+    } catch (err: any) {
+      setTypeError(err.response?.data?.message || 'Failed to update exam type.');
+    } finally {
+      setIsSavingType(false);
+    }
+  };
+
+  const handleDeleteType = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this exam type? This may affect records using it.')) return;
+    setTypeError('');
+    try {
+      await api.delete(`/exams/exam-types/${id}`);
+      await fetchManageTypes();
+      await fetchMetadata(); // Refresh parent dropdown options!
+    } catch (err: any) {
+      setTypeError(err.response?.data?.message || 'Failed to delete exam type.');
+    }
+  };
 
   useEffect(() => {
     fetchMetadata();
@@ -197,14 +268,23 @@ export default function ExamsAndMarksPage() {
             Grade and evaluate student performance in specific examinations.
           </p>
         </div>
-        <button
-          onClick={handleSaveMarks}
-          disabled={roster.length === 0 || isLoading}
-          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white font-semibold text-[13px] flex items-center gap-2 shadow-xs transition-colors"
-        >
-          <Save className="w-4 h-4" />
-          Save Scoresheet
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setIsManageTypesOpen(true)}
+            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+          >
+            <Settings className="w-4 h-4 text-slate-500" />
+            Manage Exam Types
+          </button>
+          <button
+            onClick={handleSaveMarks}
+            disabled={roster.length === 0 || isLoading}
+            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white font-semibold text-[13px] flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+          >
+            <Save className="w-4 h-4" />
+            Save Scoresheet
+          </button>
+        </div>
       </div>
 
       {saveSuccess && (
@@ -395,6 +475,116 @@ export default function ExamsAndMarksPage() {
           )}
         </div>
       </div>
+
+      {/* Manage Exam Types Modal */}
+      {isManageTypesOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in space-y-0 text-slate-800">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-blue-600" />
+                <h2 className="text-[16px] font-bold text-slate-900">Manage Exam Types</h2>
+              </div>
+              <button
+                onClick={() => setIsManageTypesOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-[18px] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {typeError && (
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-700 text-xs rounded-xl font-semibold">
+                  {typeError}
+                </div>
+              )}
+
+              {/* Create Form */}
+              <form onSubmit={handleCreateType} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. Pre-Final Exam"
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-600"
+                  disabled={isSavingType}
+                />
+                <button
+                  type="submit"
+                  disabled={isSavingType || !newTypeName.trim()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl font-bold text-xs cursor-pointer"
+                >
+                  Add Type
+                </button>
+              </form>
+
+              {/* List of Types */}
+              <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-[220px] overflow-y-auto bg-slate-50/20">
+                {manageTypesList.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-xs italic">
+                    Loading exam types...
+                  </div>
+                ) : (
+                  manageTypesList.map((t) => (
+                    <div key={t.id} className="p-3 flex items-center justify-between gap-3 text-xs font-semibold">
+                      {editingTypeId === t.id ? (
+                        <div className="flex-1 flex gap-2">
+                          <input
+                            type="text"
+                            value={editingTypeName}
+                            onChange={(e) => setEditingTypeName(e.target.value)}
+                            className="flex-1 bg-white border border-slate-350 rounded-lg px-2.5 py-1 text-xs text-slate-800 font-semibold focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateType(t.id)}
+                            className="text-emerald-600 hover:text-emerald-700 cursor-pointer font-bold"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTypeId(null)}
+                            className="text-slate-400 hover:text-slate-500 cursor-pointer font-bold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="text-slate-800">{t.name}</span>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingTypeId(t.id);
+                                setEditingTypeName(t.name);
+                              }}
+                              className="text-slate-500 hover:text-blue-600 cursor-pointer font-bold"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteType(t.id)}
+                              className="text-slate-400 hover:text-rose-600 cursor-pointer font-bold"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

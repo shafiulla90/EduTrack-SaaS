@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import BulkImportModal from '@/components/BulkImportModal';
 import { api } from '@/lib/api';
-import { useSchoolSetupUpdate } from '@/lib/events';
+import { useSchoolSetupUpdate, dispatchSchoolSetupUpdated } from '@/lib/events';
 
 export default function DashboardOverview() {
   const [admissionsLimit, setAdmissionsLimit] = useState(5);
@@ -597,6 +597,7 @@ export default function DashboardOverview() {
         onClose={() => setIsImportOpen(false)}
         onImportSuccess={(count) => {
           alert(`Successfully imported ${count} student records!`);
+          dispatchSchoolSetupUpdated();
         }}
       />
     </div>

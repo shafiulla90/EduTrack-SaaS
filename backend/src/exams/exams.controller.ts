@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Query, UseGuards, Param } from '@nestjs/common';
 import { ExamsService } from './exams.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -35,6 +35,26 @@ export class ExamsController {
   @Get('exam-types')
   async getExamTypes() {
     return this.examsService.getExamTypes();
+  }
+
+  @Get('exam-types/manage')
+  async getExamTypesManage() {
+    return this.examsService.getExamTypesManage();
+  }
+
+  @Post('exam-types')
+  async createExamType(@Body('name') name: string) {
+    return this.examsService.createExamType(name);
+  }
+
+  @Put('exam-types/:id')
+  async updateExamType(@Param('id') id: string, @Body('name') name: string) {
+    return this.examsService.updateExamType(id, name);
+  }
+
+  @Delete('exam-types/:id')
+  async deleteExamType(@Param('id') id: string) {
+    return this.examsService.deleteExamType(id);
   }
 
   @Get('marks-entry')
