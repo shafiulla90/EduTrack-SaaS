@@ -351,7 +351,7 @@ function AttendanceDashboardContent() {
         className: group.className,
         section: group.section,
         totalCount: group.studentsList.length,
-        presentDisplay: isSubmitted ? String(presentCount) : 'N/A',
+        presentDisplay: isSubmitted ? String(presentCount) : '0',
         absentCount: absentees.length,
         attendanceRate: rate,
         absentees: absentees.map(s => ({ id: s.id, name: s.name })),
