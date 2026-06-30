@@ -235,6 +235,10 @@ export class StudentsService {
       include: { class: true, section: true }
     });
 
+    const activeYear = await this.prisma.academicYear.findFirst({
+      where: { tenantId, isActive: true }
+    });
+
     const defaultPassword = 'Welcome@123';
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
@@ -257,22 +261,52 @@ export class StudentsService {
           continue;
         }
 
-        // Resolve class & section linkages
-        const matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase().trim());
-        const matchedSection = sections.find(s => s.name.toLowerCase() === sectionName.toLowerCase().trim());
+        // Resolve class name
+        let matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase().trim());
+        if (!matchedClass && activeYear) {
+          matchedClass = await this.prisma.class.create({
+            data: {
+              name: className.trim(),
+              academicYearId: activeYear.id,
+              tenantId
+            }
+          });
+          classes.push(matchedClass);
+        }
 
-        if (!matchedClass || !matchedSection) {
-          errors.push(`Row ${i + 1}: Class "${className}" or Section "${sectionName}" does not exist`);
+        if (!matchedClass) {
+          errors.push(`Row ${i + 1}: Class "${className}" could not be resolved or created (No active academic year defined)`);
           continue;
         }
 
-        const matchedClassSection = classSections.find(
+        // Resolve section name
+        let matchedSection = sections.find(s => s.name.toLowerCase() === sectionName.toLowerCase().trim());
+        if (!matchedSection) {
+          matchedSection = await this.prisma.section.create({
+            data: {
+              name: sectionName.trim(),
+              tenantId
+            }
+          });
+          sections.push(matchedSection);
+        }
+
+        // Resolve classSection mapping
+        let matchedClassSection = classSections.find(
           cs => cs.classId === matchedClass.id && cs.sectionId === matchedSection.id
         );
 
         if (!matchedClassSection) {
-          errors.push(`Row ${i + 1}: Junction mapping between Class "${className}" and Section "${sectionName}" not found`);
-          continue;
+          matchedClassSection = await this.prisma.classSection.create({
+            data: {
+              classId: matchedClass.id,
+              sectionId: matchedSection.id,
+              tenantId,
+              strength: 0
+            },
+            include: { class: true, section: true }
+          });
+          classSections.push(matchedClassSection);
         }
 
         const emailLower = email.toLowerCase().trim();
@@ -282,16 +316,27 @@ export class StudentsService {
           continue;
         }
 
+        // Check if phone number is already registered to prevent Prisma user.create unique constraint crash
+        const normalizedPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
+        let finalPhone = normalizedPhone;
+        if (normalizedPhone) {
+          const phoneExists = await this.prisma.user.findFirst({
+            where: { phone: normalizedPhone }
+          });
+          if (phoneExists) {
+            finalPhone = null; // Bypassed duplicate phone gracefully to allow student import success
+          }
+        }
+
         // Perform user creation transaction
         await this.prisma.$transaction(async (tx) => {
-          const normalizedPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
           const user = await tx.user.create({
             data: {
               email: emailLower,
               name: `${firstName || ''} ${lastName}`.trim(),
               passwordHash,
               role: Role.STUDENT,
-              phone: normalizedPhone,
+              phone: finalPhone,
               tenantId,
             }
           });
