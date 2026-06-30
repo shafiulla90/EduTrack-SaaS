@@ -422,10 +422,17 @@ function AttendanceEntryContent() {
               
               {/* Today's status pill */}
               <div className="flex flex-wrap justify-center gap-2 mt-3">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-teal-50 border border-teal-200 text-teal-700 shadow-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse"></span>
-                  Today's attendance is currently pending
-                </span>
+                {recentSubmissions.length === 0 || recentSubmissions.some(s => s.id === 'pending') ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-50 border border-amber-200 text-amber-700 shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    Today's attendance is currently pending
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Today's attendance is submitted
+                  </span>
+                )}
               </div>
             </div>
 
