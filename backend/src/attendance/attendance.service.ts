@@ -346,7 +346,7 @@ export class AttendanceService {
       throw new BadRequestException('Class and Section names are required.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Find or create Class record
       let cls = await tx.class.findFirst({
         where: {
@@ -409,6 +409,33 @@ export class AttendanceService {
         });
       }
 
+      // Resolve a valid teacher (StaffProfile ID) to avoid foreign key constraint crashes
+      let finalTeacherId = teacherId;
+      if (!finalTeacherId) {
+        const firstStaff = await tx.staffProfile.findFirst({
+          where: { tenantId }
+        });
+        if (firstStaff) {
+          finalTeacherId = firstStaff.id;
+        } else {
+          throw new BadRequestException('No teacher/staff profile exists for this school. Please register a teacher first.');
+        }
+      } else {
+        const staffExists = await tx.staffProfile.findUnique({
+          where: { id: finalTeacherId }
+        });
+        if (!staffExists) {
+          const firstStaff = await tx.staffProfile.findFirst({
+            where: { tenantId }
+          });
+          if (firstStaff) {
+            finalTeacherId = firstStaff.id;
+          } else {
+            throw new BadRequestException('Teacher profile not found.');
+          }
+        }
+      }
+
       // 4. Duplicate prevention: find duplicate sessions and delete all except first
       const existingSessions = await tx.attendanceSession.findMany({
         where: {
@@ -425,7 +452,7 @@ export class AttendanceService {
           data: {
             classSectionId: classSection.id,
             date,
-            takenById: teacherId,
+            takenById: finalTeacherId,
             presentCount,
             absentCount,
             totalStudents,
@@ -452,7 +479,7 @@ export class AttendanceService {
             presentCount,
             absentCount,
             totalStudents,
-            takenById: teacherId,
+            takenById: finalTeacherId,
           },
         });
       }
@@ -492,8 +519,11 @@ export class AttendanceService {
         });
       }
 
-      return this.getSessionData(classVal, sectionVal, data.dateStr || data.date);
+      return { classVal, sectionVal, dateStr: data.dateStr || data.date };
     }, { timeout: 25000 });
+
+    // Run outside the database write lock transaction to avoid transaction deadlocks
+    return this.getSessionData(result.classVal, result.sectionVal, result.dateStr);
   }
 
   // Salesforce parity: get bundled attendance data for reports

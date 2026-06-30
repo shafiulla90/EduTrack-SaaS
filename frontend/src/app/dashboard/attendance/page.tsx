@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 interface Teacher {
   id: string;
@@ -172,6 +173,7 @@ export default function AttendancePage() {
       });
 
       setIsSuccess(true);
+      dispatchSchoolSetupUpdated();
     } catch (err) {
       console.error('Failed to save attendance:', err);
       alert('Error occurred while saving attendance records.');

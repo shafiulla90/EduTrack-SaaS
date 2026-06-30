@@ -9,6 +9,7 @@ import {
   Search, Lock, X, ChevronRight, BarChart3, Clock 
 } from 'lucide-react';
 import Link from 'next/link';
+import { dispatchSchoolSetupUpdated } from '@/lib/events';
 
 interface Teacher {
   id: string;
@@ -343,6 +344,7 @@ function AttendanceEntryContent() {
         setSessionExists(res.data.sessionExists);
         setIsSuccess(true);
         fetchRecentSubmissions();
+        dispatchSchoolSetupUpdated();
       }
     } catch (err: any) {
       console.error('Save Error:', err);

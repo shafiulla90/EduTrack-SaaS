@@ -1,10 +1,24 @@
 // src/lib/events.ts
 export const SCHOOL_SETUP_UPDATED = 'school-setup-updated';
 
+const syncChannel = typeof window !== 'undefined' ? new BroadcastChannel('edutrack-sync') : null;
+
+if (syncChannel) {
+  syncChannel.onmessage = (event) => {
+    if (event.data === SCHOOL_SETUP_UPDATED) {
+      const ev = new CustomEvent(SCHOOL_SETUP_UPDATED);
+      window.dispatchEvent(ev);
+    }
+  };
+}
+
 /** Dispatch the school‑setup‑updated event */
 export const dispatchSchoolSetupUpdated = () => {
   const ev = new CustomEvent(SCHOOL_SETUP_UPDATED);
   window.dispatchEvent(ev);
+  if (syncChannel) {
+    syncChannel.postMessage(SCHOOL_SETUP_UPDATED);
+  }
 };
 
 /** Hook to register a listener that triggers a refetch callback */
