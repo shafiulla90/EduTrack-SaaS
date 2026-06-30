@@ -39,7 +39,7 @@ export default function StudentsDirectory() {
   // Selected student for Profile details (Full Page swap)
   const [activeStudent, setActiveStudent] = useState<Student | null>(null);
   const [activeStudentDetails, setActiveStudentDetails] = useState<any>(null);
-  const [selectedExamTab, setSelectedExamTab] = useState<'Unit Test' | 'Quarterly' | 'Final'>('Unit Test');
+  const [selectedExamTab, setSelectedExamTab] = useState<string>('Unit Test');
   const [expandedInvoices, setExpandedInvoices] = useState<Record<string, boolean>>({});
   const [expandedExams, setExpandedExams] = useState<Record<string, boolean>>({});
   const [tempDiscount, setTempDiscount] = useState<number>(0);
@@ -196,6 +196,12 @@ export default function StudentsDirectory() {
         }))
       });
 
+      if (exams.length > 0) {
+        setSelectedExamTab(exams[0].type || 'Unit Test');
+      } else {
+        setSelectedExamTab('Unit Test');
+      }
+
       setActiveStudent(student);
       setExpandedInvoices({});
       setExpandedExams({});
@@ -228,6 +234,19 @@ export default function StudentsDirectory() {
 
   // Detail rendering helpers
   const detailData = activeStudentDetails;
+
+  const dynamicExamTabs = useMemo(() => {
+    if (!detailData?.exams || detailData.exams.length === 0) {
+      return ['Unit Test', 'Quarterly', 'Final'];
+    }
+    const typesSet = new Set<string>();
+    detailData.exams.forEach((ex: any) => {
+      if (ex.type) typesSet.add(ex.type);
+    });
+    const list = Array.from(typesSet);
+    return list.length > 0 ? list : ['Unit Test', 'Quarterly', 'Final'];
+  }, [detailData]);
+
   const isPaidClear = activeStudent ? activeStudent.balanceDue <= 0 : false;
 
   // Recalculated values based on discount
@@ -743,15 +762,15 @@ export default function StudentsDirectory() {
                 
                 {/* Exam Category Tabs */}
                 <div className="flex border-b border-slate-100 gap-4 text-xs font-bold overflow-x-auto whitespace-nowrap scrollbar-none pb-0.5">
-                  {(['Unit Test', 'Quarterly', 'Final'] as const).map((tab) => (
+                  {dynamicExamTabs.map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setSelectedExamTab(tab)}
-                      className={`pb-2.5 transition-all border-b-2 ${
+                      className={`pb-2.5 transition-all border-b-2 uppercase ${
                         selectedExamTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'
                       }`}
                     >
-                      {tab.toUpperCase()}
+                      {tab}
                     </button>
                   ))}
                 </div>
