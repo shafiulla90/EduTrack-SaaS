@@ -390,4 +390,208 @@ export class DashboardService {
       chartData,
     };
   }
+
+  async getReportsSummary() {
+    const tenantId = this.getTenantId();
+
+    // 1. Enrollment Demographics (Student counts grouped by class)
+    const students = await this.prisma.studentProfile.findMany({
+      where: {
+        user: { tenantId, isActive: true }
+      },
+      include: {
+        user: { select: { createdAt: true } },
+        classSection: {
+          include: { class: true, section: true }
+        }
+      }
+    });
+
+    const classDistribution: Record<string, number> = {};
+    students.forEach(s => {
+      const className = s.classSection?.class.name || 'Unassigned';
+      classDistribution[className] = (classDistribution[className] || 0) + 1;
+    });
+
+    const timelineGroups: Record<string, number> = {};
+    students.forEach(s => {
+      const dateStr = s.user.createdAt.toISOString().slice(0, 7); // YYYY-MM
+      timelineGroups[dateStr] = (timelineGroups[dateStr] || 0) + 1;
+    });
+    const timeline = Object.entries(timelineGroups)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const demographics = {
+      totalStudents: students.length,
+      classDistribution,
+      timeline
+    };
+
+    // 2. Financial Statements (Paid revenue, outstanding balances, salaries paid)
+    const [invoices, expenses] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: { tenantId }
+      }),
+      this.prisma.expense.findMany({
+        where: { tenantId, status: 'PAID' }
+      })
+    ]);
+
+    let totalRevenue = 0;
+    let outstandingReceivables = 0;
+    invoices.forEach(inv => {
+      totalRevenue += Number(inv.paidAmount || 0);
+      outstandingReceivables += Number(inv.remainingBalance || 0);
+    });
+
+    let totalExpenses = 0;
+    expenses.forEach(exp => {
+      totalExpenses += Number(exp.amount || 0);
+    });
+
+    const financials = {
+      totalRevenue,
+      outstandingReceivables,
+      totalExpenses,
+      netCashflow: totalRevenue - totalExpenses
+    };
+
+    // 3. Grading Averages & Mark Distribution curve
+    const marks = await this.prisma.examMark.findMany({
+      where: { tenantId }
+    });
+
+    let totalMarksObtained = 0;
+    let passedCount = 0;
+    let failedCount = 0;
+    const distribution = {
+      failed: 0, // < 35
+      belowAverage: 0, // 35 - 60
+      average: 0, // 60 - 75
+      firstDivision: 0, // 75 - 90
+      highDistinction: 0 // 90 - 100
+    };
+
+    marks.forEach(m => {
+      const score = Number(m.marksObtained);
+      totalMarksObtained += score;
+
+      if (score < 35) {
+        failedCount++;
+        distribution.failed++;
+      } else {
+        passedCount++;
+        if (score >= 35 && score < 60) distribution.belowAverage++;
+        else if (score >= 60 && score < 75) distribution.average++;
+        else if (score >= 75 && score < 90) distribution.firstDivision++;
+        else if (score >= 90) distribution.highDistinction++;
+      }
+    });
+
+    const totalMarksEntries = marks.length;
+    const averageScore = totalMarksEntries > 0 ? (totalMarksObtained / totalMarksEntries) : 0;
+    const passRate = totalMarksEntries > 0 ? (passedCount / totalMarksEntries) * 100 : 0;
+
+    const grading = {
+      averageScore: Math.round(averageScore * 10) / 10,
+      passRate: Math.round(passRate * 10) / 10,
+      distribution
+    };
+
+    return {
+      demographics,
+      financials,
+      grading
+    };
+  }
+
+  async getDemographicsReport() {
+    const tenantId = this.getTenantId();
+    const students = await this.prisma.studentProfile.findMany({
+      where: { user: { tenantId, isActive: true } },
+      include: {
+        user: { select: { name: true, email: true, phone: true, createdAt: true } },
+        classSection: {
+          include: { class: true, section: true }
+        }
+      }
+    });
+
+    return students.map(s => ({
+      name: s.user.name,
+      email: s.user.email || 'N/A',
+      phone: s.user.phone || 'N/A',
+      class: s.classSection?.class.name || 'Unassigned',
+      section: s.classSection?.section.name || 'Unassigned',
+      rollNo: s.rollNo || 'N/A',
+      joiningDate: s.user.createdAt.toISOString().split('T')[0]
+    }));
+  }
+
+  async getCashflowsReport() {
+    const tenantId = this.getTenantId();
+    const [invoices, expenses] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: { tenantId },
+        include: { student: { include: { user: { select: { name: true } } } } }
+      }),
+      this.prisma.expense.findMany({
+        where: { tenantId, status: 'PAID' }
+      })
+    ]);
+
+    const txs: any[] = [];
+    invoices.forEach(inv => {
+      txs.push({
+        type: 'Fee Revenue',
+        name: inv.student?.user.name || 'Student Fee',
+        amount: Number(inv.paidAmount),
+        date: inv.invoiceDate.toISOString().split('T')[0],
+        status: inv.status
+      });
+      if (Number(inv.remainingBalance) > 0) {
+        txs.push({
+          type: 'Receivable Outstanding',
+          name: inv.student?.user.name || 'Student Fee',
+          amount: Number(inv.remainingBalance),
+          date: inv.dueDate.toISOString().split('T')[0],
+          status: 'UNPAID'
+        });
+      }
+    });
+
+    expenses.forEach(exp => {
+      txs.push({
+        type: 'School Expense',
+        name: exp.description || exp.category || 'Vendor Payment',
+        amount: -Number(exp.amount),
+        date: exp.date.toISOString().split('T')[0],
+        status: 'PAID'
+      });
+    });
+
+    return txs;
+  }
+
+  async getGradingReport() {
+    const tenantId = this.getTenantId();
+    const marks = await this.prisma.examMark.findMany({
+      where: { tenantId },
+      include: {
+        student: { include: { user: { select: { name: true } } } },
+        subject: { select: { name: true } },
+        exam: { select: { type: true } }
+      }
+    });
+
+    return marks.map(m => ({
+      studentName: m.student?.user.name || 'Student',
+      rollNo: m.student?.rollNo || 'N/A',
+      subject: m.subject?.name || 'Subject',
+      examType: m.exam?.type || 'Exam',
+      marksObtained: Number(m.marksObtained),
+      maxMarks: 100
+    }));
+  }
 }
