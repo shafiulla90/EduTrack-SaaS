@@ -443,6 +443,8 @@ export default function StudentsDirectory() {
                 <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
                   {filteredStudents.slice(0, 30).map((student) => {
                     const hasDue = student.balanceDue > 0;
+                    const totalFees = student.paidAmount + student.balanceDue;
+                    const paidPercentage = totalFees > 0 ? Math.round((student.paidAmount / totalFees) * 100) : 100;
                     return (
                       <tr key={student.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4">
@@ -474,7 +476,7 @@ export default function StudentsDirectory() {
                               : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                            {hasDue ? 'Pending Due' : 'Paid Clear'}
+                            {hasDue ? `Pending Due (${paidPercentage}%)` : 'Paid Clear (100%)'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -520,6 +522,8 @@ export default function StudentsDirectory() {
             <div className="block md:hidden divide-y divide-slate-100">
               {filteredStudents.slice(0, 30).map((student) => {
                 const hasDue = student.balanceDue > 0;
+                const totalFees = student.paidAmount + student.balanceDue;
+                const paidPercentage = totalFees > 0 ? Math.round((student.paidAmount / totalFees) * 100) : 100;
                 return (
                   <div key={student.id} className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
@@ -536,7 +540,7 @@ export default function StudentsDirectory() {
                           : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                        {hasDue ? 'Due' : 'Clear'}
+                        {hasDue ? `Due (${paidPercentage}%)` : 'Clear (100%)'}
                       </span>
                     </div>
 
