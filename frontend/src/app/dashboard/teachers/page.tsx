@@ -127,8 +127,40 @@ export default function TeacherClassManagement() {
   const [ttSelectedClassSectionId, setTtSelectedClassSectionId] = useState('');
   const [ttSelectedAcademicYear, setTtSelectedAcademicYear] = useState('');
   const [ttFrequency, setTtFrequency] = useState('Weekly');
-  const [ttStartDate, setTtStartDate] = useState('2026-06-01');
-  const [ttEndDate, setTtEndDate] = useState('2026-06-07');
+  const [ttDuration, setTtDuration] = useState<number>(1);
+  const [ttStartDate, setTtStartDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [ttEndDate, setTtEndDate] = useState('');
+
+  const calculateEndDate = (startDateStr: string, frequency: string, durationVal: number) => {
+    if (!startDateStr) return '';
+    const date = new Date(startDateStr);
+    if (isNaN(date.getTime())) return '';
+
+    const duration = Math.max(1, durationVal);
+
+    if (frequency === 'Daily' || frequency === 'Day') {
+      date.setDate(date.getDate() + duration);
+    } else if (frequency === 'Weekly') {
+      date.setDate(date.getDate() + (duration * 7));
+    } else if (frequency === 'Monthly' || frequency === 'Month') {
+      date.setMonth(date.getMonth() + duration);
+    } else if (frequency === 'Yearly' || frequency === 'Year') {
+      date.setFullYear(date.getFullYear() + duration);
+    }
+
+    return date.toISOString().split('T')[0];
+  };
+
+  // Recalculate End Date when Start Date, Frequency, or Duration changes
+  useEffect(() => {
+    const computedEnd = calculateEndDate(ttStartDate, ttFrequency, ttDuration);
+    if (computedEnd) {
+      setTtEndDate(computedEnd);
+    }
+  }, [ttStartDate, ttFrequency, ttDuration]);
   const [showTimetableGrid, setShowTimetableGrid] = useState(false);
   const [timetableData, setTimetableData] = useState<Record<string, { subject: string; teacherId: string }>>({});
   const [classSubjects, setClassSubjects] = useState<any[]>([]);
@@ -2124,7 +2156,7 @@ export default function TeacherClassManagement() {
 
           {/* Timetable Configuration Filters Card */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Class Section *</label>
                 <select
@@ -2156,13 +2188,33 @@ export default function TeacherClassManagement() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Frequency *</label>
                 <select
                   value={ttFrequency}
-                  onChange={e => { setTtFrequency(e.target.value); setShowTimetableGrid(false); }}
+                  onChange={e => {
+                    setTtFrequency(e.target.value);
+                    setTtStartDate(new Date().toISOString().split('T')[0]); // Set to current date
+                    setShowTimetableGrid(false);
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none"
                 >
-                  <option>Weekly</option>
-                  <option>Yearly</option>
-                  <option>Daily</option>
+                  <option value="Daily">Daily</option>
+                  <option value="Weekly">Weekly</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Yearly">Yearly</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Duration *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={ttDuration}
+                  onChange={e => {
+                    const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                    setTtDuration(val);
+                    setShowTimetableGrid(false);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none"
+                  placeholder="e.g. 1, 6, 12"
+                />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Start Date *</label>
@@ -2178,7 +2230,17 @@ export default function TeacherClassManagement() {
                 <input
                   type="date"
                   value={ttEndDate}
-                  onChange={e => { setTtEndDate(e.target.value); setShowTimetableGrid(false); }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val && ttStartDate && val <= ttStartDate) {
+                      showToast('End Date must be after Start Date.', 'warning');
+                      const computedEnd = calculateEndDate(ttStartDate, ttFrequency, ttDuration);
+                      setTtEndDate(computedEnd);
+                    } else {
+                      setTtEndDate(val);
+                      setShowTimetableGrid(false);
+                    }
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none"
                 />
               </div>
