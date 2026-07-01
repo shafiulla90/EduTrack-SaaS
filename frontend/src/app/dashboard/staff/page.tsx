@@ -53,6 +53,7 @@ interface StaffMember {
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
+import { resizeAndCompressImage } from '@/lib/image';
 
 export default function SchoolStaffPage() {
   const { showToast } = useToast();
@@ -118,14 +119,15 @@ export default function SchoolStaffPage() {
     }
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const result = await resizeAndCompressImage(file);
+        setPhotoPreview(result);
+      } catch (err) {
+        console.error('Error compressing photo:', err);
+      }
     }
   };
 
@@ -1037,14 +1039,15 @@ export default function SchoolStaffPage() {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={e => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setEditingStaff({ ...editingStaff, avatarUrl: reader.result as string });
-                        };
-                        reader.readAsDataURL(file);
+                        try {
+                          const result = await resizeAndCompressImage(file);
+                          setEditingStaff({ ...editingStaff, avatarUrl: result });
+                        } catch (err) {
+                          console.error('Error compressing staff photo:', err);
+                        }
                       }
                     }}
                     className="block w-full text-xs text-slate-500 file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"

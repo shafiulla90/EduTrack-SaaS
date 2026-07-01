@@ -10,7 +10,9 @@ let cachedServer: any;
 async function bootstrap() {
   if (!cachedServer) {
     const expressApp = express();
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
+    expressApp.use(express.json({ limit: '10mb' }));
+    expressApp.use(express.urlencoded({ limit: '10mb', extended: true }));
+    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bodyParser: false });
 
     app.enableCors({
       origin: true,
@@ -40,7 +42,9 @@ export default async (req: any, res: any) => {
 // For local running
 if (!process.env.VERCEL) {
   async function startLocal() {
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create(AppModule, { bodyParser: false });
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
     app.enableCors({
       origin: true,

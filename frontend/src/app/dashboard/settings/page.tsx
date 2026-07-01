@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
+import { resizeAndCompressImage } from '@/lib/image';
 import { 
   Building2, Landmark, CheckCircle, Save, QrCode, 
   Plus, Trash2, Calendar, ShieldAlert, Globe, Link as LinkIcon 
@@ -473,12 +474,12 @@ function SettingsPageContent() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        const result = reader.result as string;
+                      try {
+                        const result = await resizeAndCompressImage(file);
                         setSchoolLogo(result);
-                      };
-                      reader.readAsDataURL(file);
+                      } catch (err) {
+                        console.error('Error compressing logo:', err);
+                      }
                     }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
                   />
@@ -502,12 +503,12 @@ function SettingsPageContent() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        const result = reader.result as string;
+                      try {
+                        const result = await resizeAndCompressImage(file);
                         setUserAvatar(result);
-                      };
-                      reader.readAsDataURL(file);
+                      } catch (err) {
+                        console.error('Error compressing admin avatar:', err);
+                      }
                     }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-[44px] text-[13px] text-slate-800 focus:outline-none"
                   />
