@@ -58,6 +58,7 @@ interface ClassSummary {
 
 export default function StudentPromotionPage() {
   const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [dbClasses, setDbClasses] = useState<any[]>([]);
   const [studentsState, setStudentsState] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -105,7 +106,24 @@ export default function StudentPromotionPage() {
         console.error('Error fetching academic years:', err);
       }
     };
+    const fetchClasses = async () => {
+      try {
+        const res = await api.get('/academics/classes');
+        const sorted = (res.data || []).sort((a: any, b: any) => {
+          const idxA = CLASS_ORDER.indexOf(a.name);
+          const idxB = CLASS_ORDER.indexOf(b.name);
+          if (idxA >= 0 && idxB >= 0) return idxA - idxB;
+          if (idxA >= 0) return -1;
+          if (idxB >= 0) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        setDbClasses(sorted);
+      } catch (err) {
+        console.error('Error fetching classes:', err);
+      }
+    };
     fetchYears();
+    fetchClasses();
   }, []);
 
   // Fetch Candidates
@@ -437,8 +455,8 @@ export default function StudentPromotionPage() {
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
               >
                 <option value="ALL">ALL CLASSES (Bulk Promotion)</option>
-                {CLASS_ORDER.map(cls => (
-                  <option key={cls} value={cls}>{cls}</option>
+                {dbClasses.map(cls => (
+                  <option key={cls.id} value={cls.name}>{cls.name}</option>
                 ))}
               </select>
             </div>
