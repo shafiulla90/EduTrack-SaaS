@@ -88,37 +88,85 @@ export class TimetableService {
 
   async createClassSection(dto: any) {
     const tenantId = this.getTenantId();
-    const classSection = await this.prisma.classSection.create({
-      data: {
-        classId: dto.classId,
-        sectionId: dto.sectionId,
-        strength: dto.classStrength ?? 0,
-        tenantId,
-        // Map subject and teacher assignments
-        teacherAssigns: {
-          create: Object.entries(dto.subjectTeacherMap || {}).flatMap(([subjectId, teacherIds]) => {
-            const ids = Array.isArray(teacherIds) ? teacherIds : [teacherIds];
-            return ids.map((teacherId: string, index: number) => {
-              const periodsVal = dto.subjectPeriodsMap && dto.subjectPeriodsMap[subjectId];
-              const periods = Array.isArray(periodsVal) ? (periodsVal[index] ?? 5) : (periodsVal ?? 5);
-              return {
-                teacherId,
-                subjectId,
-                periodsPerWeek: Number(periods) || 5,
-                tenantId,
-              };
-            });
-          }),
-        },
-        // Map class subjects
-        classSubjects: {
-          create: Object.keys(dto.subjectTeacherMap || {}).map((subjectId) => ({
-            subjectId,
-            tenantId,
-          })),
-        },
-      },
+    
+    let classSection = await this.prisma.classSection.findUnique({
+      where: {
+        classId_sectionId: {
+          classId: dto.classId,
+          sectionId: dto.sectionId
+        }
+      }
     });
+
+    if (classSection) {
+      classSection = await this.prisma.classSection.update({
+        where: { id: classSection.id },
+        data: { strength: dto.classStrength ?? classSection.strength }
+      });
+      await this.prisma.teacherAssignment.deleteMany({
+        where: { classSectionId: classSection.id, tenantId }
+      });
+      await this.prisma.classSubject.deleteMany({
+        where: { classSectionId: classSection.id, tenantId }
+      });
+
+      const createAssigns = Object.entries(dto.subjectTeacherMap || {}).flatMap(([subjectId, teacherIds]) => {
+        const ids = Array.isArray(teacherIds) ? teacherIds : [teacherIds];
+        return ids.map((teacherId: string, index: number) => {
+          const periodsVal = dto.subjectPeriodsMap && dto.subjectPeriodsMap[subjectId];
+          const periods = Array.isArray(periodsVal) ? (periodsVal[index] ?? 5) : (periodsVal ?? 5);
+          return {
+            classSectionId: classSection.id,
+            teacherId,
+            subjectId,
+            periodsPerWeek: Number(periods) || 5,
+            tenantId
+          };
+        });
+      });
+      if (createAssigns.length > 0) {
+        await this.prisma.teacherAssignment.createMany({ data: createAssigns });
+      }
+
+      const createSubjects = Object.keys(dto.subjectTeacherMap || {}).map((subjectId) => ({
+        classSectionId: classSection.id,
+        subjectId,
+        tenantId
+      }));
+      if (createSubjects.length > 0) {
+        await this.prisma.classSubject.createMany({ data: createSubjects });
+      }
+    } else {
+      classSection = await this.prisma.classSection.create({
+        data: {
+          classId: dto.classId,
+          sectionId: dto.sectionId,
+          strength: dto.classStrength ?? 0,
+          tenantId,
+          teacherAssigns: {
+            create: Object.entries(dto.subjectTeacherMap || {}).flatMap(([subjectId, teacherIds]) => {
+              const ids = Array.isArray(teacherIds) ? teacherIds : [teacherIds];
+              return ids.map((teacherId: string, index: number) => {
+                const periodsVal = dto.subjectPeriodsMap && dto.subjectPeriodsMap[subjectId];
+                const periods = Array.isArray(periodsVal) ? (periodsVal[index] ?? 5) : (periodsVal ?? 5);
+                return {
+                  teacherId,
+                  subjectId,
+                  periodsPerWeek: Number(periods) || 5,
+                  tenantId,
+                };
+              });
+            }),
+          },
+          classSubjects: {
+            create: Object.keys(dto.subjectTeacherMap || {}).map((subjectId) => ({
+              subjectId,
+              tenantId,
+            })),
+          },
+        },
+      });
+    }
 
     // Automatically create or update TeacherSkill records for all assigned teachers
     if (dto.subjectTeacherMap) {
