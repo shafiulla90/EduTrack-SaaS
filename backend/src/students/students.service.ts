@@ -720,15 +720,24 @@ export class StudentsService implements OnModuleInit {
           );
 
           if (!targetClassSection) {
-            targetClassSection = await tx.classSection.create({
-              data: {
-                classId: targetClass.id,
-                sectionId: targetSection.id,
-                tenantId,
-                strength: 0
-              },
+            const existingClassSection = await tx.classSection.findFirst({
+              where: { classId: targetClass.id, sectionId: targetSection.id, tenantId },
               include: { class: true, section: true }
             });
+            if (existingClassSection) {
+              targetClassSection = existingClassSection;
+            } else {
+              targetClassSection = await tx.classSection.create({
+                data: {
+                  classId: targetClass.id,
+                  sectionId: targetSection.id,
+                  tenantId,
+                  strength: 0
+                },
+                include: { class: true, section: true }
+              });
+            }
+            classSections.push(targetClassSection);
           }
 
           const existingInCS = await tx.studentProfile.findMany({
