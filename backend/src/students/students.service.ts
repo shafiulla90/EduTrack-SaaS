@@ -311,15 +311,13 @@ export class StudentsService implements OnModuleInit {
     const errors: string[] = [];
 
     // Cache lists to resolve names to primary keys
+    const ays = await this.prisma.academicYear.findMany({ where: { tenantId } });
+    const activeYear = ays.find(ay => ay.isActive);
     const classes = await this.prisma.class.findMany({ where: { tenantId } });
     const sections = await this.prisma.section.findMany({ where: { tenantId } });
     const classSections = await this.prisma.classSection.findMany({
       where: { tenantId },
       include: { class: true, section: true }
-    });
-
-    const activeYear = await this.prisma.academicYear.findFirst({
-      where: { tenantId, isActive: true }
     });
 
     const defaultPassword = 'Welcome@123';
@@ -338,19 +336,22 @@ export class StudentsService implements OnModuleInit {
         const fatherName = row['Father Name'] || row['fatherName'];
         const motherName = row['Mother Name'] || row['motherName'];
         const aadharNo = row['Aadhar No'] || row['aadharNo'];
+        const ayStr = row['Academic Year'] || row['academicYear'];
 
         if (!email || !lastName || !className || !sectionName) {
           errors.push(`Row ${i + 1}: Missing mandatory fields (Email, Last Name, Class, Section)`);
           continue;
         }
 
+        const matchedAY = ays.find(ay => ay.name.toLowerCase() === (ayStr || '').toLowerCase().trim()) || activeYear;
+
         // Resolve class name
         let matchedClass = classes.find(c => c.name.toLowerCase() === className.toLowerCase().trim());
-        if (!matchedClass && activeYear) {
+        if (!matchedClass && matchedAY) {
           matchedClass = await this.prisma.class.create({
             data: {
               name: className.trim(),
-              academicYearId: activeYear.id,
+              academicYearId: matchedAY.id,
               tenantId
             }
           });
@@ -413,6 +414,50 @@ export class StudentsService implements OnModuleInit {
 
         // Perform user creation transaction
         await this.prisma.$transaction(async (tx) => {
+          // Resolve class pricebook & entries BEFORE creating transaction entities to fail fast if missing
+          const priceBookName = matchedClass.name.replace('-', ' ');
+          const priceBookNameAlt = matchedClass.name.replace(' ', '-');
+
+          const classPriceBook = await tx.pricebook.findFirst({
+            where: {
+              tenantId,
+              classId: matchedClass.id,
+              academicYearId: matchedAY?.id || undefined,
+              isActive: true
+            },
+          }) || await tx.pricebook.findFirst({
+            where: {
+              tenantId,
+              isActive: true,
+              OR: [
+                { name: { equals: priceBookName, mode: 'insensitive' } },
+                { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
+              ],
+            },
+          });
+
+          if (!classPriceBook) {
+            throw new Error(`No active Price Book (fee structure) configured for class "${matchedClass.name}"`);
+          }
+
+          const pbes = await tx.pricebookEntry.findMany({
+            where: {
+              tenantId,
+              isActive: true,
+              pricebookId: classPriceBook.id,
+              pricebook: { isActive: true },
+              product: {
+                isActive: true,
+                productCode: { not: 'PREV_DUES' },
+                name: { not: { contains: 'Previous' } },
+              },
+            },
+          });
+
+          if (pbes.length === 0) {
+            throw new Error(`No active fee products found in the Price Book for class "${matchedClass.name}"`);
+          }
+
           const user = await tx.user.create({
             data: {
               email: emailLower,
@@ -451,37 +496,44 @@ export class StudentsService implements OnModuleInit {
             }
           });
 
-          // Create standard fee invoice for this student
-          const standardFees = [
-            { name: `Tuition Fees - ${matchedClass.name}`, amount: 12000.00 },
-            { name: 'Admission Registration Fee', amount: 3000.00 },
-            { name: 'Library Membership Fee', amount: 800.00 }
-          ];
-
-          const totalAmount = standardFees.reduce((sum, item) => sum + item.amount, 0);
-
-          const invoice = await tx.invoice.create({
-            data: {
+          // Check if Opportunity already exists for this student for this academic year to avoid duplicates
+          const existingOpp = await tx.opportunity.findFirst({
+            where: {
               studentId: profile.id,
-              invoiceDate: new Date(),
-              dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-              totalAmount,
-              paidAmount: 0,
-              remainingBalance: totalAmount,
-              status: PaymentStatus.UNPAID,
-              description: `Admission Fees Invoice for Academic Year ${matchedClass.name}`,
+              academicYearId: matchedAY?.id || undefined,
               tenantId,
-            },
+            }
           });
 
-          await tx.invoiceItem.createMany({
-            data: standardFees.map(item => ({
-              invoiceId: invoice.id,
-              name: item.name,
-              amount: item.amount,
+          if (!existingOpp) {
+            const opp = await tx.opportunity.create({
+              data: {
+                name: `${firstName || ''} ${lastName} - Admission ${matchedAY?.name || ''}`.trim(),
+                studentId: profile.id,
+                stageName: 'Prospecting',
+                closeDate: new Date(new Date().setDate(new Date().getDate() + 30)),
+                classId: matchedClass.id,
+                sectionId: matchedSection.id,
+                academicYearId: matchedAY?.id || null,
+                totalPaidAmount: 0,
+                tenantId,
+              },
+            });
+
+            const olis = pbes.map(pbe => ({
+              opportunityId: opp.id,
+              pricebookEntryId: pbe.id,
+              productId: pbe.productId,
+              quantity: 1,
+              unitPrice: pbe.unitPrice,
+              discount: 0,
               tenantId,
-            })),
-          });
+            }));
+
+            await tx.opportunityLineItem.createMany({
+              data: olis,
+            });
+          }
         });
 
         successCount++;

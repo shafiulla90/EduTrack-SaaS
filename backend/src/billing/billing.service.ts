@@ -884,37 +884,41 @@ export class BillingService {
             },
           });
 
-          if (classPriceBook) {
-            const pbes = await tx.pricebookEntry.findMany({
-              where: {
-                tenantId,
-                isActive: true,
-                pricebookId: classPriceBook.id,
-                pricebook: { isActive: true },
-                product: {
-                  isActive: true,
-                  productCode: { not: 'PREV_DUES' },
-                  name: { not: { contains: 'Previous' } },
-                },
-              },
-            });
-
-            if (pbes.length > 0) {
-              const olis = pbes.map(pbe => ({
-                opportunityId: opp.id,
-                pricebookEntryId: pbe.id,
-                productId: pbe.productId,
-                quantity: 1,
-                unitPrice: pbe.unitPrice,
-                discount: 0,
-                tenantId,
-              }));
-
-              await tx.opportunityLineItem.createMany({
-                data: olis,
-              });
-            }
+          if (!classPriceBook) {
+            throw new Error(`No active Price Book (fee structure) configured for class "${matchedClass.name}"`);
           }
+
+          const pbes = await tx.pricebookEntry.findMany({
+            where: {
+              tenantId,
+              isActive: true,
+              pricebookId: classPriceBook.id,
+              pricebook: { isActive: true },
+              product: {
+                isActive: true,
+                productCode: { not: 'PREV_DUES' },
+                name: { not: { contains: 'Previous' } },
+              },
+            },
+          });
+
+          if (pbes.length === 0) {
+            throw new Error(`No active fee products found in the Price Book for class "${matchedClass.name}"`);
+          }
+
+          const olis = pbes.map(pbe => ({
+            opportunityId: opp.id,
+            pricebookEntryId: pbe.id,
+            productId: pbe.productId,
+            quantity: 1,
+            unitPrice: pbe.unitPrice,
+            discount: 0,
+            tenantId,
+          }));
+
+          await tx.opportunityLineItem.createMany({
+            data: olis,
+          });
         });
 
         successCount++;
