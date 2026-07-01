@@ -2156,7 +2156,7 @@ export default function TeacherClassManagement() {
 
           {/* Timetable Configuration Filters Card */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Class Section *</label>
                 <select
@@ -2200,21 +2200,6 @@ export default function TeacherClassManagement() {
                   <option value="Monthly">Monthly</option>
                   <option value="Yearly">Yearly</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Duration *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={ttDuration}
-                  onChange={e => {
-                    const val = Math.max(1, parseInt(e.target.value, 10) || 1);
-                    setTtDuration(val);
-                    setShowTimetableGrid(false);
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none"
-                  placeholder="e.g. 1, 6, 12"
-                />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Start Date *</label>
