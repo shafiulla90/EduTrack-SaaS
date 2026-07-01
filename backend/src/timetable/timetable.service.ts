@@ -530,6 +530,11 @@ export class TimetableService {
             classSectionId: true,
             periodsPerWeek: true,
           }
+        },
+        teacherSkills: {
+          include: {
+            subject: true
+          }
         }
       }
     });
@@ -539,6 +544,7 @@ export class TimetableService {
       const uniqueClasses = new Set(t.teacherAssignments.map(a => a.classSectionId));
       const totalPeriods = t.teacherAssignments.reduce((sum, a) => sum + (a.periodsPerWeek || 0), 0);
       const loadPercent = Math.min(100, t.teacherAssignments.length * 15);
+      const subjectsTaught = t.teacherSkills.map(sk => sk.subject?.name).filter(Boolean);
 
       return {
         teacherId: t.id,
@@ -547,6 +553,7 @@ export class TimetableService {
         classCount: uniqueClasses.size,
         totalPeriods,
         loadPercent,
+        subjectsTaught,
       };
     });
   }
