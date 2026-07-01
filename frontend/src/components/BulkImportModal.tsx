@@ -129,6 +129,18 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
     }
   };
 
+  const handleDone = () => {
+    setStep(1);
+    setFileName('');
+    setParsedData([]);
+    setSuccessCount(0);
+    setErrors([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    onClose();
+  };
+
   const handleBack = () => {
     setStep(1);
     setFileName('');
@@ -147,13 +159,13 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
             <h2 className="text-[16px] font-bold text-slate-900">Bulk Student Import</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleDone}
             className="text-slate-400 hover:text-slate-600 font-bold text-[18px] cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-
+ 
         {/* Modal Body */}
         <div className="p-6">
           {/* STEP 1: UPLOAD ZONE */}
@@ -162,7 +174,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
               <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-[13px] text-slate-700 leading-relaxed">
                 Import student rosters in bulk. Download the official CSV templates layout, fill in personal & registration information, and re-upload the file.
               </div>
-
+ 
               <div className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition-all text-center space-y-4">
                 <div className="w-12 h-12 rounded-full bg-blue-50 text-[#2E5BFF] flex items-center justify-center">
                   <Upload className="w-6 h-6" />
@@ -186,7 +198,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
                   Select CSV File
                 </button>
               </div>
-
+ 
               <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                 <span className="text-[12px] text-slate-400 font-semibold uppercase tracking-wider">Instructions</span>
                 <button
@@ -200,7 +212,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
               </div>
             </div>
           )}
-
+ 
           {/* STEP 2: CONFIRM DATA ROWS */}
           {step === 2 && (
             <div className="space-y-6">
@@ -213,7 +225,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
                   We parsed <strong>{parsedData.length}</strong> record rows from <strong>{fileName}</strong>.
                 </p>
               </div>
-
+ 
               {/* Sample grid preview */}
               <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-slate-50/50">
                 <div className="px-4 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -244,7 +256,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
                   </table>
                 </div>
               </div>
-
+ 
               <div className="flex gap-4 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -263,7 +275,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
               </div>
             </div>
           )}
-
+ 
           {/* STEP 3: PROCESSING & ERROR RESOLUTION */}
           {step === 3 && (
             <div className="space-y-6">
@@ -289,7 +301,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
                       Successfully Imported: <strong>{successCount}</strong> / {parsedData.length} records.
                     </p>
                   </div>
-
+ 
                   {/* Errors log box */}
                   {errors.length > 0 && (
                     <div className="border border-rose-200 rounded-xl bg-rose-50/50 p-4 space-y-2">
@@ -304,11 +316,11 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
                       </ul>
                     </div>
                   )}
-
+ 
                   <div className="pt-4 border-t border-slate-100 flex justify-end">
                     <button
                       type="button"
-                      onClick={onClose}
+                      onClick={handleDone}
                       className="px-6 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold text-[13px] cursor-pointer"
                     >
                       Done
@@ -318,7 +330,7 @@ export default function BulkImportModal({ isOpen, onClose, onImportSuccess }: Bu
               )}
             </div>
           )}
-
+ 
         </div>
       </div>
     </div>
