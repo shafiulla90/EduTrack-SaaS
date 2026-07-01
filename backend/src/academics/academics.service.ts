@@ -98,7 +98,7 @@ export class AcademicsService {
   async getClasses() {
     const tenantId = this.getTenantId();
     return this.prisma.class.findMany({
-      where: { tenantId },
+      where: { tenantId, isActive: true },
       include: { academicYear: true },
       orderBy: { name: 'asc' },
     });

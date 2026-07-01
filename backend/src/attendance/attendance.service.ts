@@ -30,7 +30,7 @@ export class AttendanceService {
   async getClasses() {
     const tenantId = this.getTenantId();
     const classes = await this.prisma.class.findMany({
-      where: { tenantId },
+      where: { tenantId, isActive: true },
       orderBy: { name: 'asc' },
       take: 500,
     });

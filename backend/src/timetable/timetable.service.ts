@@ -27,7 +27,7 @@ export class TimetableService {
   // ---------- Classes ----------
   async getClasses(academicYearId?: string) {
     const tenantId = this.getTenantId();
-    const whereClause: any = { tenantId };
+    const whereClause: any = { tenantId, isActive: true };
     if (academicYearId) {
       whereClause.academicYearId = academicYearId;
     }
