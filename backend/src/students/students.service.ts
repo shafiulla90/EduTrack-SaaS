@@ -824,6 +824,25 @@ export class StudentsService implements OnModuleInit {
       }
     });
   }
+
+  async deleteStudent(studentId: string) {
+    const tenantId = this.getTenantId();
+
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      include: { user: true }
+    });
+
+    if (!profile || profile.user.tenantId !== tenantId) {
+      throw new NotFoundException('Student profile not found');
+    }
+
+    await this.prisma.user.delete({
+      where: { id: profile.userId }
+    });
+
+    return { success: true };
+  }
 }
 
 function getNextClass(currentClass: string): string {

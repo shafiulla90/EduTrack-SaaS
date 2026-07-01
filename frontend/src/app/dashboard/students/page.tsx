@@ -5,10 +5,11 @@ import {
   Search, ArrowLeft, Plus, X, Phone, Mail, Award, Receipt, 
   CheckCircle, AlertTriangle, ChevronDown, ChevronUp, User, 
   MapPin, Calendar as CalendarIcon, DollarSign, BookOpen, ShieldAlert,
-  Percent
+  Percent, Trash2
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useSchoolSetupUpdate } from '@/lib/events';
+import { useToast } from '@/components/Toast';
 
 interface Student {
   id: string;
@@ -26,6 +27,7 @@ interface Student {
 }
 
 export default function StudentsDirectory() {
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [selectedClass, setSelectedClass] = useState('All');
   const [selectedSection, setSelectedSection] = useState('All');
@@ -35,6 +37,28 @@ export default function StudentsDirectory() {
   const [sections, setSections] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    show: boolean;
+    id: string;
+    name: string;
+  }>({
+    show: false,
+    id: '',
+    name: ''
+  });
+
+  const handleConfirmDelete = async () => {
+    try {
+      await api.delete(`/students/${deleteConfirm.id}`);
+      showToast('Student deleted successfully.', 'success');
+      setDeleteConfirm({ show: false, id: '', name: '' });
+      setActiveStudent(null);
+      loadStudents();
+    } catch (err: any) {
+      console.error('Error deleting student:', err);
+      showToast(err.response?.data?.message || 'Failed to delete student.', 'error');
+    }
+  };
 
   // Selected student for Profile details (Full Page swap)
   const [activeStudent, setActiveStudent] = useState<Student | null>(null);
@@ -377,12 +401,21 @@ export default function StudentsDirectory() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => handleViewDetails(student)}
-                            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px]"
-                          >
-                            View Profile
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => handleViewDetails(student)}
+                              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px]"
+                            >
+                              View Profile
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm({ show: true, id: student.id, name: student.name })}
+                              className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-150 hover:border-rose-300 text-rose-600 transition-all flex items-center justify-center cursor-pointer min-h-[44px]"
+                              title="Delete Student"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -479,7 +512,7 @@ export default function StudentsDirectory() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
               <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                 isPaidClear 
                   ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
@@ -487,6 +520,13 @@ export default function StudentsDirectory() {
               }`}>
                 {isPaidClear ? 'Financial Clear' : 'Outstanding Balances'}
               </span>
+              <button
+                onClick={() => setDeleteConfirm({ show: true, id: activeStudent.id, name: activeStudent.name })}
+                className="p-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all shadow-xs cursor-pointer flex items-center justify-center min-h-[44px]"
+                title="Delete Student"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -856,6 +896,38 @@ export default function StudentsDirectory() {
             </div>
           </div>
         </div>
+      )}
+      {/* ── CUSTOM DELETE CONFIRMATION MODAL ── */}
+      {deleteConfirm.show && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50 animate-fade-in" onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-2xl shadow-2xl z-50 p-6 animate-scale-in">
+            <div className="text-center py-2">
+              <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl mx-auto mb-3">
+                ⚠️
+              </div>
+              <h3 className="font-extrabold text-slate-800 text-base mb-1">Confirm Student Deletion</h3>
+              <p className="text-xs text-slate-500 mb-5">
+                Are you sure you want to delete student{' '}
+                <strong className="text-slate-700 font-bold">{deleteConfirm.name}</strong>? This will remove the student profile and all associated data records. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))}
+                className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition-all cursor-pointer min-h-[38px]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer font-extrabold min-h-[38px]"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
