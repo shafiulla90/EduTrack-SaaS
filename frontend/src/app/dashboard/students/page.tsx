@@ -24,6 +24,7 @@ interface Student {
   aadharNo: string;
   paidAmount: number;
   balanceDue: number;
+  academicYearId?: string;
 }
 
 export default function StudentsDirectory() {
@@ -39,20 +40,47 @@ export default function StudentsDirectory() {
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     show: boolean;
-    id: string;
-    name: string;
+    studentIds: string[];
+    count: number;
+    yearName?: string;
+    className?: string;
+    sectionName?: string;
+    singleName?: string;
   }>({
     show: false,
-    id: '',
-    name: ''
+    studentIds: [],
+    count: 0
   });
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
 
   const handleConfirmDelete = async () => {
     try {
-      await api.delete(`/students/${deleteConfirm.id}`);
-      showToast('Student deleted successfully.', 'success');
-      setDeleteConfirm({ show: false, id: '', name: '' });
+      if (deleteConfirm.studentIds.length === 1) {
+        await api.delete(`/students/${deleteConfirm.studentIds[0]}`);
+        showToast('Student deleted successfully.', 'success');
+      } else {
+        await api.post('/students/bulk-delete', { studentIds: deleteConfirm.studentIds });
+        showToast(`Successfully deleted ${deleteConfirm.count} students.`, 'success');
+      }
+      setDeleteConfirm({ show: false, studentIds: [], count: 0 });
+      setSelectedIds([]);
       setActiveStudent(null);
+
+      // Reset filters and checkboxes
+      setSearch('');
+      setSelectedClass('All');
+      setSelectedSection('All');
+      if (academicYears.length > 0) {
+        setSelectedYear(academicYears[0].id);
+      }
+
       loadStudents();
     } catch (err: any) {
       console.error('Error deleting student:', err);
@@ -106,7 +134,8 @@ export default function StudentsDirectory() {
           motherName: s.motherName || 'N/A',
           aadharNo: s.aadharNo || 'N/A',
           paidAmount: paid,
-          balanceDue: due
+          balanceDue: due,
+          academicYearId: s.classSection?.class?.academicYearId || ''
         };
       }));
     } catch (err) {
@@ -121,9 +150,12 @@ export default function StudentsDirectory() {
     loadStudents();
   }, []);
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [search, selectedClass, selectedSection, selectedYear]);
+
   useSchoolSetupUpdate(loadStudents);
 
-  // Filters calculation
   const filteredStudents = useMemo(() => {
     return students.filter((student) => {
       const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -133,10 +165,28 @@ export default function StudentsDirectory() {
       
       const matchesClass = selectedClass === 'All' || student.class === selectedClass;
       const matchesSection = selectedSection === 'All' || student.section === selectedSection;
+      const matchesYear = selectedYear === 'All' || !selectedYear || student.academicYearId === selectedYear;
 
-      return matchesSearch && matchesClass && matchesSection;
+      return matchesSearch && matchesClass && matchesSection && matchesYear;
     });
-  }, [students, search, selectedClass, selectedSection]);
+  }, [students, search, selectedClass, selectedSection, selectedYear]);
+
+  const isAllSelected = useMemo(() => {
+    return filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.includes(s.id));
+  }, [filteredStudents, selectedIds]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      const filteredIds = filteredStudents.map(s => s.id);
+      setSelectedIds(prev => prev.filter(id => !filteredIds.includes(id)));
+    } else {
+      const filteredIds = filteredStudents.map(s => s.id);
+      setSelectedIds(prev => {
+        const union = new Set([...prev, ...filteredIds]);
+        return Array.from(union);
+      });
+    }
+  };
 
   const getInitials = (name: string) => {
     if (!name) return '?';
@@ -321,7 +371,7 @@ export default function StudentsDirectory() {
           </div>
 
           {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="md:col-span-2 relative flex items-center bg-white border border-slate-200 rounded-xl px-4 py-2 focus-within:border-[#2E5BFF] focus-within:ring-2 focus-within:ring-blue-100 transition-all">
               <Search className="w-4 h-4 text-slate-400 mr-2" />
               <input
@@ -332,6 +382,17 @@ export default function StudentsDirectory() {
                 className="bg-transparent border-none text-[13px] font-medium text-slate-800 outline-none w-full placeholder-slate-400"
               />
             </div>
+
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-[13px] font-semibold text-slate-700 focus:outline-none focus:border-[#2E5BFF] shadow-xs"
+            >
+              <option value="All">All Academic Years</option>
+              {academicYears.map(ay => (
+                <option key={ay.id} value={ay.id}>{ay.name}</option>
+              ))}
+            </select>
 
             <select
               value={selectedClass}
@@ -363,6 +424,14 @@ export default function StudentsDirectory() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4 w-10">
+                      <input 
+                        type="checkbox" 
+                        checked={isAllSelected} 
+                        onChange={handleToggleSelectAll} 
+                        className="rounded border-slate-300 text-[#2E5BFF] focus:ring-blue-500 cursor-pointer w-4 h-4"
+                      />
+                    </th>
                     <th className="px-6 py-4">Roll No</th>
                     <th className="px-6 py-4">Name</th>
                     <th className="px-6 py-4">Class / Section</th>
@@ -376,6 +445,14 @@ export default function StudentsDirectory() {
                     const hasDue = student.balanceDue > 0;
                     return (
                       <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedIds.includes(student.id)} 
+                            onChange={() => handleToggleSelect(student.id)} 
+                            className="rounded border-slate-300 text-[#2E5BFF] focus:ring-blue-500 cursor-pointer w-4 h-4"
+                          />
+                        </td>
                         <td className="px-6 py-4 font-mono text-xs text-blue-600 font-bold">{student.rollNo}</td>
                         <td className="px-6 py-4">
                           <div className="font-bold text-slate-800">{student.name}</div>
@@ -409,7 +486,15 @@ export default function StudentsDirectory() {
                               View Profile
                             </button>
                             <button
-                              onClick={() => setDeleteConfirm({ show: true, id: student.id, name: student.name })}
+                              onClick={() => setDeleteConfirm({
+                                show: true,
+                                studentIds: [student.id],
+                                count: 1,
+                                singleName: student.name,
+                                yearName: selectedYear !== 'All' ? academicYears.find(ay => ay.id === selectedYear)?.name : undefined,
+                                className: student.class !== 'N/A' ? student.class : undefined,
+                                sectionName: student.section !== 'N/A' ? student.section : undefined
+                              })}
                               className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-150 hover:border-rose-300 text-rose-600 transition-all flex items-center justify-center cursor-pointer min-h-[44px]"
                               title="Delete Student"
                             >
@@ -422,7 +507,7 @@ export default function StudentsDirectory() {
                   })}
                   {filteredStudents.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-light">
+                      <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-light">
                         No matching student records found.
                       </td>
                     </tr>
@@ -490,6 +575,62 @@ export default function StudentsDirectory() {
               )}
             </div>
           </div>
+
+          {/* Floating Bulk Actions Bar */}
+          {(selectedIds.length > 0 || selectedClass !== 'All' || selectedSection !== 'All' || selectedYear !== 'All' || search !== '') && filteredStudents.length > 0 && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-4 z-40 border border-slate-800 animate-slide-up max-w-[90%] sm:max-w-max">
+              <div className="flex items-center gap-3">
+                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-xs font-semibold text-slate-300">
+                  {selectedIds.length > 0 ? (
+                    <span>
+                      <strong className="text-white font-bold">{selectedIds.length}</strong> student(s) selected
+                    </span>
+                  ) : (
+                    <span>
+                      <strong className="text-white font-bold">{filteredStudents.length}</strong> student(s) match filters
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+              <div className="flex gap-3">
+                {selectedIds.length > 0 && (
+                  <button
+                    onClick={() => setDeleteConfirm({
+                      show: true,
+                      studentIds: selectedIds,
+                      count: selectedIds.length,
+                      yearName: selectedYear !== 'All' ? academicYears.find(ay => ay.id === selectedYear)?.name : undefined,
+                      className: selectedClass !== 'All' ? selectedClass : undefined,
+                      sectionName: selectedSection !== 'All' ? selectedSection : undefined
+                    })}
+                    className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs shadow-md transition-all cursor-pointer min-h-[38px] flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Selected ({selectedIds.length})
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    const filteredIds = filteredStudents.map(s => s.id);
+                    setDeleteConfirm({
+                      show: true,
+                      studentIds: filteredIds,
+                      count: filteredIds.length,
+                      yearName: selectedYear !== 'All' ? academicYears.find(ay => ay.id === selectedYear)?.name : undefined,
+                      className: selectedClass !== 'All' ? selectedClass : undefined,
+                      sectionName: selectedSection !== 'All' ? selectedSection : undefined
+                    });
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:text-white font-semibold text-xs transition-all cursor-pointer min-h-[38px] flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+                  Delete All Filtered ({filteredStudents.length})
+                </button>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         /* ================= DETAIL VIEW ================= */
@@ -521,7 +662,15 @@ export default function StudentsDirectory() {
                 {isPaidClear ? 'Financial Clear' : 'Outstanding Balances'}
               </span>
               <button
-                onClick={() => setDeleteConfirm({ show: true, id: activeStudent.id, name: activeStudent.name })}
+                onClick={() => setDeleteConfirm({
+                  show: true,
+                  studentIds: [activeStudent.id],
+                  count: 1,
+                  singleName: activeStudent.name,
+                  yearName: selectedYear !== 'All' ? academicYears.find(ay => ay.id === selectedYear)?.name : undefined,
+                  className: activeStudent.class !== 'N/A' ? activeStudent.class : undefined,
+                  sectionName: activeStudent.section !== 'N/A' ? activeStudent.section : undefined
+                })}
                 className="p-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 transition-all shadow-xs cursor-pointer flex items-center justify-center min-h-[44px]"
                 title="Delete Student"
               >
@@ -901,16 +1050,47 @@ export default function StudentsDirectory() {
       {deleteConfirm.show && (
         <>
           <div className="fixed inset-0 bg-black/50 z-50 animate-fade-in" onClick={() => setDeleteConfirm(prev => ({ ...prev, show: false }))} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-2xl shadow-2xl z-50 p-6 animate-scale-in">
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-2xl z-50 p-6 animate-scale-in">
             <div className="text-center py-2">
               <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl mx-auto mb-3">
                 ⚠️
               </div>
-              <h3 className="font-extrabold text-slate-800 text-base mb-1">Confirm Student Deletion</h3>
-              <p className="text-xs text-slate-500 mb-5">
-                Are you sure you want to delete student{' '}
-                <strong className="text-slate-700 font-bold">{deleteConfirm.name}</strong>? This will remove the student profile and all associated data records. This action cannot be undone.
-              </p>
+              <h3 className="font-extrabold text-slate-800 text-lg mb-2">Confirm Student Deletion</h3>
+              
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-left text-xs mb-4 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-semibold">Total Students:</span>
+                  <span className="text-slate-800 font-extrabold">{deleteConfirm.count}</span>
+                </div>
+                {deleteConfirm.singleName && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-semibold">Student Name:</span>
+                    <span className="text-slate-800 font-extrabold">{deleteConfirm.singleName}</span>
+                  </div>
+                )}
+                {deleteConfirm.yearName && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-semibold">Academic Year:</span>
+                    <span className="text-slate-800 font-extrabold">{deleteConfirm.yearName}</span>
+                  </div>
+                )}
+                {deleteConfirm.className && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-semibold">Class:</span>
+                    <span className="text-slate-800 font-extrabold">{deleteConfirm.className}</span>
+                  </div>
+                )}
+                {deleteConfirm.sectionName && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 font-semibold">Section:</span>
+                    <span className="text-slate-800 font-extrabold">{deleteConfirm.sectionName}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 bg-red-50 border border-red-100 text-red-700 text-xs font-semibold rounded-xl text-left leading-relaxed mb-5">
+                <strong>CRITICAL WARNING:</strong> Deleting student profile(s) will cascade and remove all related invoices, payments, attendance records, exam marks, and discipline cases. This action is permanent and cannot be undone.
+              </div>
             </div>
             <div className="flex gap-3">
               <button

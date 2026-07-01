@@ -843,6 +843,66 @@ export class StudentsService implements OnModuleInit {
 
     return { success: true };
   }
+
+  async bulkDeleteStudents(studentIds: string[], actorUserId: string) {
+    const tenantId = this.getTenantId();
+
+    // Verify all students belong to the active tenant
+    const profiles = await this.prisma.studentProfile.findMany({
+      where: {
+        id: { in: studentIds },
+        tenantId
+      },
+      select: {
+        id: true,
+        userId: true
+      }
+    });
+
+    const userIds = profiles.map(p => p.userId);
+
+    if (userIds.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    // Strictly verify count matches. If any requested studentId is missing or belongs to another tenant, fail the transaction.
+    if (profiles.length !== studentIds.length) {
+      throw new BadRequestException('One or more selected students do not exist or belong to another tenant.');
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Delete all matching User records (which triggers DB-level cascades to all student-dependent records)
+        await tx.user.deleteMany({
+          where: {
+            id: { in: userIds },
+            tenantId
+          }
+        });
+
+        // Record the bulk deletion in the ActivityLog (Audit Log)
+        await tx.activityLog.create({
+          data: {
+            userId: actorUserId,
+            action: 'RECORD_DELETE',
+            entityName: 'StudentProfile',
+            entityId: 'BULK_DELETE',
+            details: JSON.stringify({
+              deletedCount: userIds.length,
+              studentIds: studentIds,
+              timestamp: new Date().toISOString(),
+            }),
+            tenantId
+          }
+        });
+      });
+
+      return { success: true, count: userIds.length };
+    } catch (err: any) {
+      console.error('Prisma transaction failed during bulk delete:', err);
+      throw new BadRequestException(`Failed to delete students transactionally: ${err.message}`);
+    }
+  }
 }
 
 function getNextClass(currentClass: string): string {

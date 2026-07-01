@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Delete, Req, BadRequestException } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -64,6 +64,15 @@ export class StudentsController {
   @Delete(':id')
   async deleteStudent(@Param('id') id: string) {
     return this.studentsService.deleteStudent(id);
+  }
+
+  @Post('bulk-delete')
+  async bulkDelete(@Req() req: any, @Body('studentIds') studentIds: string[]) {
+    if (!Array.isArray(studentIds)) {
+      throw new BadRequestException('studentIds must be an array of strings');
+    }
+    const actorUserId = req.user.id;
+    return this.studentsService.bulkDeleteStudents(studentIds, actorUserId);
   }
 
   @Post('import')
