@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
 import { resizeAndCompressImage } from '@/lib/image';
+import { useToast } from '@/components/Toast';
 import { 
   Building2, Landmark, CheckCircle, Save, QrCode, 
   Plus, Trash2, Calendar, ShieldAlert, Globe, Link as LinkIcon 
@@ -29,6 +30,7 @@ interface AcademicTerm {
 }
 
 function SettingsPageContent() {
+  const { showToast } = useToast();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<'profile' | 'banking' | 'upi' | 'terms'>('profile');
@@ -38,9 +40,6 @@ function SettingsPageContent() {
       setActiveTab('profile');
     }
   }, [tabParam]);
-
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [alertText, setAlertText] = useState('');
 
   // 1. School Profile Metadata
   const [schoolName, setSchoolName] = useState('');
@@ -161,7 +160,7 @@ function SettingsPageContent() {
         };
 
         await api.put('/school-setup', payload);
-        setAlertText('School Setup org defaults successfully updated.');
+        showToast('School Setup org defaults successfully updated.', 'success');
       } else if (activeTab === 'upi') {
         const primaryBank = bankAccounts[0];
         await api.put('/tenant/banking-upi', {
@@ -173,19 +172,14 @@ function SettingsPageContent() {
           phonePeId: phonepeId,
           upiQrId: upiQrId,
         });
-        setAlertText('UPI payment gateway keys updated.');
+        showToast('UPI payment gateway keys updated.', 'success');
       }
-      setSaveSuccess(true);
 
       // Dispatch event to refresh branding instantly
       dispatchSchoolSetupUpdated();
-
-      setTimeout(() => {
-        setSaveSuccess(false);
-      }, 4000);
     } catch (err: any) {
       console.error('Error saving settings profile:', err);
-      alert('Failed to save configuration settings: ' + (err.response?.data?.message || err.message));
+      showToast('Failed to save configuration settings: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 
@@ -229,12 +223,10 @@ function SettingsPageContent() {
         isPrimary: false
       });
 
-      setAlertText('Merchant bank account configuration updated.');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      showToast('Merchant bank account configuration updated.', 'success');
     } catch (err: any) {
       console.error('Error adding bank account:', err);
-      alert('Failed to save bank account: ' + (err.response?.data?.message || err.message));
+      showToast('Failed to save bank account: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 
@@ -252,12 +244,10 @@ function SettingsPageContent() {
       });
 
       setBankAccounts([]);
-      setAlertText('Merchant bank account configuration cleared.');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      showToast('Merchant bank account configuration cleared.', 'success');
     } catch (err: any) {
       console.error('Error clearing bank account:', err);
-      alert('Failed to clear bank account: ' + (err.response?.data?.message || err.message));
+      showToast('Failed to clear bank account: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 
@@ -288,12 +278,10 @@ function SettingsPageContent() {
       setNewYearRange('');
       await loadAcademicYears();
 
-      setAlertText(`Academic year term ${cleanRange} successfully configured.`);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      showToast(`Academic year term ${cleanRange} successfully configured.`, 'success');
     } catch (err: any) {
       console.error('Error adding academic year:', err);
-      alert('Failed to add academic year: ' + (err.response?.data?.message || err.message));
+      showToast('Failed to add academic year: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 
@@ -303,12 +291,10 @@ function SettingsPageContent() {
       await api.patch(`/academics/academic-years/${id}/toggle`);
       await loadAcademicYears();
       
-      setAlertText('Academic year active status updated.');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      showToast('Academic year active status updated.', 'success');
     } catch (err: any) {
       console.error('Error toggling academic year status:', err);
-      alert('Failed to update academic year active status: ' + (err.response?.data?.message || err.message));
+      showToast('Failed to update academic year active status: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 
@@ -326,12 +312,7 @@ function SettingsPageContent() {
         </div>
       </div>
 
-      {saveSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-3 text-[13px] shadow-xs">
-          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span className="font-semibold">{alertText}</span>
-        </div>
-      )}
+
 
       {/* Tabs Layout */}
       <div className="overflow-x-auto w-full scrollbar-none border-b border-slate-200">
