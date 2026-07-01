@@ -957,7 +957,8 @@ export default function TeacherClassManagement() {
 
   const fetchExistingClasses = useCallback(async () => {
     try {
-      const res = await api.get('/timetable/classes', {
+      // Use the academics endpoint to get the list of classes for the selected academic year
+      const res = await api.get('/academics/classes', {
         params: selectedAcademicYear ? { academicYearId: selectedAcademicYear } : undefined
       });
       setExistingClasses(res.data || []);
@@ -998,13 +999,15 @@ export default function TeacherClassManagement() {
     }
     try {
       setIsLoading(true);
-      for (const entry of valid) {
-        await api.post('/timetable/classes', { name: entry.name.trim() });
-      }
+        for (const entry of valid) {
+          await api.post('/academics/classes', { name: entry.name.trim(), academicYearId: selectedAcademicYear });
+        }
       showToast('Classes created successfully.', 'success');
       setShowCreateClass(false);
       setClassNamesInput([{ id: 1, name: '' }]);
       await loadWorkloadDashboard();
+      // Refresh class list after creating new classes
+      await fetchExistingClasses();
     } catch (err: any) {
       console.error('Error creating classes:', err);
       showToast(err.response?.data?.message || 'Failed to save class names.', 'error');
