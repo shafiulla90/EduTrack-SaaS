@@ -330,7 +330,7 @@ export class AttendanceService {
     // Validate historical date lock
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (date < today) {
+    if (date < today && !data.allowPastDates) {
       throw new BadRequestException('Historical records are in Read-Only mode.');
     }
 

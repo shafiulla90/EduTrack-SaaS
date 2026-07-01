@@ -538,26 +538,33 @@ export class TimetableService {
     await this.prisma.period.deleteMany({
       where: { classSectionId: dto.classSectionId, tenantId },
     });
-    const created = [];
+    
+    // Fetch all period timings in a single query
+    const timings = await this.prisma.periodTiming.findMany({
+      where: { tenantId, isActive: true },
+    });
+    const timingMap = new Map(timings.map(t => [t.periodNumber, t.id]));
+
+    const periodsToCreate = [];
     for (const period of dto.periods) {
-      const timing = await this.prisma.periodTiming.findFirst({
-        where: { periodNumber: period.periodNumber, tenantId },
+      const timingId = timingMap.get(period.periodNumber);
+      if (!timingId) continue;
+      periodsToCreate.push({
+        classSectionId: dto.classSectionId,
+        subjectId: period.subjectId,
+        teacherId: period.teacherId,
+        periodTimingId: timingId,
+        dayOfWeek: period.day,
+        tenantId,
       });
-      if (!timing) continue;
-      created.push(
-        await this.prisma.period.create({
-          data: {
-            classSectionId: dto.classSectionId,
-            subjectId: period.subjectId,
-            teacherId: period.teacherId,
-            periodTimingId: timing.id,
-            dayOfWeek: period.day,
-            tenantId,
-          },
-        })
-      );
     }
-    return created;
+
+    if (periodsToCreate.length > 0) {
+      await this.prisma.period.createMany({
+        data: periodsToCreate,
+      });
+    }
+    return { success: true, count: periodsToCreate.length };
   }
 
   async saveSubstituteForPeriod(periodId: string, substituteTeacherId: string) {

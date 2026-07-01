@@ -188,6 +188,7 @@ export default function TeacherClassManagement() {
   const [showCreateSection, setShowCreateSection] = useState(false);
   const [subjectsListInput, setSubjectsListInput] = useState([{ id: 1, name: '' }]);
   const [classNamesInput, setClassNamesInput] = useState([{ id: 1, name: '' }]);
+  const [existingClasses, setExistingClasses] = useState<any[]>([]);
   const [newSectionName, setNewSectionName] = useState('');
 
   // ── DELETE CONFIRMATION STATE ──
@@ -949,6 +950,41 @@ export default function TeacherClassManagement() {
     } catch (err: any) {
       console.error('Error adding subjects:', err);
       showToast(err.response?.data?.message || 'Failed to save subjects.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchExistingClasses = useCallback(async () => {
+    try {
+      const res = await api.get('/timetable/classes', {
+        params: selectedAcademicYear ? { academicYearId: selectedAcademicYear } : undefined
+      });
+      setExistingClasses(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch existing classes:', err);
+    }
+  }, [selectedAcademicYear]);
+
+  useEffect(() => {
+    if (showCreateClass) {
+      fetchExistingClasses();
+    }
+  }, [showCreateClass, fetchExistingClasses]);
+
+  const handleDeleteClass = async (classId: string) => {
+    if (!confirm('Are you sure you want to delete this class? This will delete all associated records.')) {
+      return;
+    }
+    try {
+      setIsLoading(true);
+      await api.delete(`/academics/classes/${classId}`);
+      showToast('Class deleted successfully.', 'success');
+      await fetchExistingClasses();
+      await loadWorkloadDashboard();
+    } catch (err: any) {
+      console.error('Error deleting class:', err);
+      showToast(err.response?.data?.message || 'Failed to delete class.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -2624,7 +2660,30 @@ export default function TeacherClassManagement() {
               <h3 className="font-extrabold text-slate-800 text-sm">Create Class Names</h3>
               <button onClick={() => setShowCreateClass(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100"><X className="w-4 h-4" /></button>
             </div>
+
+            {existingClasses.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Existing Classes</h4>
+                <div className="max-h-32 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                  {existingClasses.map((cls) => (
+                    <div key={cls.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-1.5 text-xs text-slate-700">
+                      <span>{cls.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClass(cls.id)}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Class"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 mb-4">
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Add New Classes</h4>
               {classNamesInput.map((entry, idx) => (
                 <div key={entry.id} className="flex gap-2 items-center">
                   <input
