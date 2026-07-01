@@ -306,7 +306,8 @@ export default function SchoolStaffPage() {
         joiningDate: editingStaff.joiningDate,
         qualification: editingStaff.qualification,
         status: editingStaff.status,
-        avatarUrl: editingStaff.avatarUrl || null
+        avatarUrl: editingStaff.avatarUrl || null,
+        subjectsTaught: editingStaff.skills ? editingStaff.skills.map((s: any) => s.subject).filter(Boolean) : []
       });
       setEditingStaff(null);
       loadStaff();
@@ -1137,6 +1138,76 @@ export default function SchoolStaffPage() {
                 <label className="block text-xs text-slate-500 font-bold mb-1">Address</label>
                 <textarea value={editingStaff.address} onChange={e => setEditingStaff({...editingStaff, address: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none h-16 resize-none" />
               </div>
+              {/* Subject Skills */}
+              {editingStaff.staffType === 'Teaching' && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs text-slate-400 font-bold">Subject Skills</label>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const currentSkills = editingStaff.skills || [];
+                        setEditingStaff({
+                          ...editingStaff,
+                          skills: [...currentSkills, { subject: '', level: 'Expert', exp: 3 }]
+                        });
+                      }} 
+                      className="text-xs text-blue-600 font-bold hover:underline cursor-pointer"
+                    >
+                      + Add Skill
+                    </button>
+                  </div>
+                  {(editingStaff.skills || []).map((sk, idx) => (
+                    <div key={idx} className="flex gap-2 mb-2">
+                      <input 
+                        value={sk.subject} 
+                        onChange={e => { 
+                          const s = [...editingStaff.skills]; 
+                          s[idx] = { ...s[idx], subject: e.target.value }; 
+                          setEditingStaff({ ...editingStaff, skills: s }); 
+                        }} 
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none" 
+                        placeholder="Subject" 
+                      />
+                      <select 
+                        value={sk.level} 
+                        onChange={e => { 
+                          const s = [...editingStaff.skills]; 
+                          s[idx] = { ...s[idx], level: e.target.value }; 
+                          setEditingStaff({ ...editingStaff, skills: s }); 
+                        }} 
+                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
+                      >
+                        <option>Beginner</option>
+                        <option>Intermediate</option>
+                        <option>Advanced</option>
+                        <option>Expert</option>
+                      </select>
+                      <input 
+                        type="number" 
+                        value={sk.exp} 
+                        onChange={e => { 
+                          const s = [...editingStaff.skills]; 
+                          s[idx] = { ...s[idx], exp: Number(e.target.value) }; 
+                          setEditingStaff({ ...editingStaff, skills: s }); 
+                        }} 
+                        className="w-14 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none" 
+                        placeholder="Yrs" 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const s = editingStaff.skills.filter((_, i) => i !== idx);
+                          setEditingStaff({ ...editingStaff, skills: s });
+                        }} 
+                        className="text-rose-450 hover:text-rose-600 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
                 <button type="button" onClick={() => setEditingStaff(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm cursor-pointer min-h-[44px]">Cancel</button>
                 <button type="submit" className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md cursor-pointer flex items-center gap-1.5 min-h-[44px]"><Check className="w-4 h-4" /> Save Changes</button>
