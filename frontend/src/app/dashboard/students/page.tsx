@@ -120,8 +120,8 @@ export default function StudentsDirectory() {
       setLoading(true);
       const res = await api.get('/students');
       setStudents(res.data.map((s: any) => {
-        const paid = s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount), 0) || 0;
-        const due = s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.remainingBalance), 0) || 0;
+        const paid = s.paidAmount !== undefined ? Number(s.paidAmount) : (s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount), 0) || 0);
+        const due = s.balanceDue !== undefined ? Number(s.balanceDue) : (s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.remainingBalance), 0) || 0);
         return {
           id: s.id,
           rollNo: s.rollNo || 'N/A',

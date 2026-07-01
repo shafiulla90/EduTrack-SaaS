@@ -209,7 +209,7 @@ export class StudentsService implements OnModuleInit {
     const tenantId = this.getTenantId();
     const skip = (page - 1) * limit;
 
-    return this.prisma.studentProfile.findMany({
+    const students = await this.prisma.studentProfile.findMany({
       where: {
         user: {
           tenantId,
@@ -246,7 +246,16 @@ export class StudentsService implements OnModuleInit {
         },
         invoices: {
           where: { tenantId },
-          select: { remainingBalance: true, paidAmount: true }
+          select: { id: true, remainingBalance: true, paidAmount: true, opportunityId: true, status: true }
+        },
+        opportunities: {
+          where: {
+            tenantId,
+            stageName: { notIn: ['Closed Won', 'Closed Lost'] }
+          },
+          include: {
+            opportunityLineItems: true
+          }
         }
       },
       orderBy: {
@@ -256,6 +265,35 @@ export class StudentsService implements OnModuleInit {
       },
       skip,
       take: limit,
+    });
+
+    return students.map(s => {
+      const nonVoidedInvoices = s.invoices.filter(inv => inv.status !== PaymentStatus.VOIDED);
+      const totalPaid = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+      const invoicePending = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
+
+      let oppPending = 0;
+      const openOpp = s.opportunities[0];
+      if (openOpp) {
+        const totalOppFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
+          const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+          const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+          return sum + (itemTotal - itemDiscount);
+        }, 0);
+
+        const oppInvoices = nonVoidedInvoices.filter(inv => inv.opportunityId === openOpp.id);
+        const totalOppPaid = oppInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+
+        oppPending = Math.max(0, totalOppFee - totalOppPaid);
+      }
+
+      const totalPending = invoicePending + oppPending;
+
+      return {
+        ...s,
+        paidAmount: totalPaid,
+        balanceDue: totalPending
+      };
     });
   }
 
@@ -282,6 +320,15 @@ export class StudentsService implements OnModuleInit {
           include: { invoiceItems: true },
           orderBy: { invoiceDate: 'desc' }
         },
+        opportunities: {
+          where: {
+            tenantId,
+            stageName: { notIn: ['Closed Won', 'Closed Lost'] }
+          },
+          include: {
+            opportunityLineItems: true
+          }
+        },
         examMarks: {
           where: { tenantId },
           include: { exam: true, subject: true },
@@ -300,7 +347,32 @@ export class StudentsService implements OnModuleInit {
       throw new NotFoundException('Student profile not found');
     }
 
-    return profile;
+    const nonVoidedInvoices = profile.invoices.filter(inv => inv.status !== PaymentStatus.VOIDED);
+    const totalPaid = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+    const invoicePending = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
+
+    let oppPending = 0;
+    const openOpp = profile.opportunities[0];
+    if (openOpp) {
+      const totalOppFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
+        const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+        const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+        return sum + (itemTotal - itemDiscount);
+      }, 0);
+
+      const oppInvoices = nonVoidedInvoices.filter(inv => inv.opportunityId === openOpp.id);
+      const totalOppPaid = oppInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+
+      oppPending = Math.max(0, totalOppFee - totalOppPaid);
+    }
+
+    const totalPending = invoicePending + oppPending;
+
+    return {
+      ...profile,
+      paidAmount: totalPaid,
+      balanceDue: totalPending
+    };
   }
 
   // ── CSV BULK IMPORT FRAMEWORK ───────────────────────────────────────────────
