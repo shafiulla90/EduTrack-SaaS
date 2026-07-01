@@ -140,19 +140,31 @@ export class TenantController {
     const completionPercentage = Math.round((filledCount / fields.length) * 100);
 
     // Entity counts for setup progress metrics
-    const classesCount = await this.prisma.class.count({
-      where: { tenantId },
+    const classesCount = await this.prisma.classSection.count({
+      where: {
+        tenantId,
+        class: {
+          isActive: true,
+        },
+      },
     });
 
     const teachersCount = await this.prisma.staffProfile.count({
       where: {
-        user: { tenantId },
+        user: {
+          tenantId,
+          isActive: true,
+          role: { in: ['TEACHER', 'STAFF'] },
+        },
       },
     });
 
     const studentsCount = await this.prisma.studentProfile.count({
       where: {
-        user: { tenantId },
+        user: {
+          tenantId,
+          isActive: true,
+        },
       },
     });
 

@@ -60,16 +60,18 @@ export class DashboardService {
           user: {
             tenantId,
             isActive: true,
-            role: 'TEACHER',
+            role: { in: ['TEACHER', 'STAFF'] },
           },
         },
       }),
 
       // 3. Total Classes
-      this.prisma.class.count({
+      this.prisma.classSection.count({
         where: {
           tenantId,
-          isActive: true,
+          class: {
+            isActive: true,
+          },
         },
       }),
 
