@@ -680,11 +680,30 @@ export class StudentsService implements OnModuleInit {
 
         if (!resolvedClassName) continue;
 
-        const targetClass = classes.find(
+        let targetClass = classes.find(
           c => c.name.toLowerCase() === resolvedClassName.toLowerCase()
         );
         if (!targetClass) {
-          throw new BadRequestException(`Target class "${resolvedClassName}" does not exist in Academic Year ${targetYear.name}`);
+          const existingTargetClass = await tx.class.findFirst({
+            where: {
+              name: resolvedClassName,
+              academicYearId: targetYearId,
+              tenantId
+            }
+          });
+          if (existingTargetClass) {
+            targetClass = existingTargetClass;
+          } else {
+            targetClass = await tx.class.create({
+              data: {
+                name: resolvedClassName,
+                academicYearId: targetYearId,
+                tenantId,
+                isActive: true
+              }
+            });
+          }
+          classes.push(targetClass);
         }
 
         const resolvedSectionName = targetSectionName || currentSectionName || 'Section A';
