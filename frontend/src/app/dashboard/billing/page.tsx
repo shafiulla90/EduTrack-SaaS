@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
+import { useTenant } from '@/app/providers/TenantContext';
 import { 
   Receipt, Search, CreditCard, Sparkles, X, CheckCircle2, 
   QrCode, User, ArrowRight, CornerDownRight, RotateCcw,
@@ -21,6 +22,7 @@ interface StagedInvoice {
 }
 
 export default function FeesBillingPage() {
+  const { setupStats } = useTenant();
   const [search, setSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [selectedYear, setSelectedYear] = useState('');
@@ -387,16 +389,54 @@ export default function FeesBillingPage() {
               </div>
 
               {/* Dynamic details for UPI and Bank */}
-              {selectedChannel.includes('UPI') && (
-                <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl max-w-sm mx-auto flex flex-col items-center text-center space-y-3">
-                  <span className="text-xs font-bold text-slate-500">Scan Standee QR</span>
-                  <div className="w-28 h-28 bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex items-center justify-center">
-                    <QrCode className="w-24 h-24 text-slate-900" />
+              {selectedChannel.includes('UPI') && (() => {
+                const tenant = setupStats?.setup?.tenant;
+                const merchantName = setupStats?.setup?.schoolName || tenant?.name || 'School Merchant';
+                let activeUpiId = '';
+                if (selectedChannel === 'GPAY_UPI') {
+                  activeUpiId = tenant?.googlePayId || '';
+                } else if (selectedChannel === 'PHONEPE_UPI') {
+                  activeUpiId = tenant?.phonePeId || '';
+                }
+                if (!activeUpiId) {
+                  activeUpiId = tenant?.upiQrId || '';
+                }
+                const isMockUpi = !activeUpiId;
+                const displayUpiId = activeUpiId || 'gpay-vikas-edu@okaxis';
+
+                // UPI standard transaction payload format
+                const upiLink = `upi://pay?pa=${encodeURIComponent(displayUpiId)}&pn=${encodeURIComponent(merchantName)}&am=${billingTotal}&cu=INR`;
+                const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiLink)}`;
+
+                return (
+                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl max-w-sm mx-auto flex flex-col items-center text-center space-y-3">
+                    <span className="text-xs font-bold text-slate-650 uppercase tracking-wider">Scan Standee QR</span>
+                    <div className="w-36 h-36 bg-white p-2 border border-slate-200 rounded-xl shadow-sm flex items-center justify-center overflow-hidden">
+                      <img 
+                        src={qrCodeUrl} 
+                        alt="UPI Payment QR Code" 
+                        className="w-32 h-32 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-slate-500 font-mono block">
+                        UPI ID: <span className="font-bold text-slate-800">{displayUpiId}</span>
+                      </span>
+                      {isMockUpi && (
+                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 block">
+                          ⚠️ Demo Mode: Configure your merchant UPI ID in Settings
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-blue-600 font-bold bg-blue-50/50 px-3 py-1 rounded-full border border-blue-100">
+                      Scan to complete physical ₹{billingTotal.toLocaleString()} collection
+                    </p>
                   </div>
-                  <span className="text-[10px] text-slate-450 font-mono">UPI ID: gpay-vikas-edu@upi</span>
-                  <p className="text-[10px] text-blue-600 font-bold">Scan to complete physical ₹{billingTotal.toLocaleString()} collection</p>
-                </div>
-              )}
+                );
+              })()}
 
               {selectedChannel === 'NET_BANKING' && (
                 <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-3 text-xs max-w-md">
