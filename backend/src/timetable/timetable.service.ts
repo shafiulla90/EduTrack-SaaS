@@ -199,6 +199,19 @@ export class TimetableService {
     const emailLower = dto.email.toLowerCase().trim();
     const passwordHash = await bcrypt.hash('StaffPass@123', 10);
 
+    const existingUser = await this.prisma.user.findUnique({ where: { email: emailLower } });
+    if (existingUser) {
+      throw new BadRequestException('Email already registered');
+    }
+
+    const normalizedPhone = dto.phone && dto.phone.trim() ? dto.phone.replace(/\D/g, '').slice(-10) || null : null;
+    if (normalizedPhone) {
+      const existingPhone = await this.prisma.user.findFirst({ where: { phone: normalizedPhone } });
+      if (existingPhone) {
+        throw new BadRequestException('Phone number already registered');
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
@@ -206,7 +219,7 @@ export class TimetableService {
           name: fullName,
           passwordHash,
           role: Role.TEACHER,
-          phone: dto.phone,
+          phone: normalizedPhone,
           tenantId,
         },
       });
@@ -258,52 +271,66 @@ export class TimetableService {
         continue;
       }
 
-      const fullName = `${t.firstName} ${t.lastName}`.trim();
-      const teacher = await this.prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
-          data: {
-            email: emailLower,
-            name: fullName,
-            passwordHash,
-            role: Role.TEACHER,
-            phone: t.phone,
-            tenantId,
-          },
-        });
-
-        const prof = await tx.staffProfile.create({
-          data: {
-            userId: user.id,
-            employeeId: t.employeeId,
-            designation: t.designation || 'Teacher',
-            basicSalary: t.basicSalary,
-            allowances: t.allowances,
-            deductions: t.deductions,
-            pfDeduction: t.pfDeduction,
-            status: 'Active',
-            qualification: t.qualification,
-            tenantId,
-          },
-        });
-
-        if (t.skills && Array.isArray(t.skills)) {
-          for (const skill of t.skills) {
-            if (!skill.subjectId) continue;
-            await tx.teacherSkill.create({
-              data: {
-                teacherId: prof.id,
-                subjectId: skill.subjectId,
-                skillLevel: skill.skillLevel,
-                yearsOfExperience: skill.yearsOfExperience,
-                tenantId,
-              },
-            });
-          }
+      const normalizedPhone = t.phone && t.phone.trim() ? t.phone.replace(/\D/g, '').slice(-10) || null : null;
+      if (normalizedPhone) {
+        const existingPhone = await this.prisma.user.findFirst({ where: { phone: normalizedPhone } });
+        if (existingPhone) {
+          skipped.push(t.email);
+          continue;
         }
-        return prof;
-      });
+      }
 
-      created.push(teacher.id);
+      const fullName = `${t.firstName} ${t.lastName}`.trim();
+      try {
+        const teacher = await this.prisma.$transaction(async (tx) => {
+          const user = await tx.user.create({
+            data: {
+              email: emailLower,
+              name: fullName,
+              passwordHash,
+              role: Role.TEACHER,
+              phone: normalizedPhone,
+              tenantId,
+            },
+          });
+
+          const prof = await tx.staffProfile.create({
+            data: {
+              userId: user.id,
+              employeeId: t.employeeId,
+              designation: t.designation || 'Teacher',
+              basicSalary: t.basicSalary,
+              allowances: t.allowances,
+              deductions: t.deductions,
+              pfDeduction: t.pfDeduction,
+              status: 'Active',
+              qualification: t.qualification,
+              tenantId,
+            },
+          });
+
+          if (t.skills && Array.isArray(t.skills)) {
+            for (const skill of t.skills) {
+              if (!skill.subjectId) continue;
+              await tx.teacherSkill.create({
+                data: {
+                  teacherId: prof.id,
+                  subjectId: skill.subjectId,
+                  skillLevel: skill.skillLevel,
+                  yearsOfExperience: skill.yearsOfExperience,
+                  tenantId,
+                },
+              });
+            }
+          }
+          return prof;
+        });
+
+        created.push(teacher.id);
+      } catch (err: any) {
+        console.error(`Failed to import teacher ${t.email}:`, err);
+        skipped.push(t.email);
+      }
     }
     return { created: created.length, skipped: skipped.length };
   }
