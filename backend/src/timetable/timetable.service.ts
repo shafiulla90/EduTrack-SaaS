@@ -244,13 +244,13 @@ export class TimetableService {
     });
   }
 
-  async bulkCreateTeachers(dto: any) {
+  async bulkCreateTeachers(teachers: any[]) {
     const tenantId = this.getTenantId();
     const created: any[] = [];
     const skipped: any[] = [];
     const passwordHash = await bcrypt.hash('StaffPass@123', 10);
 
-    for (const t of dto.teachers) {
+    for (const t of teachers) {
       const emailLower = t.email.toLowerCase().trim();
       const existing = await this.prisma.user.findUnique({ where: { email: emailLower } });
       if (existing) {

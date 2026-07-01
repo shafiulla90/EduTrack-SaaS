@@ -109,113 +109,110 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
     setIsProcessing(true);
     setErrors([]);
 
-    // We do validations and api call
-    setTimeout(async () => {
-      const teachersToUpload: any[] = [];
-      const errorLogs: string[] = [];
+    const teachersToUpload: any[] = [];
+    const errorLogs: string[] = [];
 
-      parsedData.forEach((row, index) => {
-        const rowNum = index + 2;
-        const firstName = row['First Name'];
-        const lastName = row['Last Name'];
-        const email = row['Email'];
+    parsedData.forEach((row, index) => {
+      const rowNum = index + 2;
+      const firstName = row['First Name'];
+      const lastName = row['Last Name'];
+      const email = row['Email'];
 
-        if (!firstName) {
-          errorLogs.push(`Row ${rowNum}: First Name is missing.`);
-          return;
-        }
-        if (!lastName) {
-          errorLogs.push(`Row ${rowNum}: Last Name is missing.`);
-          return;
-        }
-        if (!email) {
-          errorLogs.push(`Row ${rowNum}: Email is missing.`);
-          return;
-        }
-        if (!email.includes('@')) {
-          errorLogs.push(`Row ${rowNum}: Invalid email format "${email}".`);
-          return;
-        }
-
-        const basicSalary = row['Basic Salary'] ? Number(row['Basic Salary']) : undefined;
-        const allowances = row['Allowances'] ? Number(row['Allowances']) : undefined;
-        const deductions = row['Deductions'] ? Number(row['Deductions']) : undefined;
-        const pf = row['PF'] ? Number(row['PF']) : undefined;
-
-        if (row['Basic Salary'] && isNaN(Number(row['Basic Salary']))) {
-          errorLogs.push(`Row ${rowNum}: Basic Salary must be a number.`);
-          return;
-        }
-        if (row['Allowances'] && isNaN(Number(row['Allowances']))) {
-          errorLogs.push(`Row ${rowNum}: Allowances must be a number.`);
-          return;
-        }
-        if (row['Deductions'] && isNaN(Number(row['Deductions']))) {
-          errorLogs.push(`Row ${rowNum}: Deductions must be a number.`);
-          return;
-        }
-        if (row['PF'] && isNaN(Number(row['PF']))) {
-          errorLogs.push(`Row ${rowNum}: PF must be a number.`);
-          return;
-        }
-
-        const skills: any[] = [];
-        const mapSkill = (subNameKey: string, skillLevelKey: string) => {
-          const sName = row[subNameKey];
-          if (sName) {
-            const matchedSub = allSubjects.find(s => s.name.toLowerCase() === sName.toLowerCase());
-            if (matchedSub) {
-              skills.push({
-                subjectId: matchedSub.id,
-                skillLevel: row[skillLevelKey] || 'Expert',
-                yearsOfExperience: 5
-              });
-            } else {
-              errorLogs.push(`Row ${rowNum}: Subject "${sName}" not found in database catalog.`);
-            }
-          }
-        };
-
-        mapSkill('Subject 1', 'Skill Level 1');
-        mapSkill('Subject 2', 'Skill Level 2');
-        mapSkill('Subject 3', 'Skill Level 3');
-
-        teachersToUpload.push({
-          firstName,
-          lastName,
-          email,
-          phone: row['Phone'] || undefined,
-          qualification: row['Qualification'] || undefined,
-          designation: row['Designation'] || undefined,
-          basicSalary: basicSalary ? Number(basicSalary) : undefined,
-          allowances: allowances ? Number(allowances) : undefined,
-          deductions: deductions ? Number(deductions) : undefined,
-          pf: pf ? Number(pf) : undefined,
-          joiningDate: row['Joining Date'] || undefined,
-          skills
-        });
-      });
-
-      if (errorLogs.length > 0) {
-        setErrors(errorLogs);
-        setIsProcessing(false);
+      if (!firstName) {
+        errorLogs.push(`Row ${rowNum}: First Name is missing.`);
+        return;
+      }
+      if (!lastName) {
+        errorLogs.push(`Row ${rowNum}: Last Name is missing.`);
+        return;
+      }
+      if (!email) {
+        errorLogs.push(`Row ${rowNum}: Email is missing.`);
+        return;
+      }
+      if (!email.includes('@')) {
+        errorLogs.push(`Row ${rowNum}: Invalid email format "${email}".`);
         return;
       }
 
-      try {
-        const res = await api.post('/timetable/teachers/bulk', { teachers: teachersToUpload });
-        const createdCount = res.data.created || 0;
-        setSuccessCount(createdCount);
-        setIsProcessing(false);
-        if (createdCount > 0) {
-          onImportSuccess(createdCount);
-        }
-      } catch (err: any) {
-        console.error('Bulk teacher import failed:', err);
-        setErrors([err.response?.data?.message || 'Error occurred while calling bulk import API.']);
-        setIsProcessing(false);
+      const basicSalary = row['Basic Salary'] ? Number(row['Basic Salary']) : undefined;
+      const allowances = row['Allowances'] ? Number(row['Allowances']) : undefined;
+      const deductions = row['Deductions'] ? Number(row['Deductions']) : undefined;
+      const pf = row['PF'] ? Number(row['PF']) : undefined;
+
+      if (row['Basic Salary'] && isNaN(Number(row['Basic Salary']))) {
+        errorLogs.push(`Row ${rowNum}: Basic Salary must be a number.`);
+        return;
       }
-    }, 1500);
+      if (row['Allowances'] && isNaN(Number(row['Allowances']))) {
+        errorLogs.push(`Row ${rowNum}: Allowances must be a number.`);
+        return;
+      }
+      if (row['Deductions'] && isNaN(Number(row['Deductions']))) {
+        errorLogs.push(`Row ${rowNum}: Deductions must be a number.`);
+        return;
+      }
+      if (row['PF'] && isNaN(Number(row['PF']))) {
+        errorLogs.push(`Row ${rowNum}: PF must be a number.`);
+        return;
+      }
+
+      const skills: any[] = [];
+      const mapSkill = (subNameKey: string, skillLevelKey: string) => {
+        const sName = row[subNameKey];
+        if (sName) {
+          const matchedSub = allSubjects.find(s => s.name.toLowerCase() === sName.toLowerCase());
+          if (matchedSub) {
+            skills.push({
+              subjectId: matchedSub.id,
+              skillLevel: row[skillLevelKey] || 'Expert',
+              yearsOfExperience: 5
+            });
+          } else {
+            errorLogs.push(`Row ${rowNum}: Subject "${sName}" not found in database catalog.`);
+          }
+        }
+      };
+
+      mapSkill('Subject 1', 'Skill Level 1');
+      mapSkill('Subject 2', 'Skill Level 2');
+      mapSkill('Subject 3', 'Skill Level 3');
+
+      teachersToUpload.push({
+        firstName,
+        lastName,
+        email,
+        phone: row['Phone'] || undefined,
+        qualification: row['Qualification'] || undefined,
+        designation: row['Designation'] || undefined,
+        basicSalary: basicSalary ? Number(basicSalary) : undefined,
+        allowances: allowances ? Number(allowances) : undefined,
+        deductions: deductions ? Number(deductions) : undefined,
+        pf: pf ? Number(pf) : undefined,
+        joiningDate: row['Joining Date'] || undefined,
+        skills
+      });
+    });
+
+    if (errorLogs.length > 0) {
+      setErrors(errorLogs);
+      setIsProcessing(false);
+      return;
+    }
+
+    try {
+      const res = await api.post('/timetable/teachers/bulk', { teachers: teachersToUpload });
+      const createdCount = res.data.created || 0;
+      setSuccessCount(createdCount);
+      setIsProcessing(false);
+      if (createdCount > 0) {
+        onImportSuccess(createdCount);
+      }
+    } catch (err: any) {
+      console.error('Bulk teacher import failed:', err);
+      setErrors([err.response?.data?.message || 'Error occurred while calling bulk import API.']);
+      setIsProcessing(false);
+    }
   };
 
   const handleBack = () => {
@@ -223,6 +220,15 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
     setFileName('');
     setParsedData([]);
     setErrors([]);
+  };
+
+  const handleClose = () => {
+    setStep(1);
+    setFileName('');
+    setParsedData([]);
+    setSuccessCount(0);
+    setErrors([]);
+    onClose();
   };
 
   return (
@@ -236,7 +242,7 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
             <h2 className="text-[16px] font-bold text-slate-900">Bulk Teacher Import</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-slate-600 font-bold text-[18px] cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -397,7 +403,7 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
                   <div className="pt-4 border-t border-slate-100 flex justify-end">
                     <button
                       type="button"
-                      onClick={onClose}
+                      onClick={handleClose}
                       className="px-6 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold text-[13px] cursor-pointer"
                     >
                       Done
