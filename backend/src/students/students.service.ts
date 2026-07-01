@@ -625,201 +625,206 @@ export class StudentsService implements OnModuleInit {
     targetClassName: string;
     targetSectionName?: string;
   }) {
-    const tenantId = this.getTenantId();
-    const { studentIds, sourceYearId, targetYearId, targetClassName, targetSectionName } = payload;
+    try {
+      const tenantId = this.getTenantId();
+      const { studentIds, sourceYearId, targetYearId, targetClassName, targetSectionName } = payload;
 
-    if (!studentIds || studentIds.length === 0) {
-      throw new BadRequestException('No students selected for promotion');
-    }
+      if (!studentIds || studentIds.length === 0) {
+        throw new BadRequestException('No students selected for promotion');
+      }
 
-    const isBulkGlobal = targetClassName === 'ALL';
+      const isBulkGlobal = targetClassName === 'ALL';
 
-    const sourceYear = await this.prisma.academicYear.findFirst({
-      where: { id: sourceYearId, tenantId }
-    });
-    const targetYear = await this.prisma.academicYear.findFirst({
-      where: { id: targetYearId, tenantId }
-    });
-    if (!sourceYear || !targetYear) {
-      throw new NotFoundException('Source or Target Academic Year not found');
-    }
+      const sourceYear = await this.prisma.academicYear.findFirst({
+        where: { id: sourceYearId, tenantId }
+      });
+      const targetYear = await this.prisma.academicYear.findFirst({
+        where: { id: targetYearId, tenantId }
+      });
+      if (!sourceYear || !targetYear) {
+        throw new NotFoundException('Source or Target Academic Year not found');
+      }
 
-    const classes = await this.prisma.class.findMany({
-      where: { academicYearId: targetYearId, tenantId }
-    });
-    const sections = await this.prisma.section.findMany({
-      where: { tenantId }
-    });
-    const classSections = await this.prisma.classSection.findMany({
-      where: { tenantId },
-      include: { class: true, section: true }
-    });
+      const classes = await this.prisma.class.findMany({
+        where: { academicYearId: targetYearId, tenantId }
+      });
+      const sections = await this.prisma.section.findMany({
+        where: { tenantId }
+      });
+      const classSections = await this.prisma.classSection.findMany({
+        where: { tenantId },
+        include: { class: true, section: true }
+      });
 
-    return this.prisma.$transaction(async (tx) => {
-      const promotedCount = studentIds.length;
+      return await this.prisma.$transaction(async (tx) => {
+        const promotedCount = studentIds.length;
 
-      for (const studentId of studentIds) {
-        const profile = await tx.studentProfile.findFirst({
-          where: { id: studentId, user: { tenantId } },
-          include: {
-            user: true,
-            classSection: {
-              include: { class: true, section: true }
-            }
-          }
-        });
-
-        if (!profile) continue;
-
-        const currentClassName = profile.classSection?.class.name;
-        const currentSectionName = profile.classSection?.section.name;
-
-        const resolvedClassName = isBulkGlobal 
-          ? getNextClass(currentClassName)
-          : targetClassName;
-
-        if (!resolvedClassName) continue;
-
-        let targetClass = classes.find(
-          c => c.name.toLowerCase() === resolvedClassName.toLowerCase()
-        );
-        if (!targetClass) {
-          const existingTargetClass = await tx.class.findFirst({
-            where: {
-              name: resolvedClassName,
-              academicYearId: targetYearId,
-              tenantId
+        for (const studentId of studentIds) {
+          const profile = await tx.studentProfile.findFirst({
+            where: { id: studentId, user: { tenantId } },
+            include: {
+              user: true,
+              classSection: {
+                include: { class: true, section: true }
+              }
             }
           });
-          if (existingTargetClass) {
-            targetClass = existingTargetClass;
-          } else {
-            targetClass = await tx.class.create({
-              data: {
+
+          if (!profile) continue;
+
+          const currentClassName = profile.classSection?.class.name;
+          const currentSectionName = profile.classSection?.section.name;
+
+          const resolvedClassName = isBulkGlobal 
+            ? getNextClass(currentClassName)
+            : targetClassName;
+
+          if (!resolvedClassName) continue;
+
+          let targetClass = classes.find(
+            c => c.name.toLowerCase() === resolvedClassName.toLowerCase()
+          );
+          if (!targetClass) {
+            const existingTargetClass = await tx.class.findFirst({
+              where: {
                 name: resolvedClassName,
                 academicYearId: targetYearId,
+                tenantId
+              }
+            });
+            if (existingTargetClass) {
+              targetClass = existingTargetClass;
+            } else {
+              targetClass = await tx.class.create({
+                data: {
+                  name: resolvedClassName,
+                  academicYearId: targetYearId,
+                  tenantId,
+                  isActive: true
+                }
+              });
+            }
+            classes.push(targetClass);
+          }
+
+          const resolvedSectionName = targetSectionName || currentSectionName || 'Section A';
+          const targetSection = sections.find(
+            s => s.name.toLowerCase() === resolvedSectionName.toLowerCase()
+          );
+          if (!targetSection) {
+            throw new BadRequestException(`Section "${resolvedSectionName}" not found`);
+          }
+
+          let targetClassSection = classSections.find(
+            cs => cs.classId === targetClass.id && cs.sectionId === targetSection.id
+          );
+
+          if (!targetClassSection) {
+            targetClassSection = await tx.classSection.create({
+              data: {
+                classId: targetClass.id,
+                sectionId: targetSection.id,
                 tenantId,
-                isActive: true
+                strength: 0
+              },
+              include: { class: true, section: true }
+            });
+          }
+
+          const existingInCS = await tx.studentProfile.findMany({
+            where: { classSectionId: targetClassSection.id, tenantId },
+            select: { rollNo: true }
+          });
+          const parsedInts = existingInCS
+            .map(s => parseInt(s.rollNo || '', 10))
+            .filter(val => !isNaN(val));
+          const nextRoll = parsedInts.length > 0 ? Math.max(...parsedInts) + 1 : 1;
+
+          await tx.studentProfile.update({
+            where: { id: studentId },
+            data: { 
+              classSectionId: targetClassSection.id,
+              rollNo: String(nextRoll)
+            }
+          });
+
+          const oldInvoices = await tx.invoice.findMany({
+            where: {
+              studentId,
+              tenantId,
+              invoiceDate: {
+                gte: sourceYear.startDate,
+                lte: sourceYear.endDate
+              },
+              status: {
+                in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
+              }
+            }
+          });
+
+          for (const oldInv of oldInvoices) {
+            await tx.invoice.update({
+              where: { id: oldInv.id },
+              data: {
+                status: PaymentStatus.PAID,
+                paidAmount: oldInv.totalAmount,
+                remainingBalance: 0
               }
             });
           }
-          classes.push(targetClass);
-        }
 
-        const resolvedSectionName = targetSectionName || currentSectionName || 'Section A';
-        const targetSection = sections.find(
-          s => s.name.toLowerCase() === resolvedSectionName.toLowerCase()
-        );
-        if (!targetSection) {
-          throw new BadRequestException(`Section "${resolvedSectionName}" not found`);
-        }
+          const standardFees = [
+            { name: `Tuition Fees - ${resolvedClassName}`, amount: 12000.00 },
+            { name: 'Admission Registration Fee', amount: 3000.00 },
+            { name: 'Library Membership Fee', amount: 800.00 }
+          ];
 
-        let targetClassSection = classSections.find(
-          cs => cs.classId === targetClass.id && cs.sectionId === targetSection.id
-        );
+          const totalAmount = standardFees.reduce((sum, item) => sum + item.amount, 0);
 
-        if (!targetClassSection) {
-          targetClassSection = await tx.classSection.create({
+          const newInvoice = await tx.invoice.create({
             data: {
-              classId: targetClass.id,
-              sectionId: targetSection.id,
-              tenantId,
-              strength: 0
-            },
-            include: { class: true, section: true }
-          });
-        }
-
-        const existingInCS = await tx.studentProfile.findMany({
-          where: { classSectionId: targetClassSection.id, tenantId },
-          select: { rollNo: true }
-        });
-        const parsedInts = existingInCS
-          .map(s => parseInt(s.rollNo || '', 10))
-          .filter(val => !isNaN(val));
-        const nextRoll = parsedInts.length > 0 ? Math.max(...parsedInts) + 1 : 1;
-
-        await tx.studentProfile.update({
-          where: { id: studentId },
-          data: { 
-            classSectionId: targetClassSection.id,
-            rollNo: String(nextRoll)
-          }
-        });
-
-        const oldInvoices = await tx.invoice.findMany({
-          where: {
-            studentId,
-            tenantId,
-            invoiceDate: {
-              gte: sourceYear.startDate,
-              lte: sourceYear.endDate
-            },
-            status: {
-              in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
+              studentId,
+              invoiceDate: new Date(),
+              dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
+              totalAmount,
+              paidAmount: 0,
+              remainingBalance: totalAmount,
+              status: PaymentStatus.UNPAID,
+              description: `Auto-generated Invoice upon promotion to ${resolvedClassName}`,
+              tenantId
             }
-          }
-        });
+          });
 
-        for (const oldInv of oldInvoices) {
-          await tx.invoice.update({
-            where: { id: oldInv.id },
+          await tx.invoiceItem.createMany({
+            data: standardFees.map(item => ({
+              invoiceId: newInvoice.id,
+              name: item.name,
+              amount: item.amount,
+              tenantId
+            }))
+          });
+
+          await tx.activityLog.create({
             data: {
-              status: PaymentStatus.PAID,
-              paidAmount: oldInv.totalAmount,
-              remainingBalance: 0
+              userId: profile.userId,
+              action: 'RECORD_UPDATE',
+              entityName: 'StudentProfile',
+              entityId: studentId,
+              details: `Promoted from ${currentClassName || '—'} (${currentSectionName || '—'}) to ${resolvedClassName} (${resolvedSectionName})`,
+              tenantId
             }
           });
         }
 
-        const standardFees = [
-          { name: `Tuition Fees - ${resolvedClassName}`, amount: 12000.00 },
-          { name: 'Admission Registration Fee', amount: 3000.00 },
-          { name: 'Library Membership Fee', amount: 800.00 }
-        ];
-
-        const totalAmount = standardFees.reduce((sum, item) => sum + item.amount, 0);
-
-        const newInvoice = await tx.invoice.create({
-          data: {
-            studentId,
-            invoiceDate: new Date(),
-            dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-            totalAmount,
-            paidAmount: 0,
-            remainingBalance: totalAmount,
-            status: PaymentStatus.UNPAID,
-            description: `Auto-generated Invoice upon promotion to ${resolvedClassName}`,
-            tenantId
-          }
-        });
-
-        await tx.invoiceItem.createMany({
-          data: standardFees.map(item => ({
-            invoiceId: newInvoice.id,
-            name: item.name,
-            amount: item.amount,
-            tenantId
-          }))
-        });
-
-        await tx.activityLog.create({
-          data: {
-            userId: profile.userId,
-            action: 'RECORD_UPDATE',
-            entityName: 'StudentProfile',
-            entityId: studentId,
-            details: `Promoted from ${currentClassName || '—'} (${currentSectionName || '—'}) to ${resolvedClassName} (${resolvedSectionName})`,
-            tenantId
-          }
-        });
-      }
-
-      return {
-        success: true,
-        promotedCount
-      };
-    });
+        return {
+          success: true,
+          promotedCount
+        };
+      });
+    } catch (err: any) {
+      console.error('Promotion transaction error:', err);
+      throw new BadRequestException(`Promotion failed: ${err.message || err}`);
+    }
   }
 
   async getParents() {
