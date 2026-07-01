@@ -5,6 +5,10 @@ export class CreateClassDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @IsString()
+  @IsOptional()
+  academicYearId?: string;
 }
 
 export class CreateSectionDto {

@@ -25,24 +25,32 @@ export class TimetableService {
   }
 
   // ---------- Classes ----------
-  async getClasses() {
+  async getClasses(academicYearId?: string) {
     const tenantId = this.getTenantId();
-    return this.prisma.class.findMany({ where: { tenantId } });
+    const whereClause: any = { tenantId };
+    if (academicYearId) {
+      whereClause.academicYearId = academicYearId;
+    }
+    return this.prisma.class.findMany({ where: whereClause });
   }
 
-  async createClass(name: string) {
+  async createClass(name: string, academicYearId?: string) {
     const tenantId = this.getTenantId();
-    const activeYear = await this.prisma.academicYear.findFirst({
-      where: { tenantId },
-      orderBy: { isActive: 'desc' },
-    });
-    if (!activeYear) {
-      throw new NotFoundException('Please create an Academic Year first.');
+    let targetYearId = academicYearId;
+    if (!targetYearId) {
+      const activeYear = await this.prisma.academicYear.findFirst({
+        where: { tenantId },
+        orderBy: { isActive: 'desc' },
+      });
+      if (!activeYear) {
+        throw new NotFoundException('Please create an Academic Year first.');
+      }
+      targetYearId = activeYear.id;
     }
     return this.prisma.class.create({
       data: {
         name,
-        academicYearId: activeYear.id,
+        academicYearId: targetYearId,
         tenantId,
       },
     });

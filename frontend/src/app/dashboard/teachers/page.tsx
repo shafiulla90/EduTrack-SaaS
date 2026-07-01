@@ -998,18 +998,22 @@ export default function TeacherClassManagement() {
   const enterSetupWizard = async () => {
     try {
       setIsLoading(true);
+      const activeYear = academicYears.find((y: any) => y.isActive) || academicYears[0];
+      const targetYearId = activeYear ? activeYear.id : '';
+
       const [clsRes, secRes, subRes] = await Promise.all([
-        api.get('/timetable/classes'),
+        api.get('/timetable/classes', { params: { academicYearId: targetYearId } }),
         api.get('/timetable/sections'),
         api.get('/timetable/subjects')
       ]);
       setAvailableClasses(clsRes.data || []);
       setAvailableSections(secRes.data || []);
       setAllSubjects((subRes.data || []).map((s: any) => ({ ...s, isSelected: false })));
-      
+
+      if (targetYearId) setSelectedAcademicYear(targetYearId);
       if (clsRes.data?.length > 0) setSelectedClassId(clsRes.data[0].id);
       if (secRes.data?.length > 0) setSelectedSectionId(secRes.data[0].id);
-      
+
       setSelectedSubjects(new Set());
       setTeacherAssignments([]);
       setCurrentStep(1);
@@ -1024,7 +1028,10 @@ export default function TeacherClassManagement() {
     if (!newClassNameInline.trim()) return;
     try {
       setIsLoading(true);
-      const res = await api.post('/timetable/classes', { name: newClassNameInline.trim() });
+      const res = await api.post('/timetable/classes', {
+        name: newClassNameInline.trim(),
+        academicYearId: selectedAcademicYear
+      });
       setAvailableClasses(prev => [...prev, res.data]);
       setSelectedClassId(res.data.id);
       setShowInlineAddClass(false);
@@ -1037,6 +1044,28 @@ export default function TeacherClassManagement() {
       setIsLoading(false);
     }
   };
+
+  // Fetch classes when selectedAcademicYear changes in the wizard
+  useEffect(() => {
+    if (!selectedAcademicYear || currentStep !== 1) return;
+    const fetchClassesForYear = async () => {
+      try {
+        const res = await api.get('/timetable/classes', {
+          params: { academicYearId: selectedAcademicYear }
+        });
+        setAvailableClasses(res.data || []);
+        if (res.data && res.data.length > 0) {
+          setSelectedClassId(res.data[0].id);
+        } else {
+          setSelectedClassId('');
+        }
+      } catch (err) {
+        console.error('Failed to fetch classes for academic year:', err);
+      }
+    };
+    fetchClassesForYear();
+  }, [selectedAcademicYear, currentStep]);
+
 
   const handleStep1Next = () => {
     if (!selectedAcademicYear || !selectedClassId || !selectedSectionId) {

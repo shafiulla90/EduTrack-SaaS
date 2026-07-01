@@ -26,13 +26,13 @@ export class TimetableController {
   }
 
   @Get('classes')
-  getClasses() {
-    return this.timetableService.getClasses();
+  getClasses(@Query('academicYearId') academicYearId?: string) {
+    return this.timetableService.getClasses(academicYearId);
   }
 
   @Post('classes')
   createClass(@Body() dto: CreateClassDto) {
-    return this.timetableService.createClass(dto.name);
+    return this.timetableService.createClass(dto.name, dto.academicYearId);
   }
 
   @Delete('classes/:id')
