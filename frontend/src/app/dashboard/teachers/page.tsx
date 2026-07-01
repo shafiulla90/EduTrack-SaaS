@@ -997,11 +997,17 @@ export default function TeacherClassManagement() {
       showToast('Please enter at least one class name.', 'error');
       return;
     }
+    // Determine academic year ID: use selected or fall back to active year
+    const yearId = selectedAcademicYear || (academicYears.find((y: any) => y.isActive)?.id) || '';
+    if (!yearId) {
+      showToast('Please select an academic year before creating classes.', 'error');
+      return;
+    }
     try {
       setIsLoading(true);
-        for (const entry of valid) {
-          await api.post('/academics/classes', { name: entry.name.trim(), academicYearId: selectedAcademicYear });
-        }
+      for (const entry of valid) {
+        await api.post('/academics/classes', { name: entry.name.trim(), academicYearId: yearId });
+      }
       showToast('Classes created successfully.', 'success');
       setShowCreateClass(false);
       setClassNamesInput([{ id: 1, name: '' }]);
@@ -1014,7 +1020,7 @@ export default function TeacherClassManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const handleSaveSection = async () => {
     if (!newSectionName.trim()) return;
