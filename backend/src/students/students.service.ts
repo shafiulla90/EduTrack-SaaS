@@ -951,7 +951,7 @@ export class StudentsService implements OnModuleInit {
   // Update student details (name, email, phone, profile fields)
   async updateStudent(studentId: string, data: any) {
     const tenantId = this.getTenantId();
-    return this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const profile = await tx.studentProfile.findUnique({
         where: { id: studentId },
         include: { user: true },
@@ -1014,10 +1014,10 @@ export class StudentsService implements OnModuleInit {
       if (Object.keys(profileUpdates).length) {
         await tx.studentProfile.update({ where: { id: studentId }, data: profileUpdates });
       }
-
-      // Return refreshed details
-      return this.getStudentDetails(studentId);
     });
+
+    // Return refreshed details after transaction commits and releases locks
+    return this.getStudentDetails(studentId);
   }
 
   async bulkDeleteStudents(studentIds: string[], actorUserId: string) {
