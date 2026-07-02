@@ -962,17 +962,43 @@ export class StudentsService implements OnModuleInit {
 
       // Prepare user updates
       const userUpdates: any = {};
-      if (data.firstName || data.lastName) {
+      if (data.name) {
+        userUpdates.name = data.name.trim();
+      } else if (data.firstName || data.lastName) {
         const name = `${data.firstName || ''} ${data.lastName || ''}`.trim();
         userUpdates.name = name;
       }
+      
       if (data.email) {
-        userUpdates.email = data.email.toLowerCase().trim();
+        const emailLower = data.email.toLowerCase().trim();
+        const emailExists = await tx.user.findFirst({
+          where: {
+            email: emailLower,
+            id: { not: profile.userId }
+          }
+        });
+        if (emailExists) {
+          throw new ConflictException('Email address is already in use by another user');
+        }
+        userUpdates.email = emailLower;
       }
+
       if (data.phone) {
         const normalizedPhone = data.phone.replace(/\D/g, '').slice(-10);
-        userUpdates.phone = normalizedPhone;
+        if (normalizedPhone) {
+          const phoneExists = await tx.user.findFirst({
+            where: {
+              phone: normalizedPhone,
+              id: { not: profile.userId }
+            }
+          });
+          if (phoneExists) {
+            throw new ConflictException('Phone number is already in use by another user');
+          }
+          userUpdates.phone = normalizedPhone;
+        }
       }
+
       if (Object.keys(userUpdates).length) {
         await tx.user.update({ where: { id: profile.userId }, data: userUpdates });
       }
