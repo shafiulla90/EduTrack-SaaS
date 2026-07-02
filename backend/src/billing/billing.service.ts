@@ -276,7 +276,7 @@ export class BillingService {
         opportunityId: opp.id,
         accountId: profile.id,
       };
-    });
+    }, { timeout: 90000 });
   }
 
   // ── OPTIONS RETRIEVAL ──────────────────────────────────────────────────────
@@ -603,7 +603,7 @@ export class BillingService {
       await this.recalculatePaidAmount(opportunityId, tx);
 
       return invoice.id;
-    });
+    }, { timeout: 30000 });
   }
 
   // ── RECENT INVOICES ────────────────────────────────────────────────────────
@@ -667,7 +667,7 @@ export class BillingService {
       }
 
       return updatedInvoice;
-    });
+    }, { timeout: 30000 });
   }
 
   // ── CONCESSION MANAGEMENT ──────────────────────────────────────────────────
@@ -1131,6 +1131,6 @@ export class BillingService {
           isActive: e.isActive,
         })),
       };
-    });
+    }, { timeout: 30000 });
   }
 }

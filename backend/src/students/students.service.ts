@@ -937,8 +937,7 @@ export class StudentsService implements OnModuleInit {
       where: { id: studentId },
       include: { user: true }
     });
-
-    if (!profile || profile.user.tenantId !== tenantId) {
+          if (!profile || profile.user.tenantId !== tenantId) {
       throw new NotFoundException('Student profile not found');
     }
 
@@ -947,6 +946,52 @@ export class StudentsService implements OnModuleInit {
     });
 
     return { success: true };
+  }
+
+  // Update student details (name, email, phone, profile fields)
+  async updateStudent(studentId: string, data: any) {
+    const tenantId = this.getTenantId();
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.studentProfile.findUnique({
+        where: { id: studentId },
+        include: { user: true },
+      });
+      if (!profile || profile.user.tenantId !== tenantId) {
+        throw new NotFoundException('Student profile not found');
+      }
+
+      // Prepare user updates
+      const userUpdates: any = {};
+      if (data.firstName || data.lastName) {
+        const name = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+        userUpdates.name = name;
+      }
+      if (data.email) {
+        userUpdates.email = data.email.toLowerCase().trim();
+      }
+      if (data.phone) {
+        const normalizedPhone = data.phone.replace(/\D/g, '').slice(-10);
+        userUpdates.phone = normalizedPhone;
+      }
+      if (Object.keys(userUpdates).length) {
+        await tx.user.update({ where: { id: profile.userId }, data: userUpdates });
+      }
+
+      // Prepare student profile updates
+      const profileUpdates: any = {};
+      if (data.fatherName !== undefined) profileUpdates.fatherName = data.fatherName;
+      if (data.motherName !== undefined) profileUpdates.motherName = data.motherName;
+      if (data.aadharNo !== undefined) profileUpdates.aadharNo = data.aadharNo;
+      if (data.rollNo !== undefined) profileUpdates.rollNo = data.rollNo;
+      if (data.classSectionId !== undefined) profileUpdates.classSectionId = data.classSectionId;
+
+      if (Object.keys(profileUpdates).length) {
+        await tx.studentProfile.update({ where: { id: studentId }, data: profileUpdates });
+      }
+
+      // Return refreshed details
+      return this.getStudentDetails(studentId);
+    });
   }
 
   async bulkDeleteStudents(studentIds: string[], actorUserId: string) {

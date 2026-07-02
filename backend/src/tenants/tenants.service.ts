@@ -155,7 +155,7 @@ export class TenantsService {
         academicYear,
         user,
       };
-    });
+    }, { timeout: 30000 });
   }
 }
 

@@ -82,3 +82,4 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+export const updateStudent = (id: string, data: Partial<any>) => api.patch(`/students/${id}`, data);

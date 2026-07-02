@@ -8,6 +8,7 @@ import {
   Percent, Trash2
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import EditStudentModal from '@/components/EditStudentModal';
 import { useSchoolSetupUpdate } from '@/lib/events';
 import { useToast } from '@/components/Toast';
 
@@ -38,6 +39,7 @@ export default function StudentsDirectory() {
   const [sections, setSections] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     show: boolean;
     studentIds: string[];
@@ -488,6 +490,12 @@ export default function StudentsDirectory() {
                               View Profile
                             </button>
                             <button
+                              onClick={() => setEditingStudent(student)}
+                              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-green-600 hover:border-green-200 hover:bg-green-50/30 transition-all text-xs font-bold min-h-[44px]"
+                            >
+                              Edit
+                            </button>
+                            <button
                               onClick={() => setDeleteConfirm({
                                 show: true,
                                 studentIds: [student.id],
@@ -636,7 +644,17 @@ export default function StudentsDirectory() {
             </div>
           )}
         </>
-      ) : (
+      {editingStudent && (
+  <EditStudentModal
+    student={editingStudent}
+    onClose={() => setEditingStudent(null)}
+    onSave={() => {
+      setEditingStudent(null);
+      loadStudents();
+    }}
+  />
+)}
+) : (
         /* ================= DETAIL VIEW ================= */
         <div className="space-y-6">
           {/* Header Back Bar */}

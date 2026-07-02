@@ -2,9 +2,45 @@ const axios = require('axios');
 const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-
+const { promisify } = require('util');
+const sleep = promisify(setTimeout);
 const BASE_URL = 'http://localhost:3001';
+const STUDENT_ADMISSION_DELAY = parseInt(process.env.STUDENT_ADMISSION_DELAY) || 200;
+const MAX_RETRIES = 3;
 
+axios.interceptors.response.use(
+  response => response,
+  async error => {
+    const { config } = error;
+    if (!config) {
+      return Promise.reject(error);
+    }
+    config.__retryCount = config.__retryCount || 0;
+    if (config.__retryCount >= MAX_RETRIES) {
+      return Promise.reject(error);
+    }
+    config.__retryCount += 1;
+    const backoff = 200 * Math.pow(2, config.__retryCount - 1);
+    console.warn(`[Axios Interceptor] Request to ${config.url} failed: ${error.message || error}. Retrying ${config.__retryCount}/${MAX_RETRIES} in ${backoff}ms...`);
+    await sleep(backoff);
+    return axios(config);
+  }
+);
+
+async function retryAsync(fn, args = [], attempt = 1) {
+  try {
+    return await fn(...args);
+  } catch (err) {
+    if (attempt < MAX_RETRIES) {
+      const backoff = 200 * Math.pow(2, attempt - 1);
+      console.warn(`Retry ${attempt} for ${fn.name} after ${backoff}ms:`, err.message || err);
+      await sleep(backoff);
+      return retryAsync(fn, args, attempt + 1);
+    }
+    console.error(`All ${MAX_RETRIES} attempts failed for ${fn.name}:`, err.message || err);
+    throw err;
+  }
+}
 async function main() {
   console.log("Starting E2E Onboarding & Data Generation...");
 
@@ -154,14 +190,21 @@ async function main() {
         subjectPeriodsMap[subId] = [5];
       }
       
-      const csWizardRes = await axios.post(`${BASE_URL}/timetable/class-sections`, {
-        academicYearId,
-        classId,
-        sectionId,
-        classStrength: 30,
-        subjectTeacherMap,
-        subjectPeriodsMap
-      }, { headers });
+      // Create Class Section using the Setup Wizard endpoint with retry logic
+        let csWizardRes;
+        try {
+          csWizardRes = await retryAsync(axios.post, [`${BASE_URL}/timetable/class-sections`, {
+            academicYearId,
+            classId,
+            sectionId,
+            classStrength: 30,
+            subjectTeacherMap,
+            subjectPeriodsMap
+          }, { headers }]);
+        } catch (err) {
+          console.error('Failed to create class-section for classId', classId, 'sectionId', sectionId, ':', err.message || err);
+          throw err; // abort script – the error will be caught by outer flow
+        }
       
       const classSectionId = csWizardRes.data.id;
       classSectionIds.push(classSectionId);
@@ -265,101 +308,98 @@ async function main() {
   for (let cIdx = 0; cIdx < classIds.length; cIdx++) {
     const classId = classIds[cIdx];
     const pbeIds = pricebookEntryIdsMap[classId];
-    
+
     for (let sIdx = 0; sIdx < 10; sIdx++) {
-      const sectionId = sIdx < 5 ? sectionAId : sectionBId;
-      const nameObj = studentNames[cIdx * 10 + sIdx];
-      const studentEmail = `student.${cIdx * 10 + sIdx + 1}@oakridge.edu`;
-      const phoneNum = `8000000${cIdx * 10 + sIdx + 10}`;
-      
-      const admissionRes = await axios.post(`${BASE_URL}/billing/admissions`, {
-        studentData: {
-          firstName: nameObj.first,
-          lastName: nameObj.last,
-          email: studentEmail,
-          phone: phoneNum,
-          fatherName: `${nameObj.first}'s Father`,
-          motherName: `${nameObj.first}'s Mother`,
-          aadharNo: `1234567890${(cIdx * 10 + sIdx) % 100}`,
-          rollNo: `${sIdx + 1}`,
-          selectedClass: classId,
-          selectedSection: sectionId,
-          academicYear: academicYearId
-        },
-        selectedPricebookEntryIds: pbeIds,
-        concessionAmount: sIdx === 0 ? 1500 : 0 
-      }, { headers });
-      
-      const studentProfileId = admissionRes.data.accountId;
-      const opportunityId = admissionRes.data.opportunityId;
-      studentProfileIds.push(studentProfileId);
-      
-      // Create Parent User and Parent Profile via Auth Register endpoint
-      const parentEmail = `parent.${cIdx * 10 + sIdx + 1}@oakridge.edu`;
-      const parentPhone = `7000000${cIdx * 10 + sIdx + 10}`;
-      const parentRes = await axios.post(`${BASE_URL}/auth/register`, {
-        name: `${nameObj.first}'s Parent`,
-        email: parentEmail,
-        password: 'School@2026',
-        role: 'PARENT',
-        phone: parentPhone,
-        emergencyContact: '111-222-3333'
-      }, { headers });
-      
-      const parentUser = parentRes.data;
-      const parentProfile = await prisma.parentProfile.findUnique({
-        where: { userId: parentUser.id }
-      });
-      parentProfileIds.push(parentProfile.id);
-      
-      // Link parent and student in database
-      await prisma.studentProfile.update({
-        where: { id: studentProfileId },
-        data: { parentProfileId: parentProfile.id }
-      });
-      
-      // 14. Create Invoices and payments
-      const unpaidFeesRes = await axios.get(`${BASE_URL}/billing/unpaid-fees/${opportunityId}`, { headers });
-      const unpaidItems = unpaidFeesRes.data; 
-      
-      if (sIdx < 3) {
-        // FULLY PAID
-        const itemsToPay = unpaidItems.map(item => ({
-          oliId: item.oliId,
-          productId: '', 
-          amount: item.balanceDue
-        }));
-        
-        for (const it of itemsToPay) {
-          const oli = unpaidItems.find(x => x.oliId === it.oliId);
-          const oliRecord = await prisma.opportunityLineItem.findUnique({
-            where: { id: it.oliId }
-          });
-          it.productId = oliRecord.productId;
-        }
-        
-        await axios.post(`${BASE_URL}/billing/invoices`, {
-          opportunityId,
-          studentId: studentProfileId,
-          items: itemsToPay,
-          paymentMethod: 'CASH'
-        }, { headers });
-        
-      } else if (sIdx < 7) {
-        // PARTIALLY PAID (Tuition only)
-        const tuitionOli = unpaidItems.find(x => x.productName === 'Tuition Fee');
-        if (tuitionOli) {
-          await axios.post(`${BASE_URL}/billing/invoices`, {
+      try {
+        const sectionId = sIdx < 5 ? sectionAId : sectionBId;
+        const nameObj = studentNames[cIdx * 10 + sIdx];
+        const studentEmail = `student.${cIdx * 10 + sIdx + 1}@oakridge.edu`;
+        const phoneNum = `8000000${cIdx * 10 + sIdx + 10}`;
+
+        const admissionPayload = {
+          studentData: {
+            firstName: nameObj.first,
+            lastName: nameObj.last,
+            email: studentEmail,
+            phone: phoneNum,
+            fatherName: `${nameObj.first}'s Father`,
+            motherName: `${nameObj.first}'s Mother`,
+            aadharNo: `1234567890${(cIdx * 10 + sIdx) % 100}`,
+            rollNo: `${sIdx + 1}`,
+            selectedClass: classId,
+            selectedSection: sectionId,
+            academicYear: academicYearId
+          },
+          selectedPricebookEntryIds: pbeIds,
+          concessionAmount: sIdx === 0 ? 1500 : 0
+        };
+
+        const admissionRes = await retryAsync(axios.post, [`${BASE_URL}/billing/admissions`, admissionPayload, { headers }]);
+        const studentProfileId = admissionRes.data.accountId;
+        const opportunityId = admissionRes.data.opportunityId;
+        studentProfileIds.push(studentProfileId);
+
+        // Create Parent User and Parent Profile via Auth Register endpoint
+        const parentEmail = `parent.${cIdx * 10 + sIdx + 1}@oakridge.edu`;
+        const parentPhone = `7000000${cIdx * 10 + sIdx + 10}`;
+        const parentPayload = {
+          name: `${nameObj.first}'s Parent`,
+          email: parentEmail,
+          password: 'School@2026',
+          role: 'PARENT',
+          phone: parentPhone,
+          emergencyContact: '111-222-3333'
+        };
+        const parentRes = await retryAsync(axios.post, [`${BASE_URL}/auth/register`, parentPayload, { headers }]);
+        const parentUser = parentRes.data;
+        const parentProfile = await prisma.parentProfile.findUnique({ where: { userId: parentUser.id } });
+        parentProfileIds.push(parentProfile.id);
+
+        // Link parent and student in database
+        await prisma.studentProfile.update({
+          where: { id: studentProfileId },
+          data: { parentProfileId: parentProfile.id }
+        });
+
+        // Create Invoices and payments
+        const unpaidFeesRes = await retryAsync(axios.get, [`${BASE_URL}/billing/unpaid-fees/${opportunityId}`, { headers }]);
+        const unpaidItems = unpaidFeesRes.data;
+
+        if (sIdx < 3) {
+          // FULLY PAID
+          const itemsToPay = unpaidItems.map(item => ({
+            oliId: item.oliId,
+            productId: '',
+            amount: item.balanceDue
+          }));
+          for (const it of itemsToPay) {
+            const oliRecord = await prisma.opportunityLineItem.findUnique({ where: { id: it.oliId } });
+            it.productId = oliRecord.productId;
+          }
+          await retryAsync(axios.post, [`${BASE_URL}/billing/invoices`, {
             opportunityId,
             studentId: studentProfileId,
-            items: [{
-              oliId: tuitionOli.oliId,
-              productId: tuitionProduct.id,
-              amount: tuitionOli.balanceDue
-            }],
+            items: itemsToPay,
             paymentMethod: 'CASH'
-          }, { headers });
+          }, { headers }]);
+        } else if (sIdx < 7) {
+          // PARTIALLY PAID (Tuition only)
+          const tuitionOli = unpaidItems.find(x => x.productName === 'Tuition Fee');
+          if (tuitionOli) {
+            await retryAsync(axios.post, [`${BASE_URL}/billing/invoices`, {
+              opportunityId,
+              studentId: studentProfileId,
+              items: [{ oliId: tuitionOli.oliId, productId: tuitionProduct.id, amount: tuitionOli.balanceDue }],
+              paymentMethod: 'CASH'
+            }, { headers }]);
+          }
         }
+
+        // Small delay before next student
+        await sleep(STUDENT_ADMISSION_DELAY);
+      } catch (err) {
+        console.error('Student admission failed for class', classId, 'student index', sIdx, ':', err.message || err);
+        // Continue with next student
       }
     }
   }
@@ -454,6 +494,29 @@ async function main() {
   }
 
   // 17. Update all users' password hash to a known value ('School@2026')
+
+  // 18. Generate additional sample data (library, complaints, notifications)
+  console.log('Generating additional sample data...');
+  // Library: create 5 books and assign random students
+  const sampleBooks = ['Mathematics Basics', 'Science Experiments', 'History of India', 'English Grammar', 'Art & Craft'];
+  for (const title of sampleBooks) {
+    const bookRes = await retryAsync(axios.post, [`${BASE_URL}/library/books`, { title, author: 'Demo Author' }, { headers }]);
+    // Issue to a random student
+    const randomStudentId = studentProfileIds[Math.floor(Math.random() * studentProfileIds.length)];
+    await retryAsync(axios.post, [`${BASE_URL}/library/issue`, { bookId: bookRes.data.id, studentId: randomStudentId, dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }, { headers }]);
+  }
+  // Complaints: create 3 mock complaints linked to random students
+  const complaintTexts = ['Lost textbook', 'Late fee dispute', 'Classroom temperature too high'];
+  for (const text of complaintTexts) {
+    const randomStudentId = studentProfileIds[Math.floor(Math.random() * studentProfileIds.length)];
+    await retryAsync(axios.post, [`${BASE_URL}/complaints`, { studentId: randomStudentId, description: text }, { headers }]);
+  }
+  // Notifications: send a welcome notification to all parents
+  for (const parentId of parentProfileIds) {
+    await retryAsync(axios.post, [`${BASE_URL}/notifications`, { recipientProfileId: parentId, title: 'Welcome', message: 'Welcome to Oakridge International School portal!' }, { headers }]);
+  }
+
+  console.log('Additional sample data generation completed.');
   console.log("Updating all users' passwords to 'School@2026' for easy testing...");
   const commonPasswordHash = await bcrypt.hash('School@2026', 10);
   

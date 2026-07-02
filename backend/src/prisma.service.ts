@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private static instance: PrismaService;
+
   constructor() {
     super({
       datasources: {
@@ -12,10 +14,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       },
       log: ['error'],
     });
+
+    if (PrismaService.instance) {
+      return PrismaService.instance;
+    }
+
+    console.log("PrismaService DATABASE_URL (initialized new singleton):", process.env.DATABASE_URL);
+    PrismaService.instance = this;
   }
 
   async onModuleInit() {
-    await this.$connect();
+    // Lazily connect on first query to prevent bootup connection timeouts
   }
 
   async onModuleDestroy() {
