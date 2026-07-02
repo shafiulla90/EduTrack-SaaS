@@ -570,12 +570,20 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                         <Phone className="w-3.5 h-3.5" />
                         {student.phone}
                       </a>
-                      <button
-                        onClick={() => handleViewDetails(student)}
-                        className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px] min-w-[100px] cursor-pointer"
-                      >
-                        View Profile
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setEditingStudent(student)}
+                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-green-600 hover:border-green-200 hover:bg-green-50/30 transition-all text-xs font-bold min-h-[44px]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleViewDetails(student)}
+                          className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px] cursor-pointer"
+                        >
+                          View Profile
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -644,17 +652,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
             </div>
           )}
         </>
-      {editingStudent && (
-  <EditStudentModal
-    student={editingStudent}
-    onClose={() => setEditingStudent(null)}
-    onSave={() => {
-      setEditingStudent(null);
-      loadStudents();
-    }}
-  />
-)}
-) : (
+      ) : (
         /* ================= DETAIL VIEW ================= */
         <div className="space-y-6">
           {/* Header Back Bar */}
@@ -1130,6 +1128,16 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
             </div>
           </div>
         </>
+      )}
+      {editingStudent && (
+        <EditStudentModal
+          student={editingStudent}
+          onClose={() => setEditingStudent(null)}
+          onSave={() => {
+            setEditingStudent(null);
+            loadStudents();
+          }}
+        />
       )}
     </div>
   );
