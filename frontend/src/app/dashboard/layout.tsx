@@ -214,7 +214,7 @@ export default function DashboardLayout({
     <ToastProvider>
     <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans overflow-x-hidden">
       {/* Sidebar - Fix position matching .sidebar in LWC CSS */}
-      <aside className="hidden lg:block w-[280px] bg-white border-r border-slate-200 h-screen fixed top-0 left-0 overflow-y-auto z-50 py-6 select-none shadow-sm">
+      <aside className="hidden lg:block w-[280px] bg-white border-r border-slate-200 h-screen fixed top-0 left-0 overflow-y-auto z-50 py-6 select-none shadow-sm print:hidden">
         {/* Sidebar Nav section blocks */}
         <nav className="space-y-6 px-4">
           {navSections.map((section) => (
@@ -249,9 +249,9 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main panel viewport - Match margin-left from LWC sidebar */}
-      <div className="flex-1 flex flex-col min-h-screen lg:pl-[280px] w-full min-w-0">
+      <div className="flex-1 flex flex-col min-h-screen lg:pl-[280px] print:pl-0 w-full min-w-0">
         {/* Top bar matching top-bar of LWC */}
-        <header className="h-[72px] bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40 shadow-sm">
+        <header className="h-[72px] bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40 shadow-sm print:hidden">
           <div className="flex items-center gap-3">
             {/* Mobile Menu trigger */}
             <button
@@ -362,7 +362,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Page content panel viewport */}
-        <main className="p-4 sm:p-8 flex-1 max-w-7xl w-full mx-auto min-w-0">
+        <main className="p-4 sm:p-8 print:p-0 print:max-w-none print:m-0 flex-1 max-w-7xl w-full mx-auto min-w-0">
           {children}
         </main>
       </div>
