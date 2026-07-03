@@ -4,15 +4,16 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useTenant } from '../../providers/TenantContext';
 
 function OtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { schoolName, logoUrl, refresh } = useTenant();
   
   const phone = searchParams.get('phone') || '';
   const devOtp = searchParams.get('dev_otp') || '';
+  // School branding passed from login page via URL params (set from send-otp response)
+  const urlSchoolName = searchParams.get('schoolName') || '';
+  const urlLogoUrl = searchParams.get('logoUrl') || '';
   
   const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -75,13 +76,6 @@ function OtpContent() {
           localStorage.setItem('userPhone', data.user.phone);
         }
         
-        // Fetch tenant details immediately to verify branding is ready
-        try {
-          await refresh();
-        } catch (err) {
-          console.error('Failed to pre-fetch school profile on login:', err);
-        }
-
         setSuccessMsg('Authenticated! Redirecting...');
         setTimeout(() => {
           router.push('/dashboard');
@@ -133,20 +127,20 @@ function OtpContent() {
       {/* Main card wrapper */}
       <div className="w-full max-w-md z-10">
         <div className="flex flex-col items-center justify-center mb-8 text-center">
-          {logoUrl ? (
+          {urlLogoUrl ? (
             <div className="w-16 h-16 rounded-2xl bg-white border border-slate-800 p-2 overflow-hidden shadow-lg mb-3">
-              <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
+              <img src={urlLogoUrl} alt={urlSchoolName} className="w-full h-full object-cover" />
             </div>
           ) : (
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 mb-3">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 mb-3">
               <span className="font-extrabold text-white text-xl tracking-tight">ET</span>
             </div>
           )}
           <h1 className="font-black text-2xl bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent tracking-tight max-w-sm">
-            {schoolName || 'EduTrack SaaS'}
+            {urlSchoolName || 'EduTrack Application'}
           </h1>
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-            {schoolName ? 'School Portal' : 'SaaS Platform'}
+            {urlSchoolName ? 'School Portal' : 'Powered By Covenant Synergy'}
           </p>
         </div>
 

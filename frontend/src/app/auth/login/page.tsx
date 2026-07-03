@@ -8,7 +8,7 @@ import { useTenant } from '../../providers/TenantContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { schoolName, logoUrl, refresh } = useTenant();
+  const { refresh } = useTenant();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -66,9 +66,17 @@ export default function LoginPage() {
       const response = await api.post('/auth/send-otp', { phone: cleanedPhone });
       // In development, the API will return the OTP code for convenience
       const otpCode = response.data?.otpCode;
-      
+      const schoolName = response.data?.schoolName || '';
+      const logoUrl = response.data?.logoUrl || '';
+
+      // Build OTP page URL with school branding params for registered users
+      let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}`;
+      if (otpCode) otpUrl += `&dev_otp=${otpCode}`;
+      if (schoolName) otpUrl += `&schoolName=${encodeURIComponent(schoolName)}`;
+      if (logoUrl) otpUrl += `&logoUrl=${encodeURIComponent(logoUrl)}`;
+
       // Navigate to verification screen
-      router.push(`/auth/otp?phone=${encodeURIComponent(cleanedPhone)}${otpCode ? `&dev_otp=${otpCode}` : ''}`);
+      router.push(otpUrl);
     } catch (err: any) {
       console.error('Send OTP error:', err);
       setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
@@ -86,20 +94,14 @@ export default function LoginPage() {
       {/* Main Card */}
       <div className="w-full max-w-md z-10">
         <div className="flex flex-col items-center justify-center mb-8 text-center">
-          {logoUrl ? (
-            <div className="w-16 h-16 rounded-2xl bg-white border border-slate-800 p-2 overflow-hidden shadow-lg mb-3">
-              <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
-            </div>
-          ) : (
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 mb-3">
-              <span className="font-extrabold text-white text-xl tracking-tight">ET</span>
-            </div>
-          )}
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 mb-3">
+            <span className="font-extrabold text-white text-xl tracking-tight">ET</span>
+          </div>
           <h1 className="font-black text-2xl bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent tracking-tight max-w-sm">
-            {schoolName || 'EduTrack SaaS'}
+            EduTrack Application
           </h1>
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-            {schoolName ? 'School Portal' : 'SaaS Platform'}
+            Powered By Covenant Synergy
           </p>
         </div>
 

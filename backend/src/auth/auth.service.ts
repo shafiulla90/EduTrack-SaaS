@@ -41,7 +41,7 @@ export class AuthService {
     };
   }
 
-  async sendOtp(phone: string): Promise<{ success: boolean; message: string; otpCode?: string }> {
+  async sendOtp(phone: string): Promise<{ success: boolean; message: string; otpCode?: string; schoolName?: string; logoUrl?: string }> {
     const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
     const otpCode = process.env.NODE_ENV === 'production'
       ? Math.floor(100000 + Math.random() * 900000).toString()
@@ -60,10 +60,41 @@ export class AuthService {
 
     console.log(`[OTP DISPATCH] Phone: ${phone} (Normalized: ${normalizedPhone}) | Code: ${otpCode}`);
 
+    // Look up if there is a registered user with this phone → return their school branding
+    let schoolName: string | undefined;
+    let logoUrl: string | undefined;
+
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: { phone: { endsWith: normalizedPhone } },
+        select: { tenantId: true },
+      });
+
+      if (user?.tenantId) {
+        const [tenant, setup] = await Promise.all([
+          this.prisma.tenant.findUnique({
+            where: { id: user.tenantId },
+            select: { name: true, logoUrl: true },
+          }),
+          this.prisma.schoolSetup.findUnique({
+            where: { tenantId: user.tenantId },
+            select: { schoolName: true, schoolLogo: true },
+          }),
+        ]);
+
+        schoolName = setup?.schoolName || tenant?.name || undefined;
+        logoUrl = setup?.schoolLogo || tenant?.logoUrl || undefined;
+      }
+    } catch (e) {
+      // Non-critical — branding lookup failure should not block OTP
+    }
+
     return {
       success: true,
       message: 'OTP sent successfully',
       otpCode,
+      ...(schoolName ? { schoolName } : {}),
+      ...(logoUrl ? { logoUrl } : {}),
     };
   }
 
