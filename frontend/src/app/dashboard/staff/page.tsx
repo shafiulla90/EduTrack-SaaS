@@ -386,9 +386,15 @@ export default function SchoolStaffPage() {
           <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between min-h-[130px]">
             <div className="flex items-start justify-between">
               <span className="text-xl">{kpi.icon}</span>
-              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-blue-500 animate-spin" />
-              </div>
+              {loading ? (
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-blue-500 animate-spin" />
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">
+                  ✓
+                </div>
+              )}
             </div>
             <div>
               <div className={`text-[28px] font-extrabold leading-none ${kpi.isPayroll ? 'text-blue-600' : 'text-slate-800'}`}>
