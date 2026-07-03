@@ -224,11 +224,29 @@ export class BillingService {
         },
       });
 
+      // Auto-generate roll number if not provided
+      let finalRollNo = studentData.rollNo ? String(studentData.rollNo).trim() : '';
+      if (classSectionId) {
+        const existingStudents = await tx.studentProfile.findMany({
+          where: { classSectionId, tenantId },
+          select: { rollNo: true }
+        });
+        const rollNumbersSet = new Set(existingStudents.map(s => s.rollNo?.trim()).filter(Boolean));
+
+        if (!finalRollNo || rollNumbersSet.has(finalRollNo)) {
+          const parsedInts = existingStudents
+            .map(s => parseInt(s.rollNo || '', 10))
+            .filter(val => !isNaN(val));
+          const nextRoll = parsedInts.length > 0 ? Math.max(...parsedInts) + 1 : 1;
+          finalRollNo = String(nextRoll);
+        }
+      }
+
       // Create student profile
       const profile = await tx.studentProfile.create({
         data: {
           userId: user.id,
-          rollNo: studentData.rollNo || null,
+          rollNo: finalRollNo || null,
           fatherName: studentData.fatherName || null,
           motherName: studentData.motherName || null,
           aadharNo: studentData.aadharNo || null,

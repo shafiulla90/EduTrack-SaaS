@@ -15,7 +15,12 @@ interface Expense {
 }
 
 const CATEGORY_OPTIONS = ['Salary', 'Utilities', 'Supplies', 'Maintenance', 'Rent', 'Other'];
-const STATUS_OPTIONS = ['Pending', 'Approved', 'Paid'];
+const STATUS_OPTIONS = [
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'PAID', label: 'Paid' }
+];
+
 const PAYMENT_OPTIONS = ['Cash', 'Bank Transfer', 'Cheque'];
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -34,10 +39,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
   APPROVED: 'bg-blue-50 text-blue-700 border-blue-200',
-  PAID: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  Pending: 'bg-amber-50 text-amber-700 border-amber-200',
-  Approved: 'bg-blue-50 text-blue-700 border-blue-200',
-  Paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  PAID: 'bg-emerald-50 text-emerald-700 border-emerald-200'
 };
 
 export default function ExpensesPage() {
@@ -201,7 +203,7 @@ export default function ExpensesPage() {
         <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)}
           className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold bg-white outline-none">
           <option value="">All Statuses</option>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
           className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold bg-white outline-none"
@@ -289,9 +291,9 @@ export default function ExpensesPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Status</label>
-                  <select value={currentExpense.status || 'Pending'} onChange={e => setCurrentExpense({...currentExpense, status: e.target.value})}
+                  <select value={currentExpense.status || 'PENDING'} onChange={e => setCurrentExpense({...currentExpense, status: e.target.value})}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none">
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
               </div>
