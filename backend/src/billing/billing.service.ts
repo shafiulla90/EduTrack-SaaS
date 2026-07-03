@@ -162,16 +162,39 @@ export class BillingService {
   async createAdmission(studentData: any, selectedPricebookEntryIds: string[], concessionAmount: number) {
     const tenantId = this.getTenantId();
 
-    const emailLower = studentData.email.toLowerCase().trim();
-    const existing = await this.prisma.user.findUnique({
-      where: { email: emailLower },
+    // ── Email handling: generate a unique fallback if no email provided ──────
+    let emailLower: string;
+    if (studentData.email && studentData.email.trim()) {
+      emailLower = studentData.email.toLowerCase().trim();
+    } else {
+      // Generate a unique, tenant-scoped email so no crash on empty email
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const firstName = (studentData.firstName || 'student').toLowerCase().replace(/\s+/g, '');
+      const lastName = (studentData.lastName || '').toLowerCase().replace(/\s+/g, '');
+      emailLower = `${firstName}${lastName ? '.' + lastName : ''}.${randomSuffix}@noemail.local`;
+    }
+
+    // ── Email uniqueness check scoped to this tenant only ───────────────────
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: emailLower, tenantId },
     });
-    if (existing) {
-      throw new ConflictException('Email already registered');
+    if (existingUser) {
+      throw new ConflictException('A student with this email is already registered in your school');
     }
 
     const defaultPassword = studentData.password || 'Welcome@123';
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+    // ── Phone: make globally unique by prefixing with short tenantId ─────────
+    // This allows the same phone number to exist across different schools.
+    let normalizedPhone: string | null = null;
+    if (studentData.phone && studentData.phone.trim()) {
+      const digitsOnly = studentData.phone.replace(/\D/g, '').slice(-10);
+      if (digitsOnly.length >= 10) {
+        // Store as tenantId[:8]-phone to avoid cross-tenant unique constraint violations
+        normalizedPhone = `${tenantId.substring(0, 8)}-${digitsOnly}`;
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
       // Resolve classSection
@@ -192,11 +215,11 @@ export class BillingService {
       // Create student user
       const user = await tx.user.create({
         data: {
-          email: studentData.email.toLowerCase().trim(),
+          email: emailLower,
           name: `${studentData.firstName} ${studentData.lastName}`,
           passwordHash,
           role: Role.STUDENT,
-          phone: studentData.phone || null,
+          phone: normalizedPhone,
           tenantId,
         },
       });

@@ -202,7 +202,7 @@ export default function AdmissionsPage() {
               dob: tempStudent.dob,
               phone: tempStudent.phone,
               emergencyContact: tempStudent.emergencyContact,
-              email: tempStudent.email || `${tempStudent.firstName.toLowerCase()}.${tempStudent.lastName.toLowerCase()}@demoschool.com`,
+              email: tempStudent.email || '',
               aadharNo: tempStudent.aadharNo,
               selectedClass: tempStudent.selectedClass,
               selectedSection: tempStudent.selectedSection,

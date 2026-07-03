@@ -84,12 +84,33 @@ export class StudentsService implements OnModuleInit {
 
   async createStudent(data: any) {
     const tenantId = this.getTenantId();
-    const emailLower = data.email.toLowerCase().trim();
-    const existing = await this.prisma.user.findUnique({
-      where: { email: emailLower },
+
+    // ── Email: generate unique fallback if not provided ───────────────────────
+    let emailLower: string;
+    if (data.email && data.email.trim()) {
+      emailLower = data.email.toLowerCase().trim();
+    } else {
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const firstName = (data.firstName || data.name || 'student').toLowerCase().replace(/\s+/g, '');
+      const lastName = (data.lastName || '').toLowerCase().replace(/\s+/g, '');
+      emailLower = `${firstName}${lastName ? '.' + lastName : ''}.${randomSuffix}@noemail.local`;
+    }
+
+    // ── Email uniqueness scoped to this tenant only ───────────────────────────
+    const existing = await this.prisma.user.findFirst({
+      where: { email: emailLower, tenantId },
     });
     if (existing) {
-      throw new ConflictException('Email already registered');
+      throw new ConflictException('A student with this email is already registered in your school');
+    }
+
+    // ── Phone: prefix with tenantId to avoid cross-tenant uniqueness issues ───
+    let normalizedPhone: string | null = null;
+    if (data.phone && String(data.phone).trim()) {
+      const digitsOnly = String(data.phone).replace(/\D/g, '').slice(-10);
+      if (digitsOnly.length >= 10) {
+        normalizedPhone = `${tenantId.substring(0, 8)}-${digitsOnly}`;
+      }
     }
 
     const defaultPassword = data.password || 'Welcome@123';
@@ -121,7 +142,6 @@ export class StudentsService implements OnModuleInit {
         }
       }
 
-      const normalizedPhone = data.phone ? data.phone.replace(/\D/g, '').slice(-10) : null;
       const user = await tx.user.create({
         data: {
           email: emailLower,
