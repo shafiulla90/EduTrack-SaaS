@@ -98,7 +98,7 @@ export default function InvoicePrintPage() {
       </div>
 
       {/* Invoice Sheet Area (A4 styled layout) */}
-      <div className="w-full max-w-[800px] bg-white border border-slate-200 print:border-none shadow-lg print:shadow-none min-h-[1050px] relative font-sans text-[#2d3748] print:m-0 flex flex-col justify-between">
+      <div className="w-full max-w-[800px] bg-white border border-slate-200 print:border-none shadow-lg print:shadow-none min-h-[1050px] print:min-h-0 relative font-sans text-[#2d3748] print:m-0 flex flex-col print:block justify-between">
         
         <div>
           {/* Header block (Dark Blue with Orange Accent border) */}

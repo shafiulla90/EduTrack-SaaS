@@ -3708,6 +3708,10 @@ body {
 
 /* Custom Print Overrides */
 @media print {
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
     aside,
     header,
     .print-hidden,
