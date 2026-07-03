@@ -3705,3 +3705,26 @@ body {
     color: #dc2626;
 }
 /* ==================== END SALESFORCE PARITY STYLES ==================== */
+
+/* Custom Print Overrides */
+@media print {
+    aside,
+    header,
+    .print-hidden,
+    .print\:hidden {
+        display: none !important;
+    }
+    main {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+    .lg\:pl-\[280px\] {
+        padding-left: 0 !important;
+    }
+    body {
+        background-color: white !important;
+        background: white !important;
+    }
+}
