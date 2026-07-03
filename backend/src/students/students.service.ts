@@ -205,7 +205,7 @@ export class StudentsService implements OnModuleInit {
     });
   }
 
-  async searchStudents(searchTerm?: string, classId?: string, sectionId?: string, page = 1, limit = 100) {
+  async searchStudents(searchTerm?: string, classId?: string, sectionId?: string, page = 1, limit = 10000) {
     const tenantId = this.getTenantId();
     const skip = (page - 1) * limit;
 

@@ -29,23 +29,11 @@ export class TenantMiddleware implements NestMiddleware {
     }
 
     if (!tenantSubdomain) {
-      // For localhost testing, we can fall back to the first available tenant
-      // to avoid breaking local dev server APIs, or raise an error.
-      try {
-        const allTenants = await this.tenantsService.findAll();
-        if (allTenants.length > 0) {
-          // Fall back to first tenant for development if no header is supplied
-          const defaultTenant = allTenants[0];
-          TenantContext.run(defaultTenant.id, () => {
-            req['tenantId'] = defaultTenant.id;
-            next();
-          });
-          return;
-        }
-      } catch (e) {
-        // Fallback failed
-      }
-      throw new BadRequestException('X-Tenant-ID header or subdomain is required');
+      // No tenant identifier provided — allow the request through without a tenant context.
+      // Public endpoints (e.g. /tenant/public-branding, /auth/send-otp) will handle the
+      // missing tenantId gracefully and return generic platform branding.
+      next();
+      return;
     }
 
     try {

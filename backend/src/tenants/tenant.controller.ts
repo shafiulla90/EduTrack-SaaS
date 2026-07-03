@@ -16,8 +16,16 @@ export class TenantController {
   @Get('public-branding')
   async getPublicBranding(@Req() req: any) {
     const tenantId = req['tenantId'];
+
+    // No tenant resolved (root domain, no subdomain) → return generic platform branding
     if (!tenantId) {
-      throw new BadRequestException('Tenant could not be resolved');
+      return {
+        id: null,
+        name: 'EduTrack Application',
+        subdomain: null,
+        logoUrl: null,
+        subtitle: 'School Management Platform',
+      };
     }
 
     const tenant = await this.prisma.tenant.findUnique({

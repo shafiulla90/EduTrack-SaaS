@@ -21,7 +21,7 @@ export class StudentsController {
     @Query('limit') limit?: string,
   ) {
     const p = page ? parseInt(page, 10) : 1;
-    const l = limit ? parseInt(limit, 10) : 100;
+    const l = limit ? parseInt(limit, 10) : 10000;
     return this.studentsService.searchStudents(search, classId, sectionId, p, l);
   }
 

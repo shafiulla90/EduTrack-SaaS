@@ -33,7 +33,7 @@ export default function StudentsDirectory() {
   const [search, setSearch] = useState('');
   const [selectedClass, setSelectedClass] = useState('All');
   const [selectedSection, setSelectedSection] = useState('All');
-  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedYear, setSelectedYear] = useState('All');
   const [academicYears, setAcademicYears] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
@@ -79,9 +79,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
       setSearch('');
       setSelectedClass('All');
       setSelectedSection('All');
-      if (academicYears.length > 0) {
-        setSelectedYear(academicYears[0].id);
-      }
+      setSelectedYear('All');
 
       loadStudents();
     } catch (err: any) {
@@ -107,9 +105,6 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
         api.get('/academics/sections')
       ]);
       setAcademicYears(ayRes.data);
-      if (ayRes.data.length > 0) {
-        setSelectedYear(ayRes.data[0].id);
-      }
       setClasses(classRes.data);
       setSections(secRes.data);
     } catch (err) {
