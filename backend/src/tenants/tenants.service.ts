@@ -7,13 +7,27 @@ import * as bcrypt from 'bcrypt';
 export class TenantsService {
   constructor(private prisma: PrismaService) {}
 
+  private subdomainCache = new Map<string, { tenant: Tenant; expiresAt: number }>();
+
   async findBySubdomain(subDomain: string): Promise<Tenant> {
+    const nowTime = Date.now();
+    const cached = this.subdomainCache.get(subDomain);
+    if (cached && cached.expiresAt > nowTime) {
+      return cached.tenant;
+    }
+
     const tenant = await this.prisma.tenant.findUnique({
       where: { subDomain },
     });
     if (!tenant) {
       throw new NotFoundException(`Tenant with subdomain '${subDomain}' not found`);
     }
+
+    this.subdomainCache.set(subDomain, {
+      tenant,
+      expiresAt: nowTime + 5 * 60 * 1000, // Cache subdomain mapping for 5 minutes
+    });
+
     return tenant;
   }
 

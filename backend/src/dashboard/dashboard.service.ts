@@ -14,8 +14,17 @@ export class DashboardService {
     return tenantId;
   }
 
+  private dashboardCache = new Map<string, { data: any; expiresAt: number }>();
+
   async getDashboardSummary() {
     const tenantId = this.getTenantId();
+    const cacheKey = `dashboard-summary-${tenantId}`;
+    const cached = this.dashboardCache.get(cacheKey);
+    const nowTime = Date.now();
+
+    if (cached && cached.expiresAt > nowTime) {
+      return cached.data;
+    }
 
     // Prepare date ranges for last 6 months
     const last6Months = [];
@@ -358,7 +367,7 @@ export class DashboardService {
       ? ((revThisMonth - revLastMonth) / revLastMonth) * 100
       : revThisMonth > 0 ? 100 : 0;
 
-    return {
+    const summaryData = {
       stats: {
         studentsCount,
         teachersCount,
@@ -391,6 +400,13 @@ export class DashboardService {
       recentPayments,
       chartData,
     };
+
+    this.dashboardCache.set(cacheKey, {
+      data: summaryData,
+      expiresAt: nowTime + 30 * 1000, // Cache for 30 seconds
+    });
+
+    return summaryData;
   }
 
   async getReportsSummary() {
