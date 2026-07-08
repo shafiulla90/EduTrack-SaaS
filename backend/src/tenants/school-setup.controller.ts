@@ -111,6 +111,7 @@ export class SchoolSetupController {
         email: setup.email,
         phone: setup.mobileNumber,
         logoUrl: setup.schoolLogo,
+        subtitle: setup.schoolType,
       },
     });
 

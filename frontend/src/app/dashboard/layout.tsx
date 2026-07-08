@@ -14,7 +14,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const { schoolName, adminName, logoUrl, currentUser, loading } = useTenant();
+  const { schoolName, schoolType, adminName, logoUrl, currentUser, loading } = useTenant();
 
   if (loading) {
     return (
@@ -317,7 +317,7 @@ export default function DashboardLayout({
                 {schoolName}
               </h1>
               <p className="text-[9px] text-slate-400 font-bold tracking-wider uppercase mt-0.5">
-                Building Excellence for Futures
+                {schoolType || 'Building Excellence for Futures'}
               </p>
             </div>
           </div>

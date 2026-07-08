@@ -103,6 +103,7 @@ function SettingsPageContent() {
         setSetupData(data);
         if (data.setup) {
           setSchoolName(data.setup.schoolName || '');
+          setSchoolSubtitle(data.setup.schoolType || '');
           setSchoolEmail(data.setup.email || '');
           setSchoolPhone(data.setup.mobileNumber || '');
           setSchoolAddress(data.setup.address || '');
@@ -151,6 +152,7 @@ function SettingsPageContent() {
       if (activeTab === 'profile') {
         const payload = {
           schoolName,
+          schoolType: schoolSubtitle,
           email: schoolEmail,
           address: schoolAddress,
           schoolLogo,
