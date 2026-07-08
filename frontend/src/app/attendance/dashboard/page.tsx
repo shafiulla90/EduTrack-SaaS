@@ -314,7 +314,7 @@ function AttendanceDashboardContent() {
     });
 
     return Object.values(groups).map((group, index) => {
-      const themeClass = `attendance-card theme-${(index % 5) + 1} bg-white border border-gray-200 text-slate-700 p-5 rounded-xl transition-all hover:translate-y-[-2px] shadow-sm`;
+      const themeClass = `relative attendance-card theme-${(index % 5) + 1} bg-white border border-gray-200 text-slate-700 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm`;
 
       if (isSunday) {
         return {
