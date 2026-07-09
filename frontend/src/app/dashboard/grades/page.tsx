@@ -135,7 +135,7 @@ export default function GradesMarksPage() {
   return (
     <div className="space-y-6 animate-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5 print:hidden">
         <div>
           <h2 className="text-[28px] font-bold text-slate-900 leading-none">
             Grades & Marks Roster
@@ -162,14 +162,14 @@ export default function GradesMarksPage() {
       </div>
 
       {errorMsg && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-3 text-sm">
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-3 text-sm print:hidden">
           <X className="w-5 h-5 text-rose-600 shrink-0" />
           <span className="font-semibold">{errorMsg}</span>
         </div>
       )}
 
       {/* Filters config bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 print:hidden">
         {/* Search */}
         <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 sm:col-span-2 shadow-xs focus-within:border-[#2E5BFF]">
           <Search className="w-4 h-4 text-slate-400 mr-2" />
@@ -206,7 +206,7 @@ export default function GradesMarksPage() {
       </div>
 
       {/* KPI Stats Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 print:hidden">
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
           <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Total Students</span>
           <span className="text-2xl font-extrabold text-slate-800 block mt-2">{totalStudents}</span>
@@ -243,7 +243,7 @@ export default function GradesMarksPage() {
       </div>
 
       {/* Student Performance Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm print:hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
           <h3 className="text-sm font-bold text-slate-700">Student Performance Marks Roster</h3>
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">— Click a row to view detailed report card</span>
@@ -318,8 +318,8 @@ export default function GradesMarksPage() {
       {/* REPORT CARD COMPILER MODAL */}
       {activeReportStudent && (
         <>
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 transition-opacity" onClick={() => setActiveReportStudent(null)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-6 space-y-6 overflow-y-auto max-h-[90vh]">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 transition-opacity print:hidden" onClick={() => setActiveReportStudent(null)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-6 space-y-6 overflow-y-auto max-h-[90vh] print:relative print:top-0 print:left-0 print:translate-x-0 print:translate-y-0 print:w-full print:max-w-none print:shadow-none print:border-none print:p-0 print:m-0 print:overflow-visible print:max-h-none">
             <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div className="flex items-center gap-3">
                 <Trophy className="w-6 h-6 text-purple-600" />
@@ -328,7 +328,7 @@ export default function GradesMarksPage() {
                   <p className="text-slate-455 text-[11px] font-semibold">{selectedExamName}</p>
                 </div>
               </div>
-              <button onClick={() => setActiveReportStudent(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
+              <button onClick={() => setActiveReportStudent(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 print:hidden">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -413,7 +413,7 @@ export default function GradesMarksPage() {
             </div>
 
             {/* Action buttons */}
-            <div className="flex justify-end pt-3 gap-2 border-t border-slate-100">
+            <div className="flex justify-end pt-3 gap-2 border-t border-slate-100 print:hidden">
               <button
                 onClick={() => {
                   window.print();
