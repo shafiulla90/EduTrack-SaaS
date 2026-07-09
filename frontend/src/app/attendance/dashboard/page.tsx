@@ -9,6 +9,7 @@ import {
   Search, ChevronLeft, ChevronRight, UserCheck, Info, TrendingUp, Plus 
 } from 'lucide-react';
 import Link from 'next/link';
+import { toLocalDateString } from '@/lib/date';
 
 interface Student {
   id: string;
@@ -117,8 +118,8 @@ function AttendanceDashboardContent() {
       const end = new Date();
       end.setDate(today.getDate() + 30);
 
-      const startDateStr = start.toISOString().split('T')[0];
-      const endDateStr = end.toISOString().split('T')[0];
+      const startDateStr = toLocalDateString(start);
+      const endDateStr = toLocalDateString(end);
 
       const res = await api.get('/attendance/report-data', {
         params: { startDate: startDateStr, endDate: endDateStr }
@@ -240,7 +241,7 @@ function AttendanceDashboardContent() {
 
   // Formatting utilities
   const formattedDate = currentDate.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const datePickerValue = currentDate.toISOString().split('T')[0];
+  const datePickerValue = toLocalDateString(currentDate);
   const formattedMonth = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Date Navigation handlers
@@ -294,7 +295,7 @@ function AttendanceDashboardContent() {
   const classSectionSummary = useMemo(() => {
     if (calendarView !== 'daily' || students.length === 0) return [];
     
-    const dateStr = currentDate.toISOString().split('T')[0];
+    const dateStr = toLocalDateString(currentDate);
     const isSunday = currentDate.getDay() === 0;
 
     // Group students by Class-Section
@@ -409,8 +410,8 @@ function AttendanceDashboardContent() {
     for (let i = 0; i < 6; i++) {
       const day = new Date(start);
       day.setDate(start.getDate() + i);
-      const dateStr = day.toISOString().split('T')[0];
-      const isToday = dateStr === new Date().toISOString().split('T')[0];
+      const dateStr = toLocalDateString(day);
+      const isToday = dateStr === toLocalDateString();
 
       // Match target Class-Section Key
       const targetClassKey = `${selectedClass}-${selectedSection}`;
@@ -515,7 +516,7 @@ function AttendanceDashboardContent() {
 
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(date);
       const dayOfWeek = date.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
@@ -572,7 +573,7 @@ function AttendanceDashboardContent() {
         status = rate >= 90 ? 'high' : rate >= 75 ? 'mid' : 'low';
       }
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = toLocalDateString();
       const isToday = dateStr === todayStr;
 
       let cellClass = `day-cell bg-white relative h-16 border border-gray-200 rounded-xl p-2 flex flex-col justify-between text-xs transition-colors `;
@@ -653,7 +654,7 @@ function AttendanceDashboardContent() {
 
       for (let d = 1; d <= daysInMonth; d++) {
         const date = new Date(year, m, d);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = toLocalDateString(date);
         const sessionsForDay = maps.sessionMap.get(dateStr);
 
         let hasSession = false;

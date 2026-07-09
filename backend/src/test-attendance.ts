@@ -25,6 +25,16 @@ async function runTests() {
     const subDomainA = `test-tenant-a-${testId}`;
     const subDomainB = `test-tenant-b-${testId}`;
 
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const startOfMonth = `${year}-${month}-01`;
+    const lastDay = new Date(year, today.getMonth() + 1, 0).getDate();
+    const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
     // -------------------------------------------------------------
     // SETUP: Create Tenant A and Academic Year
     // -------------------------------------------------------------
@@ -128,7 +138,6 @@ async function runTests() {
 
       // 3. Mark attendance: Student 1 & 2 Present, Student 3 Absent
       console.log('[Test 1] Marking attendance (Student 1 & 2 Present, Student 3 Absent)...');
-      const dateStr = '2026-06-24';
       
       const saveResult = await service.saveAttendance({
         classVal: 'Grade-Test',
@@ -181,7 +190,6 @@ async function runTests() {
     // -------------------------------------------------------------
     console.log('\n=== TEST 2 - Attendance Update ===');
     await TenantContext.run(tenantA.id, async () => {
-      const dateStr = '2026-06-24';
       console.log('[Test 2] Modifying attendance (Student 3 becomes Present, Student 2 becomes Absent)...');
       
       const updateResult = await service.saveAttendance({
@@ -260,7 +268,6 @@ async function runTests() {
     // -------------------------------------------------------------
     console.log('\n=== TEST 4 - Daily Reports ===');
     await TenantContext.run(tenantA.id, async () => {
-      const dateStr = '2026-06-24';
       const data = await service.getAttendanceData(dateStr, dateStr);
       
       // Calculate totals
@@ -286,7 +293,7 @@ async function runTests() {
     // -------------------------------------------------------------
     console.log('\n=== TEST 5, 6, 7 - Weekly, Monthly, Yearly Reports ===');
     await TenantContext.run(tenantA.id, async () => {
-      const reportsData = await service.getAttendanceData('2026-06-01', '2026-06-30');
+      const reportsData = await service.getAttendanceData(startOfMonth, endOfMonth);
       
       console.log(`[Reports Compilation] Found ${reportsData.sessions.length} sessions, ${reportsData.attendanceRecords.length} absent logs`);
       
@@ -298,7 +305,7 @@ async function runTests() {
       
       console.log(`-> Computed Weekly Attendance Rate: ${rate}%`);
       console.log(`-> Monthly Calendar status slots resolved: ${reportsData.sessions.map(s => s.attendanceDate + ': ' + s.presentCount + '/' + s.totalStudents).join(', ')}`);
-      console.log(`-> Yearly Month Card buckets compiled: June has ${reportsData.sessions.length} session(s)`);
+      console.log(`-> Yearly Month Card buckets compiled: Month ${month} has ${reportsData.sessions.length} session(s)`);
       console.log('-> Assertion [Reports mathematical aggregation]: PASSED');
     });
 
@@ -316,7 +323,6 @@ async function runTests() {
 
     console.log('[Test 8] Querying attendance from Tenant B context...');
     await TenantContext.run(tenantB.id, async () => {
-      const dateStr = '2026-06-24';
       const data = await service.getAttendanceData(dateStr, dateStr);
       
       console.log(`-> Tenant B Roster Students Count = ${data.students.length}`);
@@ -333,11 +339,11 @@ async function runTests() {
     console.log('\n=== TEST 9 - Performance Metrics ===');
     await TenantContext.run(tenantA.id, async () => {
       const startDashboard = performance.now();
-      await service.getAttendanceData('2026-06-01', '2026-06-30');
+      await service.getAttendanceData(startOfMonth, endOfMonth);
       const endDashboard = performance.now();
 
       const startEntry = performance.now();
-      await service.getSessionData('Grade-Test', 'A', '2026-06-24');
+      await service.getSessionData('Grade-Test', 'A', dateStr);
       const endEntry = performance.now();
 
       const startHistory = performance.now();

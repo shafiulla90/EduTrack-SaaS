@@ -2,6 +2,12 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { AttendanceStatus, Role } from '@prisma/client';
+import { 
+  getTodayDateString, 
+  formatAttendanceDate, 
+  parseAttendanceDate, 
+  isBeforeDateString 
+} from './date.utils';
 
 @Injectable()
 export class AttendanceService {
@@ -91,18 +97,13 @@ export class AttendanceService {
   // Salesforce parity: get today's recent submissions
   async getRecentSubmissions() {
     const tenantId = this.getTenantId();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const todayStr = getTodayDateString();
+    const todayDate = parseAttendanceDate(todayStr);
 
     const todaySessions = await this.prisma.attendanceSession.findMany({
       where: {
         tenantId,
-        date: {
-          gte: todayStart,
-          lte: todayEnd,
-        },
+        date: todayDate,
       },
       include: {
         classSection: {
@@ -170,7 +171,7 @@ export class AttendanceService {
     return sessions.map(s => {
       return {
         id: s.id,
-        date: s.date.toISOString().split('T')[0],
+        date: formatAttendanceDate(s.date),
         classSection: {
           class: { name: s.classSection?.class?.name || 'N/A' },
           section: { name: s.classSection?.section?.name || 'N/A' },
@@ -278,8 +279,7 @@ export class AttendanceService {
       return { sessionExists: false, absentIds: [], total: 0, present: 0, absent: 0 };
     }
 
-    const searchDate = new Date(dateStr);
-    searchDate.setHours(0, 0, 0, 0);
+    const searchDate = parseAttendanceDate(dateStr);
 
     const session = await this.prisma.attendanceSession.findFirst({
       where: {
@@ -324,13 +324,12 @@ export class AttendanceService {
   // Salesforce parity: save attendance with name resolution, auto-creation, duplication removal, past-date read-only validation
   async saveAttendance(data: any) {
     const tenantId = this.getTenantId();
-    const date = new Date(data.dateStr || data.date);
-    date.setHours(0, 0, 0, 0);
+    const date = parseAttendanceDate(data.dateStr || data.date);
+    const dateStr = data.dateStr || formatAttendanceDate(date);
 
-    // Validate historical date lock
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (date < today && !data.allowPastDates) {
+    // Validate historical date lock using timezone-safe string comparison
+    const todayStr = getTodayDateString();
+    if (isBeforeDateString(dateStr, todayStr) && !data.allowPastDates) {
       throw new BadRequestException('Historical records are in Read-Only mode.');
     }
 
@@ -529,10 +528,8 @@ export class AttendanceService {
   // Salesforce parity: get bundled attendance data for reports
   async getAttendanceData(startDateStr: string, endDateStr: string) {
     const tenantId = this.getTenantId();
-    const startDate = new Date(startDateStr);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(endDateStr);
-    endDate.setHours(23, 59, 59, 999);
+    const startDate = parseAttendanceDate(startDateStr);
+    const endDate = parseAttendanceDate(endDateStr);
 
     // 1. Fetch Students
     const rawStudents = await this.prisma.studentProfile.findMany({
@@ -607,7 +604,7 @@ export class AttendanceService {
         section,
         classValue,
         className: classValue,
-        attendanceDate: a.attendanceSession.date.toISOString().split('T')[0],
+        attendanceDate: formatAttendanceDate(a.attendanceSession.date),
         status: a.status === AttendanceStatus.ABSENT ? 'Absent' : 'Present',
       };
     });
@@ -642,7 +639,7 @@ export class AttendanceService {
       classId: s.classSection?.class?.id || '',
       className: s.classSection?.class?.name || '',
       classValue: s.classSection?.class?.name || '',
-      attendanceDate: s.date.toISOString().split('T')[0],
+      attendanceDate: formatAttendanceDate(s.date),
       section: s.classSection?.section?.name || '',
       totalStudents: s.totalStudents,
       presentCount: s.presentCount,
@@ -691,8 +688,7 @@ export class AttendanceService {
 
   async getDailySummary(date?: string) {
     const tenantId = this.getTenantId();
-    const searchDate = date ? new Date(date) : new Date();
-    searchDate.setHours(0, 0, 0, 0);
+    const searchDate = parseAttendanceDate(date);
 
     const sessions = await this.prisma.attendanceSession.findMany({
       where: { tenantId, date: searchDate },
@@ -739,9 +735,7 @@ export class AttendanceService {
     const tenantId = this.getTenantId();
     const where: any = { tenantId, classSectionId };
     if (date) {
-      const d = new Date(date);
-      d.setHours(0, 0, 0, 0);
-      where.date = d;
+      where.date = parseAttendanceDate(date);
     }
 
     const sessions = await this.prisma.attendanceSession.findMany({ where });
@@ -760,9 +754,7 @@ export class AttendanceService {
     const tenantId = this.getTenantId();
     const where: any = { tenantId, studentId };
     if (date) {
-      const d = new Date(date);
-      d.setHours(0, 0, 0, 0);
-      where.attendanceSession = { date: d };
+      where.attendanceSession = { date: parseAttendanceDate(date) };
     }
 
     const records = await this.prisma.attendance.findMany({ where });

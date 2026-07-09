@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
+import { toLocalDateString, isBefore } from '@/lib/date';
 
 interface Teacher {
   id: string;
@@ -59,7 +60,7 @@ function AttendanceEntryContent() {
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
 
   // Selection state
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => toLocalDateString());
   const [selectedClass, setSelectedClass] = useState('Class-1');
   const [selectedSection, setSelectedSection] = useState('A');
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
@@ -83,7 +84,7 @@ function AttendanceEntryContent() {
   const [submittedTime, setSubmittedTime] = useState('');
   const [lastUpdatedTime, setLastUpdatedTime] = useState('');
 
-  const todayDate = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayDate = useMemo(() => toLocalDateString(), []);
 
   // Pre-fill query parameters if present
   useEffect(() => {
@@ -200,11 +201,9 @@ function AttendanceEntryContent() {
       setSubmittedTime('');
       setLastUpdatedTime('');
 
-      // Lock historical past dates
-      const selectedDateObj = new Date(selectedDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const readOnly = selectedDateObj < today;
+      // Lock historical past dates using timezone-safe string comparison
+      const todayStr = toLocalDateString();
+      const readOnly = isBefore(selectedDate, todayStr);
       setIsReadOnly(readOnly);
 
       try {

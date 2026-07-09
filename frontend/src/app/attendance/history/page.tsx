@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { Calendar, RefreshCw, AlertCircle, ArrowLeft, ExternalLink, ChevronRight, UserCheck, Shield } from 'lucide-react';
 import Link from 'next/link';
+import { formatDisplayDate } from '@/lib/date';
 
 export default function AttendanceHistory() {
   const [sessions, setSessions] = useState([] as any[]);
@@ -120,7 +121,7 @@ export default function AttendanceHistory() {
                             href={`/attendance/entry?classVal=${encodeURIComponent(s.classSection?.class?.name || '')}&sectionVal=${encodeURIComponent(s.classSection?.section?.name || '')}&dateVal=${encodeURIComponent(s.date)}&teacherId=${encodeURIComponent(s.teacherId || '')}`}
                             className="text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1"
                           >
-                            {new Date(s.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {formatDisplayDate(s.date)}
                             <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </Link>
                         </td>

@@ -8,6 +8,7 @@ import {
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
+import { toLocalDateString, isBefore } from '@/lib/date';
 
 interface Teacher {
   id: string;
@@ -49,7 +50,7 @@ export default function AttendancePage() {
   
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [selectedClassSectionId, setSelectedClassSectionId] = useState('');
-  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attendanceDate, setAttendanceDate] = useState(() => toLocalDateString());
 
   // Phase 2: Live Attendance Tracking
   const [students, setStudents] = useState<Student[]>([]);
@@ -124,10 +125,8 @@ export default function AttendancePage() {
       setRecords(initialRecords);
 
       // Mark read-only if date is in the past and no session exists (or customize logic)
-      const selDate = new Date(attendanceDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      setIsReadOnly(selDate < today && !session.sessionExists);
+      const todayStr = toLocalDateString();
+      setIsReadOnly(isBefore(attendanceDate, todayStr) && !session.sessionExists);
 
       setShowSetup(false);
     } catch (err) {

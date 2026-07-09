@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import { toLocalDateString } from '@/lib/date';
 
 interface StudentSuggestion {
   id: string;
@@ -36,10 +37,7 @@ export default function AttendanceReportPage() {
   const [studentDetails, setStudentDetails] = useState<any | null>(null);
   
   // Selected Month: YYYY-MM format
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
+  const [selectedMonth, setSelectedMonth] = useState(() => toLocalDateString().slice(0, 7));
 
   const [loading, setLoading] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -118,11 +116,11 @@ export default function AttendanceReportPage() {
 
     // Get number of days in the month
     const totalDays = new Date(year, monthIdx + 1, 0).getDate();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toLocalDateString();
 
     for (let day = 1; day <= totalDays; day++) {
       const currentDayDate = new Date(year, monthIdx, day);
-      const dateString = currentDayDate.toISOString().split('T')[0];
+      const dateString = toLocalDateString(currentDayDate);
       const dayOfWeek = currentDayDate.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sun = 0, Sat = 6
 
@@ -136,7 +134,7 @@ export default function AttendanceReportPage() {
       } else if (studentDetails?.attendances) {
         // If an attendance entry exists and status is ABSENT
         const match = studentDetails.attendances.find((att: AttendanceRecord) => {
-          const attDate = new Date(att.attendanceSession.date).toISOString().split('T')[0];
+          const attDate = toLocalDateString(att.attendanceSession.date);
           return attDate === dateString;
         });
 
