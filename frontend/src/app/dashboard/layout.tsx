@@ -268,11 +268,11 @@ export default function DashboardLayout({
 
             {/* Mobile Logo & School Name */}
             <div className="flex lg:hidden items-center gap-2">
-              <div className="w-[30px] h-[30px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
+              <div className="w-[42px] h-[42px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
                 {logoUrl ? (
                   <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
                 ) : (
-                  <svg className="w-[16px] h-[16px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
+                  <svg className="w-[24px] h-[24px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
                     <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
                     <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
                   </svg>
@@ -302,11 +302,11 @@ export default function DashboardLayout({
 
           {/* Center: logo and school name (Desktop/Tablet only) */}
           <div className="hidden lg:flex items-center gap-2 px-4 text-center">
-            <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
+            <div className="w-[52px] h-[52px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
               {logoUrl ? (
                 <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
               ) : (
-                <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
+                <svg className="w-[30px] h-[30px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
                   <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
                   <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
                 </svg>
@@ -382,11 +382,11 @@ export default function DashboardLayout({
         >
           <div>
             <div className="flex items-center gap-3 px-6 mb-6">
-              <div className="w-[36px] h-[36px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
+              <div className="w-[48px] h-[48px] bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 shrink-0 overflow-hidden">
                 {logoUrl ? (
                   <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
                 ) : (
-                  <svg className="w-[20px] h-[20px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
+                  <svg className="w-[28px] h-[28px] stroke-[#2E5BFF] fill-none" viewBox="0 0 24 24">
                     <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
                     <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
                   </svg>
