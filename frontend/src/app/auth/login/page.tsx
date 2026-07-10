@@ -69,11 +69,13 @@ export default function LoginPage() {
       const schoolName = response.data?.schoolName || '';
       const logoUrl = response.data?.logoUrl || '';
 
-      // Build OTP page URL with school branding params for registered users
+      // Store schoolName and logoUrl in sessionStorage to prevent HTTP 431 on large base64 data URIs
+      sessionStorage.setItem('otp_schoolName', schoolName);
+      sessionStorage.setItem('otp_logoUrl', logoUrl);
+
+      // Build OTP page URL
       let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}`;
       if (otpCode) otpUrl += `&dev_otp=${otpCode}`;
-      if (schoolName) otpUrl += `&schoolName=${encodeURIComponent(schoolName)}`;
-      if (logoUrl) otpUrl += `&logoUrl=${encodeURIComponent(logoUrl)}`;
 
       // Navigate to verification screen
       router.push(otpUrl);

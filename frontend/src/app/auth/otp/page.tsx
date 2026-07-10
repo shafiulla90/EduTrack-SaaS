@@ -11,14 +11,20 @@ function OtpContent() {
   
   const phone = searchParams.get('phone') || '';
   const devOtp = searchParams.get('dev_otp') || '';
-  // School branding passed from login page via URL params (set from send-otp response)
-  const urlSchoolName = searchParams.get('schoolName') || '';
-  const urlLogoUrl = searchParams.get('logoUrl') || '';
+  const [schoolName, setSchoolName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
   
   const [otpCode, setOtpCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSchoolName(sessionStorage.getItem('otp_schoolName') || searchParams.get('schoolName') || '');
+      setLogoUrl(sessionStorage.getItem('otp_logoUrl') || searchParams.get('logoUrl') || '');
+    }
+  }, [searchParams]);
 
   // Refs for auto-focusing next input
   const inputRefs = useRef<HTMLInputElement[]>([]);
@@ -126,10 +132,10 @@ function OtpContent() {
 
       {/* Main card wrapper */}
       <div className="w-full max-w-md z-10">
-        <div className="flex flex-col items-center justify-center mb-8 text-center">
-          {urlLogoUrl ? (
+         <div className="flex flex-col items-center justify-center mb-8 text-center">
+          {logoUrl ? (
             <div className="w-16 h-16 rounded-2xl bg-white border border-slate-800 p-2 overflow-hidden shadow-lg mb-3">
-              <img src={urlLogoUrl} alt={urlSchoolName} className="w-full h-full object-cover" />
+              <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
             </div>
           ) : (
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 mb-3">
@@ -137,10 +143,10 @@ function OtpContent() {
             </div>
           )}
           <h1 className="font-black text-2xl bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent tracking-tight max-w-sm">
-            {urlSchoolName || 'EduTrack Application'}
+            {schoolName || 'EduTrack Application'}
           </h1>
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-            {urlSchoolName ? 'School Portal' : 'Powered By Covenant Synergy'}
+            {schoolName ? 'School Portal' : 'Powered By Covenant Synergy'}
           </p>
         </div>
 
