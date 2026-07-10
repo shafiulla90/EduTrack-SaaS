@@ -1,0 +1,167 @@
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { TeacherPortalService } from './teacher-portal.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+@UseGuards(JwtAuthGuard)
+@Controller('teacher-portal')
+export class TeacherPortalController {
+  constructor(private portalService: TeacherPortalService) {}
+
+  @Get('dashboard')
+  async getDashboard(@Req() req: any) {
+    return this.portalService.getDashboardStats(req.user.sub, req.user.tenantId);
+  }
+
+  @Get('profile')
+  async getProfile(@Req() req: any) {
+    return this.portalService.getProfile(req.user.sub, req.user.tenantId);
+  }
+
+  @Put('profile')
+  async updateProfile(@Req() req: any, @Body() data: any) {
+    return this.portalService.updateProfile(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Post('profile/change-password')
+  async changePassword(@Req() req: any, @Body() data: any) {
+    return this.portalService.changePassword(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Get('classes')
+  async getClasses(@Req() req: any) {
+    return this.portalService.getAssignedClasses(req.user.sub, req.user.tenantId);
+  }
+
+  @Get('classes/:classSectionId/students')
+  async getStudents(@Req() req: any, @Param('classSectionId') classSectionId: string) {
+    return this.portalService.getStudentsForClassSection(req.user.sub, req.user.tenantId, classSectionId);
+  }
+
+  @Get('attendance/classes')
+  async getAttendanceClasses(@Req() req: any) {
+    return this.portalService.getClassesForAttendance(req.user.sub, req.user.tenantId);
+  }
+
+  @Get('attendance/sections')
+  async getAttendanceSections(@Req() req: any, @Query('classVal') classVal: string) {
+    return this.portalService.getSectionsForAttendance(req.user.sub, req.user.tenantId, classVal);
+  }
+
+  @Get('attendance/students')
+  async getAttendanceStudents(
+    @Req() req: any,
+    @Query('classVal') classVal: string,
+    @Query('sectionVal') sectionVal: string,
+  ) {
+    return this.portalService.getStudentsForAttendance(req.user.sub, req.user.tenantId, classVal, sectionVal);
+  }
+
+  @Post('attendance/save')
+  async saveAttendance(@Req() req: any, @Body() data: any) {
+    return this.portalService.saveAttendanceSheet(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Get('attendance/history')
+  async getAttendanceHistory(@Req() req: any) {
+    return this.portalService.getAttendanceHistory(req.user.sub, req.user.tenantId);
+  }
+
+  @Get('marks/entry')
+  async getMarksEntryList(
+    @Req() req: any,
+    @Query('subjectId') subjectId: string,
+    @Query('examName') examName: string,
+    @Query('classSectionId') classSectionId: string,
+  ) {
+    return this.portalService.getExamMarksEntryList(req.user.sub, req.user.tenantId, subjectId, examName, classSectionId);
+  }
+
+  @Post('marks/save')
+  async saveMarks(@Req() req: any, @Body() data: any) {
+    return this.portalService.saveExamMarksList(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Get('timetable')
+  async getTimetable(@Req() req: any) {
+    return this.portalService.getTeacherWeeklySchedule(req.user.sub, req.user.tenantId);
+  }
+
+  @Get('homework')
+  async getHomeworks(@Req() req: any) {
+    return this.portalService.getHomeworks(req.user.sub, req.user.tenantId);
+  }
+
+  @Post('homework')
+  async createHomework(@Req() req: any, @Body() data: any) {
+    return this.portalService.createHomework(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Put('homework/:id')
+  async updateHomework(@Req() req: any, @Param('id') id: string, @Body() data: any) {
+    return this.portalService.updateHomework(req.user.sub, req.user.tenantId, id, data);
+  }
+
+  @Delete('homework/:id')
+  async deleteHomework(@Req() req: any, @Param('id') id: string) {
+    return this.portalService.deleteHomework(req.user.sub, req.user.tenantId, id);
+  }
+
+  @Get('announcements')
+  async getAnnouncements(@Req() req: any) {
+    return this.portalService.getAnnouncements(req.user.sub, req.user.tenantId);
+  }
+
+  @Post('announcements')
+  async createAnnouncement(@Req() req: any, @Body() data: any) {
+    return this.portalService.createAnnouncement(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Delete('announcements/:id')
+  async deleteAnnouncement(@Req() req: any, @Param('id') id: string) {
+    return this.portalService.deleteAnnouncement(req.user.sub, req.user.tenantId, id);
+  }
+
+  @Get('leave')
+  async getLeaves(@Req() req: any) {
+    return this.portalService.getLeaveRequests(req.user.sub, req.user.tenantId);
+  }
+
+  @Post('leave')
+  async applyLeave(@Req() req: any, @Body() data: any) {
+    return this.portalService.applyLeave(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Delete('leave/:id')
+  async cancelLeave(@Req() req: any, @Param('id') id: string) {
+    return this.portalService.cancelLeave(req.user.sub, req.user.tenantId, id);
+  }
+
+  @Get('communication/audience')
+  async getCommAudience(@Req() req: any) {
+    return this.portalService.getCommunicationAudience(req.user.sub, req.user.tenantId);
+  }
+
+  @Post('communication/send')
+  async sendBroadcast(@Req() req: any, @Body() data: any) {
+    return this.portalService.sendBroadcastMessage(req.user.sub, req.user.tenantId, data);
+  }
+
+  @Get('calendar')
+  async getCalendar(
+    @Req() req: any,
+    @Query('month') month: string,
+    @Query('year') year: string,
+  ) {
+    return this.portalService.getCalendarTimeline(
+      req.user.sub,
+      req.user.tenantId,
+      parseInt(month, 10),
+      parseInt(year, 10),
+    );
+  }
+
+  @Get('student-progress/:studentId')
+  async getStudentProgress(@Req() req: any, @Param('studentId') studentId: string) {
+    return this.portalService.getStudentProgressDetails(req.user.sub, req.user.tenantId, studentId);
+  }
+}

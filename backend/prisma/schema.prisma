@@ -112,6 +112,9 @@ model Tenant {
   studentProfiles StudentProfile[]
   staffProfiles   StaffProfile[]
   examTypes       ExamType[]
+  homeworks       Homework[]
+  leaveRequests   LeaveRequest[]
+  announcements   Announcement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -167,6 +170,9 @@ model StaffProfile {
 
   // New relation for BehaviorCase
   behaviorCases BehaviorCase[]
+  homeworks     Homework[]
+  leaveRequests LeaveRequest[]
+  announcements Announcement[]
   tenantId      String
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -271,6 +277,8 @@ model ClassSection {
   periods            Period[]
   exams              Exam[]
   complaints         Complaint[]
+  homeworks          Homework[]
+  announcements      Announcement[]
 
   @@unique([classId, sectionId])
 }
@@ -287,6 +295,7 @@ model Subject {
   examMarks      ExamMark[]
   periods        Period[]
   teacherSkills  TeacherSkill[]
+  homeworks      Homework[]
 }
 
 model ClassSubject {
@@ -739,4 +748,75 @@ model ExamType {
   updatedAt DateTime @updatedAt
 
   @@unique([name, tenantId])
+}
+
+model Homework {
+  id                  String       @id @default(uuid())
+  title               String
+  description         String       @db.Text
+  dueDate             DateTime     @db.Date
+  allowLateSubmission Boolean      @default(false)
+  maxMarks            Decimal      @db.Decimal(5, 2)
+  assignmentType      String       @default("Homework") // Homework, Project, Quiz, Assignment
+  status              String       @default("Published") // Draft, Published
+  visibleFrom         DateTime     @default(now())
+  attachments         String[]
+  
+  classSectionId String
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId      String
+  teacher        StaffProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdBy String
+  updatedBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LeaveRequest {
+  id           String       @id @default(uuid())
+  teacherId    String
+  teacher      StaffProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  leaveType    String // Casual, Medical, Emergency, Half Day, Maternity, Paternity
+  startDate    DateTime     @db.Date
+  endDate      DateTime     @db.Date
+  reason       String       @db.Text
+  status       String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  attachment   String?
+  approver     String?
+  comments     String?      @db.Text
+  approvedDate DateTime?
+  rejectedDate DateTime?
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Announcement {
+  id           String    @id @default(uuid())
+  title        String
+  content      String    @db.Text
+  audienceType String    @default("CLASS") // INSTITUTION, DEPARTMENT, SEMESTER, COURSE, CLASS, SECTION, GROUP
+  priority     String    @default("Medium") // High, Medium, Low
+  expiryDate   DateTime? @db.Date
+  pinned       Boolean   @default(false)
+  readStatus   Json? // e.g. ["userId1", "userId2"] list of users who read it
+
+  classSectionId String?
+  classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  teacherId      String
+  teacher        StaffProfile  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

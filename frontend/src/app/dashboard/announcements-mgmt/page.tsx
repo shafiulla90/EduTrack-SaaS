@@ -1,0 +1,280 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
+import { Megaphone, Plus, Trash2, X, AlertTriangle, Pin, Calendar, Users, Eye } from 'lucide-react';
+
+export default function AnnouncementsMgmtPage() {
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Form modal visibility
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Form states
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [audienceType, setAudienceType] = useState('CLASS'); // INSTITUTION, CLASS
+  const [classSectionId, setClassSectionId] = useState('');
+  const [priority, setPriority] = useState('Medium'); // High, Medium, Low
+  const [expiryDate, setExpiryDate] = useState('');
+  const [pinned, setPinned] = useState(false);
+
+  async function loadData() {
+    try {
+      const [annRes, clsRes] = await Promise.all([
+        api.get('/teacher-portal/announcements'),
+        api.get('/teacher-portal/classes'),
+      ]);
+      setAnnouncements(annRes.data);
+      setClasses(clsRes.data);
+    } catch (err) {
+      console.error('Failed to load announcements:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const openCreateModal = () => {
+    setTitle('');
+    setContent('');
+    setAudienceType('CLASS');
+    setClassSectionId('');
+    setPriority('Medium');
+    setExpiryDate('');
+    setPinned(false);
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    const payload = {
+      title,
+      content,
+      audienceType,
+      classSectionId: audienceType === 'CLASS' ? classSectionId : null,
+      priority,
+      expiryDate: expiryDate || null,
+      pinned,
+    };
+
+    try {
+      await api.post('/teacher-portal/announcements', payload);
+      setIsModalOpen(false);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to save announcement:', err);
+      alert('Failed to publish announcement.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this announcement?')) return;
+    try {
+      await api.delete(`/teacher-portal/announcements/${id}`);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to delete announcement:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-10 h-10 border-4 border-t-[#2E5BFF] border-slate-200 rounded-full animate-spin"></div>
+        <p className="text-sm font-semibold text-slate-500">Loading notices...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-md mx-auto sm:max-w-none pb-20">
+      <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+        <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <Megaphone className="w-6 h-6 text-[#2E5BFF]" />
+          Notices & Broadcasts
+        </h2>
+        <button
+          onClick={openCreateModal}
+          className="p-2.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer"
+        >
+          <Plus className="w-4 h-4" /> Add Notice
+        </button>
+      </div>
+
+      {announcements.length === 0 ? (
+        <div className="bg-white p-8 text-center rounded-3xl border border-slate-200 shadow-sm text-slate-500 italic text-sm">
+          No notices published yet.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {announcements.map((ann) => (
+            <div key={ann.id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-3 relative">
+              <div className="space-y-2">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border uppercase ${
+                      ann.priority === 'High' ? 'bg-red-50 text-red-600 border-red-100' :
+                      ann.priority === 'Low' ? 'bg-slate-50 text-slate-500 border-slate-200' :
+                      'bg-amber-50 text-amber-600 border-amber-100'
+                    }`}>
+                      {ann.priority} Priority
+                    </span>
+                    {ann.pinned && (
+                      <span className="text-[10px] text-blue-600 flex items-center gap-0.5 font-bold">
+                        <Pin className="w-3.5 h-3.5 fill-blue-600/20" /> Pinned
+                      </span>
+                    )}
+                  </div>
+                  
+                  <button onClick={() => handleDelete(ann.id)} className="text-slate-400 hover:text-red-600 transition-colors p-1 cursor-pointer">
+                    <Trash2 className="w-4.5 h-4.5" />
+                  </button>
+                </div>
+
+                <h3 className="font-bold text-slate-800 text-[15px]">{ann.title}</h3>
+                <p className="text-xs text-slate-500 font-light leading-relaxed whitespace-pre-wrap">{ann.content}</p>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                <span className="flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  Target: {ann.audienceType === 'INSTITUTION' ? 'Entire School' : `${ann.classSection?.class.name} - ${ann.classSection?.section.name}`}
+                </span>
+                {ann.expiryDate && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    Expires: {ann.expiryDate.split('T')[0]}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create notice modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-end z-[100] transition-opacity duration-300 animate-in">
+          <div className="w-full max-w-md bg-white h-full flex flex-col shadow-2xl relative overflow-hidden animate-slide-in">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-black text-slate-900 text-lg leading-none">Draft Notice Announcement</h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Headline Title</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Science Fair registrations closed"
+                  className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Content Details</label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Write clear instructions for parents / students..."
+                  rows={6}
+                  className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Audience Scope</label>
+                  <select
+                    value={audienceType}
+                    onChange={(e) => setAudienceType(e.target.value)}
+                    className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+                  >
+                    <option value="CLASS">Specific Class Section</option>
+                    <option value="INSTITUTION">Entire Institution</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Notice Priority</label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+                  >
+                    <option value="High">🔴 High</option>
+                    <option value="Medium">🟡 Medium</option>
+                    <option value="Low">⚪ Low</option>
+                  </select>
+                </div>
+              </div>
+
+              {audienceType === 'CLASS' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Target Class Section</label>
+                  <select
+                    value={classSectionId}
+                    onChange={(e) => setClassSectionId(e.target.value)}
+                    className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+                    required
+                  >
+                    <option value="">Select Class Section...</option>
+                    {classes.map(c => <option key={c.classSectionId} value={c.classSectionId}>{c.className}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Expiry Date (Optional)</label>
+                <input
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="pinned"
+                  checked={pinned}
+                  onChange={(e) => setPinned(e.target.checked)}
+                  className="rounded border-slate-350 text-[#2E5BFF] focus:ring-[#2E5BFF] w-4.5 h-4.5"
+                />
+                <label htmlFor="pinned" className="text-xs font-bold text-slate-600">Pin to top of Notice Board</label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-3 bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-500/10 cursor-pointer disabled:opacity-50 mt-4"
+              >
+                {submitting ? 'Publishing...' : 'Broadcast Notice'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

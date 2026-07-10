@@ -5,8 +5,9 @@ import Link from 'next/link';
 import BulkImportModal from '@/components/BulkImportModal';
 import { api } from '@/lib/api';
 import { useSchoolSetupUpdate, dispatchSchoolSetupUpdated } from '@/lib/events';
+import { useTenant } from '../providers/TenantContext';
 
-export default function DashboardOverview() {
+function AdminDashboardOverview() {
   const [admissionsLimit, setAdmissionsLimit] = useState(5);
   const [paymentsLimit, setPaymentsLimit] = useState(5);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -602,4 +603,175 @@ export default function DashboardOverview() {
       />
     </div>
   );
+}
+
+function TeacherDashboardView() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const res = await api.get('/teacher-portal/dashboard');
+        setData(res.data);
+      } catch (err) {
+        console.error('Failed to load teacher stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-10 h-10 border-4 border-t-blue-600 border-slate-200 rounded-full animate-spin"></div>
+        <p className="text-sm font-semibold text-slate-500">Loading Portal Dashboard...</p>
+      </div>
+    );
+  }
+
+  const statsList = [
+    { name: 'Assigned Students', val: data?.stats?.assignedStudents || 0, desc: 'Across all sections', icon: '👥', color: 'from-blue-500 to-indigo-500' },
+    { name: 'Attendance Rate', val: `${data?.stats?.attendanceRate || 100}%`, desc: 'Average active rate', icon: '📈', color: 'from-emerald-500 to-teal-500' },
+    { name: 'Pending Marks', val: data?.stats?.marksPending || 0, desc: 'Exams awaiting review', icon: '📝', color: 'from-amber-500 to-orange-500' },
+    { name: 'Homework Created', val: data?.stats?.homeworkCreated || 0, desc: 'Assignments sent', icon: '📚', color: 'from-pink-500 to-rose-500' },
+  ];
+
+  return (
+    <div className="space-y-6 max-w-md mx-auto sm:max-w-none">
+      {/* Welcome header */}
+      <div className="bg-gradient-to-tr from-[#1E293B] to-[#0F172A] p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-[20%] right-[-10%] w-[150px] h-[150px] rounded-full bg-blue-500/10 blur-xl pointer-events-none" />
+        <h2 className="text-xl font-bold tracking-tight">Hello Teacher! 👋</h2>
+        <p className="text-[13px] text-slate-300 font-light mt-1">Here is your timeline schedule and tasks overview for today.</p>
+        
+        {/* Today status badges */}
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-700/50">
+          <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/30">
+            <span className="text-[11px] text-slate-400 font-bold block uppercase">Attendance Pending</span>
+            <span className="text-lg font-black text-amber-400">{data?.today?.attendancePending || 0} Classes</span>
+          </div>
+          <div className="bg-slate-800/40 p-2.5 rounded-xl border border-slate-700/30">
+            <span className="text-[11px] text-slate-400 font-bold block uppercase">Homework Pending</span>
+            <span className="text-lg font-black text-rose-400">{data?.today?.homeworkPending || 0} Active</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Action Grid */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+        <h3 className="text-[15px] font-bold text-slate-800 mb-4">Quick Actions</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <Link href="/dashboard/attendance-mgmt" className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-2xl transition-all gap-1.5 group cursor-pointer text-center">
+            <div className="w-12 h-12 rounded-xl bg-blue-55 text-blue-600 flex items-center justify-center shadow-xs">
+              <span className="text-lg">📅</span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-600">Attendance</span>
+          </Link>
+          <Link href="/dashboard/marks-mgmt" className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-2xl transition-all gap-1.5 group cursor-pointer text-center">
+            <div className="w-12 h-12 rounded-xl bg-emerald-55 text-emerald-600 flex items-center justify-center shadow-xs">
+              <span className="text-lg">✍️</span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-600">Enter Marks</span>
+          </Link>
+          <Link href="/dashboard/homework" className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-2xl transition-all gap-1.5 group cursor-pointer text-center">
+            <div className="w-12 h-12 rounded-xl bg-purple-55 text-purple-600 flex items-center justify-center shadow-xs">
+              <span className="text-lg">📖</span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-600">Homework</span>
+          </Link>
+          <Link href="/dashboard/communication" className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-2xl transition-all gap-1.5 group cursor-pointer text-center">
+            <div className="w-12 h-12 rounded-xl bg-pink-55 text-pink-600 flex items-center justify-center shadow-xs">
+              <span className="text-lg">💬</span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-600">Messages</span>
+          </Link>
+          <Link href="/dashboard/my-timetable" className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-2xl transition-all gap-1.5 group cursor-pointer text-center">
+            <div className="w-12 h-12 rounded-xl bg-amber-55 text-amber-600 flex items-center justify-center shadow-xs">
+              <span className="text-lg">⏰</span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-600">Timetable</span>
+          </Link>
+          <Link href="/dashboard/calendar" className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-2xl transition-all gap-1.5 group cursor-pointer text-center">
+            <div className="w-12 h-12 rounded-xl bg-teal-55 text-teal-600 flex items-center justify-center shadow-xs">
+              <span className="text-lg">🗓️</span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-600">Calendar</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* KPI Stats Grid */}
+      <div className="grid grid-cols-2 gap-4">
+        {statsList.map((stat, idx) => (
+          <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between h-32">
+            <div className="flex justify-between items-center">
+              <span className="text-2xl">{stat.icon}</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Metrics</span>
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-800 leading-none">{stat.val}</div>
+              <div className="text-[12px] font-bold text-slate-600 mt-1">{stat.name}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Today's Classes List */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-[15px] font-bold text-slate-800">Today's Class Schedule</h3>
+          <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-md">Today</span>
+        </div>
+        
+        {data?.today?.classes?.length === 0 ? (
+          <div className="py-8 text-center text-slate-400 text-xs italic">No teaching periods scheduled for today.</div>
+        ) : (
+          <div className="space-y-3">
+            {data?.today?.classes?.map((cls: any) => (
+              <div key={cls.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center">
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800">{cls.className}</h4>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">{cls.subjectName} • Period {cls.periodNumber}</p>
+                  <p className="text-[11px] text-slate-400 font-mono mt-1">{cls.time}</p>
+                </div>
+                <Link href={`/dashboard/attendance-mgmt?classVal=${encodeURIComponent(cls.className.split(' - ')[0])}&sectionVal=${encodeURIComponent(cls.className.split(' - ')[1])}`} className="px-3 py-1.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-xs">
+                  Mark Roll
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Upcoming events / Notice Board */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+        <h3 className="text-[15px] font-bold text-slate-800 mb-4">Notice Board & Announcements</h3>
+        {data?.today?.events?.length === 0 ? (
+          <div className="py-6 text-center text-slate-400 text-xs italic">No high-priority announcements at the moment.</div>
+        ) : (
+          <div className="space-y-4">
+            {data?.today?.events?.map((ev: any) => (
+              <div key={ev.id} className="border-l-4 border-amber-500 pl-3">
+                <h4 className="text-sm font-bold text-slate-800">{ev.title}</h4>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">{ev.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardOverview() {
+  const { currentUser } = useTenant();
+
+  if (currentUser?.role === 'TEACHER') {
+    return <TeacherDashboardView />;
+  }
+
+  return <AdminDashboardOverview />;
 }

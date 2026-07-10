@@ -31,7 +31,7 @@ export default function DashboardLayout({
   }
 
   // Categories as defined in eduProDashboard.html
-  const navSections = [
+  const adminNavSections = [
     {
       title: 'Main',
       items: [
@@ -210,6 +210,157 @@ export default function DashboardLayout({
     },
   ];
 
+  const teacherNavSections = [
+    {
+      title: 'Portal',
+      items: [
+        {
+          name: 'Dashboard',
+          href: '/dashboard',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+          ),
+        },
+        {
+          name: 'My Classes',
+          href: '/dashboard/my-classes',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          ),
+        },
+        {
+          name: 'Attendance',
+          href: '/dashboard/attendance-mgmt',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          ),
+        },
+        {
+          name: 'Enter Marks',
+          href: '/dashboard/marks-mgmt',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+          ),
+        },
+        {
+          name: 'Timetable',
+          href: '/dashboard/my-timetable',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+              <path d="M9 22v-4h6v4"></path>
+            </svg>
+          ),
+        },
+        {
+          name: 'Homework',
+          href: '/dashboard/homework',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          ),
+        },
+        {
+          name: 'Announcements',
+          href: '/dashboard/announcements-mgmt',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          ),
+        },
+        {
+          name: 'Student Progress',
+          href: '/dashboard/student-progress',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+              <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+          ),
+        },
+        {
+          name: 'Leave Request',
+          href: '/dashboard/leave-mgmt',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          ),
+        },
+        {
+          name: 'Messages',
+          href: '/dashboard/communication',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          ),
+        },
+        {
+          name: 'Calendar',
+          href: '/dashboard/calendar',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          ),
+        },
+        {
+          name: 'Reports',
+          href: '/dashboard/reports-mgmt',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+              <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+            </svg>
+          ),
+        },
+        {
+          name: 'My Profile',
+          href: '/dashboard/profile',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          ),
+        },
+      ],
+    },
+  ];
+
+  const navSections = currentUser?.role === 'TEACHER' ? teacherNavSections : adminNavSections;
+
   return (
     <ToastProvider>
     <div className="min-h-screen bg-slate-50 text-slate-800 flex font-sans overflow-x-hidden">
@@ -362,7 +513,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Page content panel viewport */}
-        <main className="p-4 sm:p-8 print:p-0 print:max-w-none print:m-0 flex-1 max-w-7xl w-full mx-auto min-w-0">
+        <main className={`p-4 sm:p-8 print:p-0 print:max-w-none print:m-0 flex-1 max-w-7xl w-full mx-auto min-w-0 ${currentUser?.role === 'TEACHER' ? 'pb-24 lg:pb-8' : ''}`}>
           {children}
         </main>
       </div>
@@ -451,6 +602,51 @@ export default function DashboardLayout({
           </div>
         </div>
       </div>
+
+      {/* Sticky Bottom Navigation Bar for Teachers on Mobile/Tablet */}
+      {currentUser?.role === 'TEACHER' && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 h-16 flex items-center justify-around z-50 px-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] print:hidden">
+          <Link href="/dashboard" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname === '/dashboard' ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Home</span>
+          </Link>
+          <Link href="/dashboard/attendance-mgmt" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/attendance-mgmt') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <span>Attendance</span>
+          </Link>
+          <Link href="/dashboard/marks-mgmt" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/marks-mgmt') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <span>Marks</span>
+          </Link>
+          <Link href="/dashboard/my-timetable" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/my-timetable') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+              <path d="M9 22v-4h6v4"></path>
+            </svg>
+            <span>Timetable</span>
+          </Link>
+          <Link href="/dashboard/profile" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/profile') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>Profile</span>
+          </Link>
+        </div>
+      )}
     </div>
     </ToastProvider>
   );
