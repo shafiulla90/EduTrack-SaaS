@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { AttendanceStatus, Role } from '@prisma/client';
+import { RoleFilterHelper } from '../common/role-filter.helper';
 import { 
   getTodayDateString, 
   formatAttendanceDate, 
@@ -11,7 +12,10 @@ import {
 
 @Injectable()
 export class AttendanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private roleFilterHelper: RoleFilterHelper,
+  ) {}
 
   private getTenantId(): string {
     const tenantId = TenantContext.getTenantId();
@@ -33,8 +37,26 @@ export class AttendanceService {
   }
 
   // Salesforce parity: get classes associated with tenant
-  async getClasses() {
+  // Teacher role → only assigned classes via RoleFilterHelper
+  async getClasses(userId?: string, role?: string) {
     const tenantId = this.getTenantId();
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      if (scope.assignedClassSectionIds.length === 0) return [];
+      // Resolve class names from assigned class-sections
+      const classSections = await this.prisma.classSection.findMany({
+        where: { id: { in: scope.assignedClassSectionIds }, tenantId },
+        include: { class: true },
+      });
+      const classesMap = new Map();
+      classSections.forEach(cs => classesMap.set(cs.class.id, cs.class));
+      return Array.from(classesMap.values()).map((c: any) => ({
+        label: c.name,
+        value: c.name,
+      }));
+    }
+
+    // Admin: all classes
     const classes = await this.prisma.class.findMany({
       where: { tenantId, isActive: true },
       orderBy: { name: 'asc' },
@@ -47,8 +69,29 @@ export class AttendanceService {
   }
 
   // Salesforce parity: get sections associated with tenant
-  async getSections() {
+  // Teacher role → only assigned sections, optionally filtered by class name
+  async getSections(classVal?: string, userId?: string, role?: string) {
     const tenantId = this.getTenantId();
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      if (scope.assignedClassSectionIds.length === 0) return [];
+      const classSections = await this.prisma.classSection.findMany({
+        where: {
+          id: { in: scope.assignedClassSectionIds },
+          tenantId,
+          ...(classVal ? { class: { name: { equals: classVal, mode: 'insensitive' } } } : {}),
+        },
+        include: { section: true },
+      });
+      const sectionsMap = new Map();
+      classSections.forEach(cs => sectionsMap.set(cs.section.id, cs.section));
+      return Array.from(sectionsMap.values()).map((s: any) => ({
+        label: s.name,
+        value: s.name,
+      }));
+    }
+
+    // Admin: all sections
     const sections = await this.prisma.section.findMany({
       where: { tenantId },
       orderBy: { name: 'asc' },
@@ -187,7 +230,7 @@ export class AttendanceService {
 
 
   // Salesforce parity: resolve names and get students
-  async getStudents(classVal: string, sectionVal: string) {
+  async getStudents(classVal: string, sectionVal: string, userId?: string, role?: string) {
     const tenantId = this.getTenantId();
     if (!classVal || !sectionVal) return [];
 
@@ -218,6 +261,14 @@ export class AttendanceService {
 
     if (!classSection) return [];
 
+    // Verify teacher assignment for safety (getStudents)
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      if (!scope.assignedClassSectionIds.includes(classSection.id)) {
+        throw new BadRequestException('You do not have teaching permissions for this class.');
+      }
+    }
+
     const studentList = await this.prisma.studentProfile.findMany({
       where: {
         tenantId,
@@ -242,7 +293,7 @@ export class AttendanceService {
   }
 
   // Salesforce parity: resolve names and get session data
-  async getSessionData(classVal: string, sectionVal: string, dateStr: string) {
+  async getSessionData(classVal: string, sectionVal: string, dateStr: string, userId?: string, role?: string) {
     const tenantId = this.getTenantId();
     if (!classVal || !sectionVal || !dateStr) {
       return { sessionExists: false, absentIds: [], total: 0, present: 0, absent: 0 };
@@ -277,6 +328,14 @@ export class AttendanceService {
 
     if (!classSection) {
       return { sessionExists: false, absentIds: [], total: 0, present: 0, absent: 0 };
+    }
+
+    // Verify teacher assignment for safety (getSessionData)
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      if (!scope.assignedClassSectionIds.includes(classSection.id)) {
+        throw new BadRequestException('You do not have teaching permissions for this class.');
+      }
     }
 
     const searchDate = parseAttendanceDate(dateStr);
@@ -322,7 +381,7 @@ export class AttendanceService {
   }
 
   // Salesforce parity: save attendance with name resolution, auto-creation, duplication removal, past-date read-only validation
-  async saveAttendance(data: any) {
+  async saveAttendance(data: any, userId?: string, role?: string) {
     const tenantId = this.getTenantId();
     const date = parseAttendanceDate(data.dateStr || data.date);
     const dateStr = data.dateStr || formatAttendanceDate(date);
@@ -339,10 +398,30 @@ export class AttendanceService {
     const totalStudents = data.totalStudents || 0;
     const presentCount = data.presentCount || 0;
     const absentCount = data.absentCount || 0;
-    const teacherId = data.teacherId;
+    let teacherId = data.teacherId;
 
     if (!classVal || !sectionVal) {
       throw new BadRequestException('Class and Section names are required.');
+    }
+
+    // Resolve classSection if teacher for assignment validation (saveAttendance)
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      const clsObj = await this.prisma.class.findFirst({
+        where: { tenantId, name: { equals: classVal, mode: 'insensitive' } },
+      });
+      const secObj = await this.prisma.section.findFirst({
+        where: { tenantId, name: { equals: sectionVal, mode: 'insensitive' } },
+      });
+      if (clsObj && secObj) {
+        const cs = await this.prisma.classSection.findFirst({
+          where: { classId: clsObj.id, sectionId: secObj.id },
+        });
+        if (cs && !scope.assignedClassSectionIds.includes(cs.id)) {
+          throw new BadRequestException('You do not have teaching permissions for this class.');
+        }
+      }
+      teacherId = scope.staff.id;
     }
 
     const result = await this.prisma.$transaction(async (tx) => {

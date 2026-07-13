@@ -1,10 +1,15 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
+import { Role } from '@prisma/client';
+import { RoleFilterHelper } from '../common/role-filter.helper';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private roleFilterHelper: RoleFilterHelper,
+  ) {}
 
   private getTenantId(): string {
     const tenantId = TenantContext.getTenantId();
@@ -206,92 +211,31 @@ export class DashboardService {
       })
     ]);
 
-    // 10. Chart Data (Monthly collections & salaries queries in smaller groups)
-    const chartDataAggregates = [];
+    // 10. Chart Data (Monthly collections & salaries aggregated in-memory)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
 
-    // Months 1-2
-    const batch1 = await Promise.all(
-      last6Months.slice(0, 2).flatMap(m => {
-        const startDate = new Date(m.year, m.month, 1);
-        const endDate = new Date(m.year, m.month + 1, 0, 23, 59, 59, 999);
-        return [
-          this.prisma.invoice.aggregate({
-            where: {
-              tenantId,
-              status: 'PAID',
-              invoiceDate: { gte: startDate, lte: endDate },
-            },
-            _sum: { paidAmount: true },
-          }),
-          this.prisma.expense.aggregate({
-            where: {
-              tenantId,
-              category: 'Salary',
-              status: 'PAID',
-              date: { gte: startDate, lte: endDate },
-            },
-            _sum: { amount: true },
-          })
-        ];
+    const [monthlyInvoices, monthlyExpenses] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: {
+          tenantId,
+          status: 'PAID',
+          invoiceDate: { gte: sixMonthsAgo },
+        },
+        select: { paidAmount: true, invoiceDate: true },
+      }),
+      this.prisma.expense.findMany({
+        where: {
+          tenantId,
+          category: 'Salary',
+          status: 'PAID',
+          date: { gte: sixMonthsAgo },
+        },
+        select: { amount: true, date: true },
       })
-    );
-    chartDataAggregates.push(...batch1);
-
-    // Months 3-4
-    const batch2 = await Promise.all(
-      last6Months.slice(2, 4).flatMap(m => {
-        const startDate = new Date(m.year, m.month, 1);
-        const endDate = new Date(m.year, m.month + 1, 0, 23, 59, 59, 999);
-        return [
-          this.prisma.invoice.aggregate({
-            where: {
-              tenantId,
-              status: 'PAID',
-              invoiceDate: { gte: startDate, lte: endDate },
-            },
-            _sum: { paidAmount: true },
-          }),
-          this.prisma.expense.aggregate({
-            where: {
-              tenantId,
-              category: 'Salary',
-              status: 'PAID',
-              date: { gte: startDate, lte: endDate },
-            },
-            _sum: { amount: true },
-          })
-        ];
-      })
-    );
-    chartDataAggregates.push(...batch2);
-
-    // Months 5-6
-    const batch3 = await Promise.all(
-      last6Months.slice(4, 6).flatMap(m => {
-        const startDate = new Date(m.year, m.month, 1);
-        const endDate = new Date(m.year, m.month + 1, 0, 23, 59, 59, 999);
-        return [
-          this.prisma.invoice.aggregate({
-            where: {
-              tenantId,
-              status: 'PAID',
-              invoiceDate: { gte: startDate, lte: endDate },
-            },
-            _sum: { paidAmount: true },
-          }),
-          this.prisma.expense.aggregate({
-            where: {
-              tenantId,
-              category: 'Salary',
-              status: 'PAID',
-              date: { gte: startDate, lte: endDate },
-            },
-            _sum: { amount: true },
-          })
-        ];
-      })
-    );
-    chartDataAggregates.push(...batch3);
+    ]);
 
     const totalRevenue = Number(revenueAgg._sum.paidAmount || 0);
     const totalExpenses = Number(expenseAgg._sum.amount || 0);
@@ -338,24 +282,23 @@ export class DashboardService {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10);
 
-    // Unpack chartDataAggregates
-    const chartData = [];
-    for (let idx = 0; idx < last6Months.length; idx++) {
-      const m = last6Months[idx];
-      const monthFees = chartDataAggregates[idx * 2] as any;
-      const monthSalaries = chartDataAggregates[idx * 2 + 1] as any;
+    // Aggregate monthly data in-memory
+    const chartData = last6Months.map(m => {
+      const collections = monthlyInvoices
+        .filter(inv => inv.invoiceDate.getFullYear() === m.year && inv.invoiceDate.getMonth() === m.month)
+        .reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
 
-      const collections = Number(monthFees._sum.paidAmount || 0);
-      const salaries = Number(monthSalaries._sum.amount || 0);
-      const revenue = collections - salaries;
+      const salaries = monthlyExpenses
+        .filter(exp => exp.date.getFullYear() === m.year && exp.date.getMonth() === m.month)
+        .reduce((sum, exp) => sum + Number(exp.amount), 0);
 
-      chartData.push({
+      return {
         month: m.label,
         feeCollection: collections,
         salaryExpense: salaries,
-        netRevenue: revenue,
-      });
-    }
+        netRevenue: collections - salaries,
+      };
+    });
 
     const studentTrendVal = studentsLastMonth > 0 
       ? ((studentsThisMonth - studentsLastMonth) / studentsLastMonth) * 100
@@ -409,14 +352,36 @@ export class DashboardService {
     return summaryData;
   }
 
-  async getReportsSummary() {
+  async getReportsSummary(userId?: string, role?: string) {
     const tenantId = this.getTenantId();
+
+    let studentWhere: any = { user: { tenantId, isActive: true } };
+    let marksWhere: any = { tenantId };
+    let showFinancials = true;
+
+    if (this.roleFilterHelper.isTeacher(role)) {
+      showFinancials = false;
+      try {
+        const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+        const classSectionIds = scope.assignedClassSectionIds;
+        studentWhere = {
+          tenantId,
+          classSectionId: { in: classSectionIds },
+          user: { isActive: true },
+        };
+        marksWhere = {
+          tenantId,
+          student: { classSectionId: { in: classSectionIds } },
+        };
+      } catch {
+        studentWhere = { id: 'none' };
+        marksWhere = { id: 'none' };
+      }
+    }
 
     // 1. Enrollment Demographics (Student counts grouped by class)
     const students = await this.prisma.studentProfile.findMany({
-      where: {
-        user: { tenantId, isActive: true }
-      },
+      where: studentWhere,
       include: {
         user: { select: { createdAt: true } },
         classSection: {
@@ -447,37 +412,46 @@ export class DashboardService {
     };
 
     // 2. Financial Statements (Paid revenue, outstanding balances, salaries paid)
-    const [invoices, expenses] = await Promise.all([
-      this.prisma.invoice.findMany({
-        where: { tenantId }
-      }),
-      this.prisma.expense.findMany({
-        where: { tenantId, status: 'PAID' }
-      })
-    ]);
-
-    let totalRevenue = 0;
-    let outstandingReceivables = 0;
-    invoices.forEach(inv => {
-      totalRevenue += Number(inv.paidAmount || 0);
-      outstandingReceivables += Number(inv.remainingBalance || 0);
-    });
-
-    let totalExpenses = 0;
-    expenses.forEach(exp => {
-      totalExpenses += Number(exp.amount || 0);
-    });
-
-    const financials = {
-      totalRevenue,
-      outstandingReceivables,
-      totalExpenses,
-      netCashflow: totalRevenue - totalExpenses
+    let financials = {
+      totalRevenue: 0,
+      outstandingReceivables: 0,
+      totalExpenses: 0,
+      netCashflow: 0
     };
+
+    if (showFinancials) {
+      const [invoices, expenses] = await Promise.all([
+        this.prisma.invoice.findMany({
+          where: { tenantId }
+        }),
+        this.prisma.expense.findMany({
+          where: { tenantId, status: 'PAID' }
+        })
+      ]);
+
+      let totalRevenue = 0;
+      let outstandingReceivables = 0;
+      invoices.forEach(inv => {
+        totalRevenue += Number(inv.paidAmount || 0);
+        outstandingReceivables += Number(inv.remainingBalance || 0);
+      });
+
+      let totalExpenses = 0;
+      expenses.forEach(exp => {
+        totalExpenses += Number(exp.amount || 0);
+      });
+
+      financials = {
+        totalRevenue,
+        outstandingReceivables,
+        totalExpenses,
+        netCashflow: totalRevenue - totalExpenses
+      };
+    }
 
     // 3. Grading Averages & Mark Distribution curve
     const marks = await this.prisma.examMark.findMany({
-      where: { tenantId }
+      where: marksWhere
     });
 
     let totalMarksObtained = 0;
@@ -524,10 +498,25 @@ export class DashboardService {
     };
   }
 
-  async getDemographicsReport() {
+  async getDemographicsReport(userId?: string, role?: string) {
     const tenantId = this.getTenantId();
+    let studentWhere: any = { user: { tenantId, isActive: true } };
+
+    if (this.roleFilterHelper.isTeacher(role)) {
+      try {
+        const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+        studentWhere = {
+          tenantId,
+          classSectionId: { in: scope.assignedClassSectionIds },
+          user: { isActive: true },
+        };
+      } catch {
+        studentWhere = { id: 'none' };
+      }
+    }
+
     const students = await this.prisma.studentProfile.findMany({
-      where: { user: { tenantId, isActive: true } },
+      where: studentWhere,
       include: {
         user: { select: { name: true, email: true, phone: true, createdAt: true } },
         classSection: {
@@ -547,7 +536,12 @@ export class DashboardService {
     }));
   }
 
-  async getCashflowsReport() {
+  async getCashflowsReport(userId?: string, role?: string) {
+    // Teachers should not see cashflows
+    if (role === Role.TEACHER) {
+      return [];
+    }
+
     const tenantId = this.getTenantId();
     const [invoices, expenses] = await Promise.all([
       this.prisma.invoice.findMany({
@@ -592,10 +586,24 @@ export class DashboardService {
     return txs;
   }
 
-  async getGradingReport() {
+  async getGradingReport(userId?: string, role?: string) {
     const tenantId = this.getTenantId();
+    let marksWhere: any = { tenantId };
+
+    if (this.roleFilterHelper.isTeacher(role)) {
+      try {
+        const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+        marksWhere = {
+          tenantId,
+          student: { classSectionId: { in: scope.assignedClassSectionIds } },
+        };
+      } catch {
+        marksWhere = { id: 'none' };
+      }
+    }
+
     const marks = await this.prisma.examMark.findMany({
-      where: { tenantId },
+      where: marksWhere,
       include: {
         student: { include: { user: { select: { name: true } } } },
         subject: { select: { name: true } },

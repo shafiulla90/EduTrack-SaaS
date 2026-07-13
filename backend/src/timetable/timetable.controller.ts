@@ -1,6 +1,9 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Query, Req } from '@nestjs/common';
 import { TimetableService } from './timetable.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 import {
   CreateClassDto,
   CreateSectionDto,
@@ -15,7 +18,7 @@ import {
   PeriodTimingDto,
 } from './dto/timetable.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('timetable')
 export class TimetableController {
   constructor(private readonly timetableService: TimetableService) {}
@@ -213,5 +216,12 @@ export class TimetableController {
   @Get('skill-level-options')
   getSkillLevelOptions() {
     return this.timetableService.getSkillLevelOptions();
+  }
+
+  @Roles(Role.TEACHER, Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
+  @Get('my-schedule')
+  async getMySchedule(@Req() req: any) {
+    // Delegates to service method — no inline prisma queries in controllers
+    return this.timetableService.getMySchedule(req.user.sub, req.user.tenantId);
   }
 }

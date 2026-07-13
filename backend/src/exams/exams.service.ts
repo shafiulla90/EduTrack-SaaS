@@ -1,10 +1,15 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
+import { Role } from '@prisma/client';
+import { RoleFilterHelper } from '../common/role-filter.helper';
 
 @Injectable()
 export class ExamsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private roleFilterHelper: RoleFilterHelper,
+  ) {}
 
   private getTenantId(): string {
     const tenantId = TenantContext.getTenantId();
@@ -50,21 +55,32 @@ export class ExamsService {
 
   // ── CUSTOM API ENDPOINTS FOR FRONTEND PARITY WITH SALESFORCE ────────────────
 
-  async getClasses() {
+  async getClasses(userId?: string, role?: string) {
     const tenantId = this.getTenantId();
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      if (scope.assignedClassSectionIds.length === 0) return [];
+      const sections = await this.prisma.classSection.findMany({
+        where: { id: { in: scope.assignedClassSectionIds }, tenantId },
+        include: { class: true, section: true },
+        orderBy: [{ class: { name: 'asc' } }, { section: { name: 'asc' } }],
+      });
+      return sections.map(s => ({
+        value: s.id,
+        label: `${s.class.name} - ${s.section.name}`,
+        displayName: `${s.class.name} - ${s.section.name}`,
+        classId: s.classId,
+        sectionId: s.sectionId,
+      }));
+    }
+
+    // Admin: all class-sections
     const sections = await this.prisma.classSection.findMany({
       where: { tenantId },
-      include: {
-        class: true,
-        section: true,
-      },
-      orderBy: [
-        { class: { name: 'asc' } },
-        { section: { name: 'asc' } },
-      ],
+      include: { class: true, section: true },
+      orderBy: [{ class: { name: 'asc' } }, { section: { name: 'asc' } }],
     });
-
-    return sections.map((s) => ({
+    return sections.map(s => ({
       value: s.id,
       label: `${s.class.name} - ${s.section.name}`,
       displayName: `${s.class.name} - ${s.section.name}`,
@@ -73,13 +89,28 @@ export class ExamsService {
     }));
   }
 
-  async getSubjects() {
+  async getSubjects(userId?: string, role?: string) {
     const tenantId = this.getTenantId();
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      if (scope.assignedSubjectIds.length === 0) return [];
+      const subjects = await this.prisma.subject.findMany({
+        where: { id: { in: scope.assignedSubjectIds }, tenantId, isActive: true },
+        orderBy: { name: 'asc' },
+      });
+      return subjects.map(s => ({
+        id: s.id,
+        name: s.name,
+        maxMarks: 100,
+        icon: s.name.substring(0, 1).toUpperCase(),
+      }));
+    }
+
+    // Admin: all subjects
     const subjects = await this.prisma.subject.findMany({
       where: { tenantId, isActive: true },
       orderBy: { name: 'asc' },
     });
-
     return subjects.map(s => ({
       id: s.id,
       name: s.name,
@@ -199,6 +230,8 @@ export class ExamsService {
     examName: string,
     classSectionId?: string,
     examId?: string,
+    userId?: string,
+    role?: string,
   ) {
     const tenantId = this.getTenantId();
     let resolvedExamId = examId;
@@ -226,6 +259,16 @@ export class ExamsService {
 
     if (!resolvedClassSectionId) {
       throw new BadRequestException('Could not resolve Class Section');
+    }
+
+    // Verify teacher assignment (getStudentsForMarksEntry)
+    if (this.roleFilterHelper.isTeacher(role)) {
+      await this.roleFilterHelper.validateTeacherAssignment(
+        (await this.roleFilterHelper.buildTeacherScope(userId, tenantId)).staff.id,
+        resolvedClassSectionId,
+        subjectId,
+        tenantId,
+      );
     }
 
     // Get all active students in the section
@@ -275,58 +318,74 @@ export class ExamsService {
     examName: string,
     classSectionId: string,
     subjectId: string,
+    userId?: string,
+    role?: string,
   ) {
     const tenantId = this.getTenantId();
 
-    return this.prisma.$transaction(async (tx) => {
-      // Find or create Exam
-      let exam = await tx.exam.findFirst({
-        where: {
-          tenantId,
-          classSectionId,
-          name: examName,
-        },
-      });
+    // Verify teacher assignment before saving marks
+    if (this.roleFilterHelper.isTeacher(role)) {
+      const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+      await this.roleFilterHelper.validateTeacherAssignment(
+        scope.staff.id,
+        classSectionId,
+        subjectId,
+        tenantId,
+      );
+    }
 
-      if (!exam) {
-        exam = await tx.exam.create({
-          data: {
-            name: examName,
-            type: examName,
-            classSectionId,
-            date: new Date(),
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Find or create Exam
+        let exam = await tx.exam.findFirst({
+          where: {
             tenantId,
+            classSectionId,
+            name: examName,
           },
         });
-      }
 
-      const results = [];
-      for (const row of marksDataList) {
-        const mark = await tx.examMark.upsert({
-          where: {
-            examId_studentId_subjectId: {
+        if (!exam) {
+          exam = await tx.exam.create({
+            data: {
+              name: examName,
+              type: examName,
+              classSectionId,
+              date: new Date(),
+              tenantId,
+            },
+          });
+        }
+
+        // Run upsert operations concurrently to speed up marks saving and avoid timeouts
+        const upsertPromises = marksDataList.map((row) =>
+          tx.examMark.upsert({
+            where: {
+              examId_studentId_subjectId: {
+                examId: exam.id,
+                studentId: row.studentId,
+                subjectId,
+              },
+            },
+            create: {
               examId: exam.id,
               studentId: row.studentId,
               subjectId,
+              marksObtained: row.marksObtained,
+              remarks: row.remarks || null,
+              tenantId,
             },
-          },
-          create: {
-            examId: exam.id,
-            studentId: row.studentId,
-            subjectId,
-            marksObtained: row.marksObtained,
-            remarks: row.remarks || null,
-            tenantId,
-          },
-          update: {
-            marksObtained: row.marksObtained,
-            remarks: row.remarks || null,
-          },
-        });
-        results.push(mark);
-      }
-      return results;
-    });
+            update: {
+              marksObtained: row.marksObtained,
+              remarks: row.remarks || null,
+            },
+          }),
+        );
+
+        return Promise.all(upsertPromises);
+      },
+      { timeout: 30000 },
+    );
   }
 
   // ── GRADES & REPORT CARD COMPILATION ────────────────────────────────────────

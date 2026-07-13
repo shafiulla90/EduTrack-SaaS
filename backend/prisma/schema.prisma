@@ -144,6 +144,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model StaffProfile {
@@ -228,6 +230,8 @@ model AcademicYear {
   complaints    Complaint[]
   pricebooks    Pricebook[]
   opportunities Opportunity[]
+
+  @@index([tenantId])
 }
 
 model Class {
@@ -242,6 +246,9 @@ model Class {
   classSections ClassSection[]
   opportunities Opportunity[]
   pricebooks    Pricebook[]
+
+  @@index([tenantId])
+  @@index([academicYearId])
 }
 
 model Section {
@@ -253,6 +260,8 @@ model Section {
 
   classSections ClassSection[]
   opportunities Opportunity[]
+
+  @@index([tenantId])
 }
 
 model ClassSection {
@@ -281,6 +290,8 @@ model ClassSection {
   announcements      Announcement[]
 
   @@unique([classId, sectionId])
+  @@index([tenantId])
+  @@index([teacherId])
 }
 
 model Subject {
@@ -296,6 +307,8 @@ model Subject {
   periods        Period[]
   teacherSkills  TeacherSkill[]
   homeworks      Homework[]
+
+  @@index([tenantId])
 }
 
 model ClassSubject {
@@ -308,6 +321,7 @@ model ClassSubject {
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([classSectionId, subjectId])
+  @@index([tenantId])
 }
 
 model TeacherAssignment {
@@ -324,6 +338,7 @@ model TeacherAssignment {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([teacherId, classSectionId, subjectId])
+  @@index([tenantId])
 }
 
 model AttendanceSession {
@@ -343,6 +358,10 @@ model AttendanceSession {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([classSectionId])
+  @@index([date])
 }
 
 model Attendance {
@@ -355,6 +374,10 @@ model Attendance {
   reason              String?           @db.Text
   tenantId            String
   tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([studentId])
+  @@index([attendanceSessionId])
 }
 
 model Exam {
@@ -368,6 +391,10 @@ model Exam {
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   examMarks ExamMark[]
+
+  @@index([tenantId])
+  @@index([classSectionId])
+  @@index([date])
 }
 
 model ExamMark {
@@ -384,6 +411,8 @@ model ExamMark {
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([examId, studentId, subjectId])
+  @@index([tenantId])
+  @@index([studentId])
 }
 
 model Invoice {
@@ -409,6 +438,11 @@ model Invoice {
   bankIFSC          String?
   bankAccountNumber String?
   bankBranch        String?
+
+  @@index([tenantId])
+  @@index([studentId])
+  @@index([status])
+  @@index([invoiceDate])
 }
 
 model InvoiceItem {
@@ -424,6 +458,9 @@ model InvoiceItem {
   opportunityLineItem   OpportunityLineItem? @relation(fields: [opportunityLineItemId], references: [id], onDelete: SetNull)
   productId             String?
   product               Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([invoiceId])
 }
 
 model Expense {
@@ -436,6 +473,11 @@ model Expense {
   status      ExpenseStatus @default(PENDING)
   tenantId    String
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([category])
+  @@index([status])
+  @@index([date])
 }
 
 model PeriodTiming {
@@ -448,6 +490,8 @@ model PeriodTiming {
   tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   periods Period[]
+
+  @@index([tenantId])
 }
 
 model Period {
@@ -470,6 +514,11 @@ model Period {
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([teacherId])
+  @@index([classSectionId])
+  @@index([dayOfWeek])
 }
 
 model TeacherSkill {
@@ -484,6 +533,7 @@ model TeacherSkill {
   tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([teacherId, subjectId])
+  @@index([tenantId])
 }
 
 model Complaint {
@@ -507,6 +557,9 @@ model Complaint {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([submittedById])
 }
 
 // ── Library Models ───────────────────────────────────────────────────────────
@@ -776,6 +829,11 @@ model Homework {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([teacherId])
+  @@index([classSectionId])
+  @@index([dueDate])
 }
 
 model LeaveRequest {
@@ -798,6 +856,10 @@ model LeaveRequest {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([teacherId])
+  @@index([startDate])
 }
 
 model Announcement {
@@ -819,4 +881,7 @@ model Announcement {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([teacherId])
 }

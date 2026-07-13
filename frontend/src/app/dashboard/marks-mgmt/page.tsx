@@ -186,9 +186,31 @@ export default function MarksMgmtPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-10 h-10 border-4 border-t-[#2E5BFF] border-slate-200 rounded-full animate-spin"></div>
-        <p className="text-sm font-semibold text-slate-500">Loading marks module...</p>
+      <div className="space-y-4 max-w-md mx-auto sm:max-w-none">
+        {/* Filter form skeleton */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 animate-pulse">
+          <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="h-10 bg-slate-200 rounded-xl"></div>
+            <div className="h-10 bg-slate-200 rounded-xl"></div>
+          </div>
+          <div className="h-10 bg-slate-200 rounded-xl"></div>
+        </div>
+        {/* Student cards skeleton */}
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3 animate-pulse">
+            <div className="flex justify-between">
+              <div className="space-y-2">
+                <div className="h-4 bg-slate-200 rounded w-36"></div>
+                <div className="h-3 bg-slate-200 rounded w-20"></div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="h-10 bg-slate-200 rounded-xl"></div>
+              <div className="col-span-2 h-10 bg-slate-200 rounded-xl"></div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

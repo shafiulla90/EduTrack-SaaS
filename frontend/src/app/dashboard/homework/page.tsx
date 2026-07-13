@@ -125,19 +125,29 @@ export default function HomeworkPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-10 h-10 border-4 border-t-[#2E5BFF] border-slate-200 rounded-full animate-spin"></div>
-        <p className="text-sm font-semibold text-slate-500">Loading assignments...</p>
-      </div>
-    );
-  }
+  return (
+    <div className="space-y-4 max-w-md mx-auto sm:max-w-none">
+      {/* Skeleton cards */}
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col space-y-3 animate-pulse">
+          <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+          <div className="h-3 bg-slate-200 rounded w-2/3"></div>
+          <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+          <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+            <div className="h-3 bg-slate-200 rounded w-20"></div>
+            <div className="h-3 bg-slate-200 rounded w-24"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
   return (
     <div className="space-y-6 max-w-md mx-auto sm:max-w-none pb-20">
       <div className="flex justify-between items-center pb-4 border-b border-slate-200">
         <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-          <BookOpen className="w-6 h-6 text-[#2E5BFF]" />
+          <BookOpen className="w-6 h-6 text-[#2E5BFF] />
           Homework & Assignments
         </h2>
         <button

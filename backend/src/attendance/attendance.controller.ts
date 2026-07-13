@@ -1,20 +1,24 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
 @Controller('attendance')
 export class AttendanceController {
   constructor(private attendanceService: AttendanceService) {}
 
   @Get('classes')
-  async getClasses() {
-    return this.attendanceService.getClasses();
+  async getClasses(@Req() req: any) {
+    return this.attendanceService.getClasses(req.user.sub, req.user.role);
   }
 
   @Get('sections')
-  async getSections() {
-    return this.attendanceService.getSections();
+  async getSections(@Req() req: any, @Query('classVal') classVal?: string) {
+    return this.attendanceService.getSections(classVal, req.user.sub, req.user.role);
   }
 
   @Get('teachers')
@@ -34,24 +38,26 @@ export class AttendanceController {
 
   @Get('students')
   async getStudents(
+    @Req() req: any,
     @Query('classVal') classVal: string,
     @Query('sectionVal') sectionVal: string,
   ) {
-    return this.attendanceService.getStudents(classVal, sectionVal);
+    return this.attendanceService.getStudents(classVal, sectionVal, req.user.sub, req.user.role);
   }
 
   @Get('session-data')
   async getSessionData(
+    @Req() req: any,
     @Query('classVal') classVal: string,
     @Query('sectionVal') sectionVal: string,
     @Query('dateVal') dateVal: string,
   ) {
-    return this.attendanceService.getSessionData(classVal, sectionVal, dateVal);
+    return this.attendanceService.getSessionData(classVal, sectionVal, dateVal, req.user.sub, req.user.role);
   }
 
   @Post('save')
-  async save(@Body() data: any) {
-    return this.attendanceService.saveAttendance(data);
+  async save(@Req() req: any, @Body() data: any) {
+    return this.attendanceService.saveAttendance(data, req.user.sub, req.user.role);
   }
 
   @Get('report-data')

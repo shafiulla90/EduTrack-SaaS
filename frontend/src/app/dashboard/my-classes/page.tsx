@@ -46,15 +46,6 @@ export default function MyClassesPage() {
     (s.rollNo && s.rollNo.toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-10 h-10 border-4 border-t-[#2E5BFF] border-slate-200 rounded-full animate-spin"></div>
-        <p className="text-sm font-semibold text-slate-500">Loading your classes...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 max-w-md mx-auto sm:max-w-none">
       <div className="flex justify-between items-center pb-4 border-b border-slate-200">
@@ -63,11 +54,24 @@ export default function MyClassesPage() {
           My Assigned Classes
         </h2>
         <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2.5 py-1 rounded-lg">
-          {classes.length} Total
+          {loading ? 'Loading...' : `${classes.length} Total`}
         </span>
       </div>
 
-      {classes.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex justify-between items-center animate-pulse">
+              <div className="space-y-3 w-full">
+                <div className="bg-slate-200 w-10 h-10 rounded-xl"></div>
+                <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                <div className="h-3 bg-slate-200 rounded w-2/3"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : classes.length === 0 ? (
         <div className="bg-white p-8 text-center rounded-3xl border border-slate-200 shadow-sm text-slate-500 italic text-sm">
           No classes are currently assigned to your profile.
         </div>

@@ -62,103 +62,142 @@ export class TeacherPortalService {
     const today = new Date();
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const todayDay = days[today.getDay()];
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-    // Today's classes schedule
-    const todayClasses = await this.prisma.period.findMany({
-      where: { tenantId, teacherId: staff.id, dayOfWeek: todayDay },
-      include: {
-        subject: { select: { name: true } },
-        classSection: {
-          include: {
-            class: { select: { name: true } },
-            section: { select: { name: true } },
+    // Execute staff-dependent queries concurrently
+    const [
+      todayClasses,
+      assignments,
+      homeworkPendingCount,
+      currentLeave,
+      homeworkCreated,
+      announcementsSent,
+      upcomingEvents
+    ] = await Promise.all([
+      // 1. Today's classes schedule
+      this.prisma.period.findMany({
+        where: { tenantId, teacherId: staff.id, dayOfWeek: todayDay },
+        include: {
+          subject: { select: { name: true } },
+          classSection: {
+            include: {
+              class: { select: { name: true } },
+              section: { select: { name: true } },
+            },
           },
+          periodTiming: { select: { startTime: true, endTime: true, periodNumber: true } },
         },
-        periodTiming: { select: { startTime: true, endTime: true, periodNumber: true } },
-      },
-    });
+      }),
 
-    // Assignments
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { tenantId, teacherId: staff.id },
-      include: { classSection: true },
-    });
+      // 2. Assignments
+      this.prisma.teacherAssignment.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: { classSection: true },
+      }),
+
+      // 3. Today's Homework Pending
+      this.prisma.homework.count({
+        where: {
+          tenantId,
+          teacherId: staff.id,
+          dueDate: todayStart,
+        },
+      }),
+
+      // 4. Leave status today
+      this.prisma.leaveRequest.findFirst({
+        where: {
+          tenantId,
+          teacherId: staff.id,
+          startDate: { lte: todayStart },
+          endDate: { gte: todayStart },
+        },
+      }),
+
+      // 5. Homework created
+      this.prisma.homework.count({
+        where: { tenantId, teacherId: staff.id },
+      }),
+
+      // 6. Announcements sent
+      this.prisma.announcement.count({
+        where: { tenantId, teacherId: staff.id },
+      }),
+
+      // 7. Today's Events / Notice Board
+      this.prisma.announcement.findMany({
+        where: {
+          tenantId,
+          priority: 'High',
+          expiryDate: { gte: todayStart },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      })
+    ]);
 
     const classSectionIds = assignments.map(a => a.classSectionId);
     const uniqueClassSectionIds = Array.from(new Set(classSectionIds));
-
-    // Stats - Assigned Students
-    const totalStudents = await this.prisma.studentProfile.count({
-      where: { tenantId, classSectionId: { in: uniqueClassSectionIds } },
-    });
-
-    // Stats - Assigned Subjects
     const uniqueSubjectIds = Array.from(new Set(assignments.map(a => a.subjectId)));
     const totalSubjects = uniqueSubjectIds.length;
 
-    // Today's Attendance Pending
-    // We look at all assigned ClassSections and check if a session exists for today
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const todaySessions = await this.prisma.attendanceSession.findMany({
-      where: {
-        tenantId,
-        classSectionId: { in: uniqueClassSectionIds },
-        date: todayStart,
-      },
-      select: { classSectionId: true },
-    });
+    // Execute section-dependent queries concurrently
+    const [
+      totalStudents,
+      todaySessions,
+      todayExams,
+      sessions,
+      examsInClassSections
+    ] = await Promise.all([
+      // 8. Stats - Assigned Students
+      this.prisma.studentProfile.count({
+        where: { tenantId, classSectionId: { in: uniqueClassSectionIds } },
+      }),
+
+      // 9. Today's Attendance Sessions
+      this.prisma.attendanceSession.findMany({
+        where: {
+          tenantId,
+          classSectionId: { in: uniqueClassSectionIds },
+          date: todayStart,
+        },
+        select: { classSectionId: true },
+      }),
+
+      // 10. Exams Today
+      this.prisma.exam.findMany({
+        where: {
+          tenantId,
+          classSectionId: { in: uniqueClassSectionIds },
+          date: todayStart,
+        },
+        include: {
+          classSection: {
+            include: { class: true, section: true },
+          },
+        },
+      }),
+
+      // 11. Performance Average (Attendance Sessions)
+      this.prisma.attendanceSession.findMany({
+        where: { tenantId, classSectionId: { in: uniqueClassSectionIds } },
+        select: { presentCount: true, totalStudents: true },
+      }),
+
+      // 12. Pending Marks (Exams)
+      this.prisma.exam.findMany({
+        where: { tenantId, classSectionId: { in: uniqueClassSectionIds } },
+        include: { examMarks: true },
+      })
+    ]);
+
     const completedSessionIds = new Set(todaySessions.map(s => s.classSectionId));
     const pendingAttendanceCount = uniqueClassSectionIds.filter(id => !completedSessionIds.has(id)).length;
 
-    // Today's Homework Pending (due today or created today)
-    const homeworkPendingCount = await this.prisma.homework.count({
-      where: {
-        tenantId,
-        teacherId: staff.id,
-        dueDate: todayStart,
-      },
-    });
-
-    // Exams Today
-    const todayExams = await this.prisma.exam.findMany({
-      where: {
-        tenantId,
-        classSectionId: { in: uniqueClassSectionIds },
-        date: todayStart,
-      },
-      include: {
-        classSection: {
-          include: { class: true, section: true },
-        },
-      },
-    });
-
-    // Leave status today
-    const currentLeave = await this.prisma.leaveRequest.findFirst({
-      where: {
-        tenantId,
-        teacherId: staff.id,
-        startDate: { lte: todayStart },
-        endDate: { gte: todayStart },
-      },
-    });
-
-    // Performance Average
-    const sessions = await this.prisma.attendanceSession.findMany({
-      where: { tenantId, classSectionId: { in: uniqueClassSectionIds } },
-      select: { presentCount: true, totalStudents: true },
-    });
     const totalPresent = sessions.reduce((sum, s) => sum + s.presentCount, 0);
     const totalRoster = sessions.reduce((sum, s) => sum + s.totalStudents, 0);
     const attendancePercentage = totalRoster > 0 ? Math.round((totalPresent / totalRoster) * 1000) / 10 : 100;
 
-    // Pending Marks
-    // Exams in teacher's ClassSections that don't have marks entered for subjects
-    const examsInClassSections = await this.prisma.exam.findMany({
-      where: { tenantId, classSectionId: { in: uniqueClassSectionIds } },
-      include: { examMarks: true },
-    });
-    // Count exams with 0 marks
     const pendingMarksCount = examsInClassSections.filter(e => e.examMarks.length === 0).length;
 
     // Homework created by this teacher
@@ -303,6 +342,9 @@ export class TeacherPortalService {
           include: {
             class: true,
             section: true,
+            _count: {
+              select: { students: true },
+            },
           },
         },
         subject: true,
@@ -318,7 +360,7 @@ export class TeacherPortalService {
       sectionOnlyName: a.classSection.section.name,
       subjectName: a.subject.name,
       periodsPerWeek: a.periodsPerWeek,
-      strength: a.classSection.strength,
+      strength: a.classSection._count.students,
     }));
   }
 
@@ -892,24 +934,26 @@ export class TeacherPortalService {
 
     await this.verifyTeacherAssignment(staff.id, student.classSectionId);
 
-    // 1. Get attendance rate
-    const attendances = await this.prisma.attendance.findMany({
-      where: { studentId, tenantId },
-    });
+    // Execute dependent queries concurrently
+    const [attendances, examMarks, homeworkCount] = await Promise.all([
+      // 1. Get attendance rate
+      this.prisma.attendance.findMany({
+        where: { studentId, tenantId },
+      }),
+      // 2. Get exam marks
+      this.prisma.examMark.findMany({
+        where: { studentId, tenantId },
+        include: { exam: true, subject: true },
+      }),
+      // 3. Get homework count
+      this.prisma.homework.count({
+        where: { tenantId, classSectionId: student.classSectionId },
+      })
+    ]);
+
     const totalAttendances = attendances.length;
     const presentCount = attendances.filter(a => a.status === 'PRESENT').length;
     const attendancePercentage = totalAttendances > 0 ? Math.round((presentCount / totalAttendances) * 100) : 100;
-
-    // 2. Get exam marks
-    const examMarks = await this.prisma.examMark.findMany({
-      where: { studentId, tenantId },
-      include: { exam: true, subject: true },
-    });
-
-    // 3. Get homework completion status (mock or from notifications/logs)
-    const homeworkCount = await this.prisma.homework.count({
-      where: { tenantId, classSectionId: student.classSectionId },
-    });
 
     return {
       student: {

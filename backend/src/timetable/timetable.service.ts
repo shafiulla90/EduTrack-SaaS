@@ -4,10 +4,14 @@ import { PeriodTimingDto, SaveTimetablePeriodsDto, SaveSubstituteDto } from './d
 import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 import { TenantContext } from '../tenants/tenant.context';
+import { RoleFilterHelper } from '../common/role-filter.helper';
 
 @Injectable()
 export class TimetableService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly roleFilterHelper: RoleFilterHelper,
+  ) {}
 
   // Retrieve tenantId from the active AsyncLocalStorage context set by TenantMiddleware
   private getTenantId(): string {
@@ -16,6 +20,15 @@ export class TimetableService {
       throw new BadRequestException('No active school tenant context found. Ensure X-Tenant-ID header or subdomain is provided.');
     }
     return tenantId;
+  }
+
+  /**
+   * Returns the timetable periods for the authenticated teacher.
+   * Uses RoleFilterHelper to resolve the teacher's staff profile.
+   */
+  async getMySchedule(userId: string, tenantId: string) {
+    const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
+    return this.getPeriodsForTeacher(scope.staff.id);
   }
 
   // ---------- Academic Years ----------

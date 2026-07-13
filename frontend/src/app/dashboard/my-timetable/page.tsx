@@ -27,15 +27,6 @@ export default function MyTimetablePage() {
 
   const filteredPeriods = periods.filter(p => p.dayOfWeek === activeDay);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-10 h-10 border-4 border-t-[#2E5BFF] border-slate-200 rounded-full animate-spin"></div>
-        <p className="text-sm font-semibold text-slate-500">Loading schedule...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 max-w-md mx-auto sm:max-w-none">
       <div className="flex justify-between items-center pb-4 border-b border-slate-200">
@@ -64,7 +55,19 @@ export default function MyTimetablePage() {
 
       {/* Periods list */}
       <div className="space-y-3">
-        {filteredPeriods.length === 0 ? (
+        {loading ? (
+          Array.from({ length: 4 }).map((_, idx) => (
+            <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex justify-between items-center animate-pulse">
+              <div className="flex items-start gap-4 w-full">
+                <div className="w-12 h-12 rounded-2xl bg-slate-200 shrink-0"></div>
+                <div className="space-y-2 w-full">
+                  <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+                  <div className="h-3 bg-slate-200 rounded w-2/3"></div>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : filteredPeriods.length === 0 ? (
           <div className="bg-white py-12 text-center text-slate-400 text-xs italic rounded-3xl border border-slate-200 shadow-sm">
             No lectures scheduled for {activeDay}.
           </div>

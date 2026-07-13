@@ -1,8 +1,12 @@
-import { Controller, Get, Post, Put, Delete, Body, Query, UseGuards, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Query, UseGuards, Param, Req } from '@nestjs/common';
 import { ExamsService } from './exams.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
 @Controller('exams')
 export class ExamsController {
   constructor(private examsService: ExamsService) {}
@@ -23,13 +27,13 @@ export class ExamsController {
   }
 
   @Get('classes')
-  async getClasses() {
-    return this.examsService.getClasses();
+  async getClasses(@Req() req: any) {
+    return this.examsService.getClasses(req.user.sub, req.user.role);
   }
 
   @Get('subjects')
-  async getSubjects() {
-    return this.examsService.getSubjects();
+  async getSubjects(@Req() req: any) {
+    return this.examsService.getSubjects(req.user.sub, req.user.role);
   }
 
   @Get('exam-types')
@@ -59,6 +63,7 @@ export class ExamsController {
 
   @Get('marks-entry')
   async getMarksEntryList(
+    @Req() req: any,
     @Query('subjectId') subjectId: string,
     @Query('examName') examName: string,
     @Query('classSectionId') classSectionId?: string,
@@ -69,11 +74,14 @@ export class ExamsController {
       examName,
       classSectionId,
       examId,
+      req.user.sub,
+      req.user.role,
     );
   }
 
   @Post('save-marks')
   async saveMarks(
+    @Req() req: any,
     @Body('marks') marks: any[],
     @Body('examName') examName: string,
     @Body('classSectionId') classSectionId: string,
@@ -82,7 +90,14 @@ export class ExamsController {
     if (!Array.isArray(marks)) {
       throw new Error('Marks must be an array');
     }
-    return this.examsService.saveMarks(marks, examName, classSectionId, subjectId);
+    return this.examsService.saveMarks(
+      marks,
+      examName,
+      classSectionId,
+      subjectId,
+      req.user.sub,
+      req.user.role,
+    );
   }
 
   @Get('grades-report')
