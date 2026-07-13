@@ -200,26 +200,7 @@ export class TeacherPortalService {
 
     const pendingMarksCount = examsInClassSections.filter(e => e.examMarks.length === 0).length;
 
-    // Homework created by this teacher
-    const homeworkCreated = await this.prisma.homework.count({
-      where: { tenantId, teacherId: staff.id },
-    });
 
-    // Announcements sent
-    const announcementsSent = await this.prisma.announcement.count({
-      where: { tenantId, teacherId: staff.id },
-    });
-
-    // Today's Events (placeholder or from announcements/holidays)
-    const upcomingEvents = await this.prisma.announcement.findMany({
-      where: {
-        tenantId,
-        priority: 'High',
-        expiryDate: { gte: todayStart },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
 
     return {
       today: {

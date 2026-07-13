@@ -7,7 +7,8 @@ import * as bcrypt from 'bcrypt';
 async function runTests() {
   console.log('=== STARTING ATTENDANCE FUNCTIONAL TEST SUITE ===');
   const prisma = new PrismaClient();
-  const service = new AttendanceService(prisma as any);
+  // Note: roleFilterHelper is null here because this script does not exercise teacher-scoped methods.
+  const service = new AttendanceService(prisma as any, null as any);
 
   let tenantA: any = null;
   let tenantB: any = null;
