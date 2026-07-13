@@ -124,6 +124,21 @@ export default function HomeworkPage() {
     }
   };
 
+  const handleWhatsAppShare = (hw: any) => {
+    const message = `*EduTrack Homework Assignment* 📚\n\n` +
+      `*Class:* ${hw.classSection.class.name} - ${hw.classSection.section.name}\n` +
+      `*Subject:* ${hw.subject.name}\n` +
+      `*Assignment:* ${hw.title}\n` +
+      `*Type:* ${hw.assignmentType}\n` +
+      `*Details:* ${hw.description}\n` +
+      `*Due Date:* ${hw.dueDate.split('T')[0]}\n\n` +
+      `*Powered by EduTrack SaaS*`;
+
+    const encodedText = encodeURIComponent(message);
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   if (loading) {
   return (
     <div className="space-y-4 max-w-md mx-auto sm:max-w-none">
@@ -176,6 +191,15 @@ export default function HomeworkPage() {
                     {hw.assignmentType}
                   </span>
                   <div className="flex gap-2">
+                    <button
+                      onClick={() => handleWhatsAppShare(hw)}
+                      className="text-slate-400 hover:text-emerald-500 transition-colors p-1 cursor-pointer"
+                      title="Share Homework via WhatsApp"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                        <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.96 9.96 0 0 0 1.333 4.982L2 22l5.233-1.371a9.936 9.936 0 0 0 4.779 1.226h.005c5.505 0 9.989-4.478 9.99-9.984A9.97 9.97 0 0 0 12.012 2zm5.835 14.16c-.255.72-1.488 1.31-2.036 1.393-.497.075-1.15.1-3.326-.8-2.784-1.153-4.577-3.986-4.717-4.172-.14-.186-1.133-1.507-1.133-2.876 0-1.369.72-2.043 1.002-2.33.282-.286.613-.357.818-.357h.582c.184 0 .432.007.622.457.197.468.675 1.642.732 1.758.056.115.094.25.019.4-.075.15-.113.245-.226.376-.113.13-.239.294-.34.394-.112.11-.23.23-.098.457.132.226.587.967 1.258 1.564.868.772 1.597 1.01 1.823 1.123.226.113.357.094.49-.057.13-.15.563-.656.713-.881.15-.226.3-.188.508-.113.206.075 1.313.619 1.538.732.226.113.376.169.432.263.056.094.056.544-.2 1.263z" />
+                      </svg>
+                    </button>
                     <button onClick={() => openEditModal(hw)} className="text-slate-400 hover:text-blue-600 transition-colors p-1 cursor-pointer">
                       <Edit3 className="w-4 h-4" />
                     </button>
