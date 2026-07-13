@@ -141,13 +141,13 @@ export default function HomeworkPage() {
       ))}
     </div>
   );
-}
+  }
 
   return (
     <div className="space-y-6 max-w-md mx-auto sm:max-w-none pb-20">
       <div className="flex justify-between items-center pb-4 border-b border-slate-200">
         <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-          <BookOpen className="w-6 h-6 text-[#2E5BFF] />
+          <BookOpen className="w-6 h-6 text-[#2E5BFF]" />
           Homework & Assignments
         </h2>
         <button
