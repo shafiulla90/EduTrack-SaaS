@@ -8,10 +8,16 @@ import express from 'express';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
-// Ensure uploads folder exists in workspace
-const uploadsDir = join(__dirname, '..', 'uploads');
-if (!existsSync(uploadsDir)) {
-  mkdirSync(uploadsDir, { recursive: true });
+// Ensure uploads folder exists in workspace when not running on Vercel
+if (!process.env.VERCEL) {
+  const uploadsDir = join(__dirname, '..', 'uploads');
+  if (!existsSync(uploadsDir)) {
+    try {
+      mkdirSync(uploadsDir, { recursive: true });
+    } catch (err) {
+      console.error('Failed to create uploads directory:', err);
+    }
+  }
 }
 
 let cachedServer: any;
