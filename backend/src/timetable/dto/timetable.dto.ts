@@ -297,9 +297,48 @@ export class PeriodTimingDto {
 
   @IsString()
   @IsNotEmpty()
+  name: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isBreak?: boolean;
+
+  @IsString()
+  @IsNotEmpty()
   startTime: string;
 
   @IsString()
   @IsNotEmpty()
   endTime: string;
+}
+
+export class SaveTimetableConfigDto {
+  @IsArray()
+  @IsString({ each: true })
+  workingDays: string[];
+
+  @IsString()
+  @IsNotEmpty()
+  schoolStartTime: string;
+
+  @IsString()
+  @IsNotEmpty()
+  schoolEndTime: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  periodDuration: number;
+
+  @IsBoolean()
+  @IsNotEmpty()
+  autoGenerate: boolean;
+
+  @IsNumber()
+  @IsNotEmpty()
+  numPeriods: number;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PeriodTimingDto)
+  periods: PeriodTimingDto[];
 }

@@ -109,6 +109,7 @@ model Tenant {
   // New relation for BehaviorCase
   behaviorCases   BehaviorCase[]
   schoolSetup     SchoolSetup?
+  timetableConfig TimetableConfig?
   studentProfiles StudentProfile[]
   staffProfiles   StaffProfile[]
   examTypes       ExamType[]
@@ -484,6 +485,8 @@ model Expense {
 model PeriodTiming {
   id           String  @id @default(uuid())
   periodNumber Int
+  name         String  @default("")
+  isBreak      Boolean @default(false)
   startTime    String // e.g. "08:30"
   endTime      String // e.g. "09:15"
   isActive     Boolean @default(true)
@@ -885,4 +888,20 @@ model Announcement {
 
   @@index([tenantId])
   @@index([teacherId])
+}
+
+model TimetableConfig {
+  id              String   @id @default(uuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workingDays     String[] // e.g. ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+  schoolStartTime String   @default("09:00 AM")
+  schoolEndTime   String   @default("04:00 PM")
+  periodDuration  Int      @default(45)
+  autoGenerate    Boolean  @default(false)
+  numPeriods      Int      @default(8)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
 }

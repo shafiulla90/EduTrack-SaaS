@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { PeriodTimingDto, SaveTimetablePeriodsDto, SaveSubstituteDto } from './dto/timetable.dto';
+import { PeriodTimingDto, SaveTimetablePeriodsDto, SaveSubstituteDto, SaveTimetableConfigDto } from './dto/timetable.dto';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 import { TenantContext } from '../tenants/tenant.context';
@@ -495,14 +495,14 @@ export class TimetableService {
     let timings = await this.prisma.periodTiming.findMany({ where: { tenantId }, orderBy: { periodNumber: 'asc' } });
     if (timings.length === 0) {
       const defaultTimings = [
-        { periodNumber: 1, startTime: '09:00 AM', endTime: '10:00 AM', isActive: true, tenantId },
-        { periodNumber: 2, startTime: '10:00 AM', endTime: '11:00 AM', isActive: true, tenantId },
-        { periodNumber: 3, startTime: '11:00 AM', endTime: '12:00 PM', isActive: true, tenantId },
-        { periodNumber: 4, startTime: '12:00 PM', endTime: '01:00 PM', isActive: true, tenantId },
-        { periodNumber: 5, startTime: '01:00 PM', endTime: '02:00 PM', isActive: true, tenantId },
-        { periodNumber: 6, startTime: '02:00 PM', endTime: '03:00 PM', isActive: true, tenantId },
-        { periodNumber: 7, startTime: '03:00 PM', endTime: '04:00 PM', isActive: true, tenantId },
-        { periodNumber: 8, startTime: '04:00 PM', endTime: '05:00 PM', isActive: true, tenantId },
+        { periodNumber: 1, name: 'P1', startTime: '09:00 AM', endTime: '10:00 AM', isBreak: false, isActive: true, tenantId },
+        { periodNumber: 2, name: 'P2', startTime: '10:00 AM', endTime: '11:00 AM', isBreak: false, isActive: true, tenantId },
+        { periodNumber: 3, name: 'P3', startTime: '11:00 AM', endTime: '12:00 PM', isBreak: false, isActive: true, tenantId },
+        { periodNumber: 4, name: 'P4', startTime: '12:00 PM', endTime: '01:00 PM', isBreak: false, isActive: true, tenantId },
+        { periodNumber: 5, name: 'P5', startTime: '01:00 PM', endTime: '02:00 PM', isBreak: false, isActive: true, tenantId },
+        { periodNumber: 6, name: 'P6', startTime: '02:00 PM', endTime: '03:00 PM', isBreak: false, isActive: true, tenantId },
+        { periodNumber: 7, name: 'P7', startTime: '03:00 PM', endTime: '04:00 PM', isBreak: false, isActive: true, tenantId },
+        { periodNumber: 8, name: 'P8', startTime: '04:00 PM', endTime: '05:00 PM', isBreak: false, isActive: true, tenantId },
       ];
       await this.prisma.periodTiming.createMany({
         data: defaultTimings,
@@ -520,7 +520,15 @@ export class TimetableService {
     for (const pt of dto) {
       created.push(
         await this.prisma.periodTiming.create({
-          data: { ...pt, tenantId },
+          data: {
+            periodNumber: pt.periodNumber,
+            name: pt.name || `P${pt.periodNumber}`,
+            isBreak: pt.isBreak ?? false,
+            startTime: pt.startTime,
+            endTime: pt.endTime,
+            isActive: true,
+            tenantId
+          },
         })
       );
     }
@@ -922,6 +930,86 @@ export class TimetableService {
       isLeaser: true,
       leaserType: 'LEASER',
     }));
+  }
+
+  // ---------- Timetable Configuration ----------
+  async getTimetableConfig() {
+    const tenantId = this.getTenantId();
+    let config = await this.prisma.timetableConfig.findUnique({
+      where: { tenantId }
+    });
+    if (!config) {
+      // Return a default configuration if not saved yet
+      config = await this.prisma.timetableConfig.create({
+        data: {
+          tenantId,
+          workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+          schoolStartTime: '09:00 AM',
+          schoolEndTime: '04:00 PM',
+          periodDuration: 45,
+          autoGenerate: false,
+          numPeriods: 8
+        }
+      });
+    }
+    return config;
+  }
+
+  async checkExistingTimetables() {
+    const tenantId = this.getTenantId();
+    const count = await this.prisma.period.count({
+      where: { tenantId }
+    });
+    return { hasExistingTimetables: count > 0 };
+  }
+
+  async saveTimetableConfig(dto: SaveTimetableConfigDto) {
+    const tenantId = this.getTenantId();
+
+    // 1. Upsert TimetableConfig record
+    const config = await this.prisma.timetableConfig.upsert({
+      where: { tenantId },
+      update: {
+        workingDays: dto.workingDays,
+        schoolStartTime: dto.schoolStartTime,
+        schoolEndTime: dto.schoolEndTime,
+        periodDuration: dto.periodDuration,
+        autoGenerate: dto.autoGenerate,
+        numPeriods: dto.numPeriods
+      },
+      create: {
+        tenantId,
+        workingDays: dto.workingDays,
+        schoolStartTime: dto.schoolStartTime,
+        schoolEndTime: dto.schoolEndTime,
+        periodDuration: dto.periodDuration,
+        autoGenerate: dto.autoGenerate,
+        numPeriods: dto.numPeriods
+      }
+    });
+
+    // 2. Clear old timings (which automatically cascades to delete associated Period timetable assignments)
+    await this.prisma.periodTiming.deleteMany({ where: { tenantId } });
+
+    // 3. Create the new PeriodTimings (teaching periods and breaks)
+    const createdPeriods = [];
+    for (const pt of dto.periods) {
+      createdPeriods.push(
+        await this.prisma.periodTiming.create({
+          data: {
+            periodNumber: pt.periodNumber,
+            name: pt.name,
+            isBreak: pt.isBreak ?? false,
+            startTime: pt.startTime,
+            endTime: pt.endTime,
+            isActive: true,
+            tenantId
+          }
+        })
+      );
+    }
+
+    return { config, periods: createdPeriods };
   }
 }
 

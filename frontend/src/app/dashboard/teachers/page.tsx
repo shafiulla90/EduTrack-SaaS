@@ -6,7 +6,7 @@ import { useSchoolSetupUpdate } from '@/lib/events';
 import { 
   Plus, X, Search, ChevronDown, ChevronUp, Users, 
   BookOpen, Grid3X3, BarChart3, Clock, Upload, 
-  Calendar, Layers, Trash2, Edit2, AlertCircle, ArrowLeft, ArrowRight, Check, Award
+  Calendar, Layers, Trash2, Edit2, AlertCircle, ArrowLeft, ArrowRight, Check, Award, Settings
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import BulkTeacherImportModal from '@/components/BulkTeacherImportModal';
@@ -161,6 +161,257 @@ export default function TeacherClassManagement() {
       setTtEndDate(computedEnd);
     }
   }, [ttStartDate, ttFrequency, ttDuration]);
+
+  // ── TIMETABLE CONFIGURATION STATE ──
+  const [isTimetableConfigView, setIsTimetableConfigView] = useState(false);
+  const [workingDays, setWorkingDays] = useState<string[]>(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
+  const [schoolStartTime, setSchoolStartTime] = useState('09:00 AM');
+  const [schoolEndTime, setSchoolEndTime] = useState('04:00 PM');
+  const [periodDuration, setPeriodDuration] = useState(45);
+  const [autoGenerate, setAutoGenerate] = useState(false);
+  const [numPeriods, setNumPeriods] = useState(8);
+  const [configPeriodsList, setConfigPeriodsList] = useState<any[]>([]);
+  const [configBreaksList, setConfigBreaksList] = useState<any[]>([{ name: 'Lunch Break', startTime: '12:45 PM', endTime: '01:30 PM' }]);
+  const [configErrors, setConfigErrors] = useState<string[]>([]);
+  const [showConfirmChangeConfigModal, setShowConfirmChangeConfigModal] = useState(false);
+
+  // ── TIMETABLE CONFIGURATION LOGIC ──
+  const parseTimeToMinutes = (timeStr: string): number => {
+    if (!timeStr) return 0;
+    const match = timeStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+    if (!match) return 0;
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const ampm = match[3].toUpperCase();
+    if (ampm === 'PM' && hours !== 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  };
+
+  const formatMinutesToTime = (totalMinutes: number): string => {
+    let hours = Math.floor(totalMinutes / 60) % 24;
+    const minutes = totalMinutes % 60;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    const hoursStr = hours.toString().padStart(2, '0');
+    const minutesStr = minutes.toString().padStart(2, '0');
+    return `${hoursStr}:${minutesStr} ${ampm}`;
+  };
+
+  const handleAutoGenerateTimetable = () => {
+    setConfigErrors([]);
+    const startMins = parseTimeToMinutes(schoolStartTime);
+    const endMins = parseTimeToMinutes(schoolEndTime);
+    
+    if (startMins >= endMins) {
+      setConfigErrors(['School End Time must be after School Start Time.']);
+      return;
+    }
+
+    const sortedBreaks = [...configBreaksList].sort((a, b) => {
+      return parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime);
+    });
+
+    const generated: any[] = [];
+    let currentMins = startMins;
+    let periodIndex = 1;
+
+    for (let i = 0; i < numPeriods; i++) {
+      let breakInserted = true;
+      while (breakInserted) {
+        breakInserted = false;
+        const matchingBreak = sortedBreaks.find(b => {
+          const bStart = parseTimeToMinutes(b.startTime);
+          return bStart >= currentMins && bStart < currentMins + periodDuration;
+        });
+
+        if (matchingBreak) {
+          const bStart = parseTimeToMinutes(matchingBreak.startTime);
+          const bEnd = parseTimeToMinutes(matchingBreak.endTime);
+          
+          if (bStart > currentMins) {
+            generated.push({
+              periodNumber: periodIndex,
+              name: `P${periodIndex}`,
+              startTime: formatMinutesToTime(currentMins),
+              endTime: formatMinutesToTime(bStart),
+              isBreak: false
+            });
+            periodIndex++;
+            currentMins = bStart;
+          }
+          
+          generated.push({
+            periodNumber: periodIndex,
+            name: matchingBreak.name,
+            startTime: formatMinutesToTime(bStart),
+            endTime: formatMinutesToTime(bEnd),
+            isBreak: true
+          });
+          periodIndex++;
+          currentMins = bEnd;
+          breakInserted = true;
+        }
+      }
+
+      if (currentMins >= endMins) break;
+
+      const nextEnd = currentMins + periodDuration;
+      generated.push({
+        periodNumber: periodIndex,
+        name: `P${periodIndex}`,
+        startTime: formatMinutesToTime(currentMins),
+        endTime: formatMinutesToTime(Math.min(nextEnd, endMins)),
+        isBreak: false
+      });
+      periodIndex++;
+      currentMins = nextEnd;
+    }
+
+    sortedBreaks.forEach(b => {
+      const bStart = parseTimeToMinutes(b.startTime);
+      const bEnd = parseTimeToMinutes(b.endTime);
+      if (bStart >= currentMins && bStart < endMins) {
+        generated.push({
+          periodNumber: periodIndex,
+          name: b.name,
+          startTime: formatMinutesToTime(bStart),
+          endTime: formatMinutesToTime(bEnd),
+          isBreak: true
+        });
+        periodIndex++;
+        currentMins = bEnd;
+      }
+    });
+
+    setConfigPeriodsList(generated);
+  };
+
+  const validateTimetableConfig = (periodsToValidate: any[]): boolean => {
+    const errors: string[] = [];
+    const schoolStart = parseTimeToMinutes(schoolStartTime);
+    const schoolEnd = parseTimeToMinutes(schoolEndTime);
+
+    if (schoolStart >= schoolEnd) {
+      errors.push('School End Time must be after School Start Time.');
+    }
+
+    if (workingDays.length === 0) {
+      errors.push('Please select at least one working day.');
+    }
+
+    for (let i = 0; i < periodsToValidate.length; i++) {
+      const pt = periodsToValidate[i];
+      const ptStart = parseTimeToMinutes(pt.startTime);
+      const ptEnd = parseTimeToMinutes(pt.endTime);
+
+      if (!pt.name.trim()) {
+        errors.push(`Slot ${i + 1}: Name cannot be empty.`);
+      }
+
+      if (ptStart >= ptEnd) {
+        errors.push(`Slot "${pt.name}": End Time (${pt.endTime}) must be after Start Time (${pt.startTime}).`);
+        continue;
+      }
+
+      if (ptStart < schoolStart || ptEnd > schoolEnd) {
+        errors.push(`Slot "${pt.name}": Timing (${pt.startTime} - ${pt.endTime}) must fall within school working hours (${schoolStartTime} - ${schoolEndTime}).`);
+      }
+
+      for (let j = i + 1; j < periodsToValidate.length; j++) {
+        const other = periodsToValidate[j];
+        const otherStart = parseTimeToMinutes(other.startTime);
+        const otherEnd = parseTimeToMinutes(other.endTime);
+
+        if (ptStart < otherEnd && ptEnd > otherStart) {
+          errors.push(`Conflict: Slot "${pt.name}" (${pt.startTime} - ${pt.endTime}) overlaps with Slot "${other.name}" (${other.startTime} - ${other.endTime}).`);
+        }
+      }
+    }
+
+    setConfigErrors(errors);
+    return errors.length === 0;
+  };
+
+  const loadConfigPeriods = async () => {
+    try {
+      setIsLoading(true);
+      const [configRes, timingsRes] = await Promise.all([
+        api.get('/timetable/config'),
+        api.get('/timetable/period-timings')
+      ]);
+
+      if (configRes.data) {
+        setWorkingDays(configRes.data.workingDays || []);
+        setSchoolStartTime(configRes.data.schoolStartTime);
+        setSchoolEndTime(configRes.data.schoolEndTime);
+        setPeriodDuration(configRes.data.periodDuration);
+        setAutoGenerate(configRes.data.autoGenerate);
+        setNumPeriods(configRes.data.numPeriods);
+      }
+
+      if (timingsRes.data) {
+        setConfigPeriodsList(timingsRes.data);
+        const breaks = timingsRes.data.filter((t: any) => t.isBreak).map((t: any) => ({
+          name: t.name,
+          startTime: t.startTime,
+          endTime: t.endTime
+        }));
+        setConfigBreaksList(breaks.length > 0 ? breaks : [{ name: 'Lunch Break', startTime: '12:45 PM', endTime: '01:30 PM' }]);
+      }
+    } catch (err) {
+      console.error('Failed to load config details:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveConfig = async (force: boolean = false) => {
+    if (!validateTimetableConfig(configPeriodsList)) {
+      showToast('Timetable configuration has validation errors.', 'error');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      if (!force) {
+        const checkRes = await api.get('/timetable/config/check-existing');
+        if (checkRes.data?.hasExistingTimetables) {
+          setShowConfirmChangeConfigModal(true);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      await api.post('/timetable/config', {
+        workingDays,
+        schoolStartTime,
+        schoolEndTime,
+        periodDuration,
+        autoGenerate,
+        numPeriods,
+        periods: configPeriodsList
+      });
+
+      showToast('Timetable configuration saved successfully.', 'success');
+      setShowConfirmChangeConfigModal(false);
+      setIsTimetableConfigView(false);
+      await loadWorkloadDashboard();
+    } catch (err: any) {
+      console.error('Failed to save config:', err);
+      showToast(err.response?.data?.message || 'Failed to save configuration.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isTimetableConfigView) {
+      loadConfigPeriods();
+    }
+  }, [isTimetableConfigView]);
+
   const [showTimetableGrid, setShowTimetableGrid] = useState(false);
   const [timetableData, setTimetableData] = useState<Record<string, { subject: string; teacherId: string }>>({});
   const [classSubjects, setClassSubjects] = useState<any[]>([]);
@@ -180,6 +431,8 @@ export default function TeacherClassManagement() {
   const [substituteContext, setSubstituteContext] = useState<any>({});
   const [substituteTeacherId, setSubstituteTeacherId] = useState('');
   const [substituteTeacherOptions, setSubstituteTeacherOptions] = useState<any[]>([]);
+
+
 
   // ── CSV IMPORT & SINGLE ENTRY STATICS ──
   const [showImportTeachers, setShowImportTeachers] = useState(false);
@@ -329,6 +582,21 @@ export default function TeacherClassManagement() {
       setAllSubjects(subjectsRes.data || []);
       setAcademicYears(yearsRes.data || []);
       setAvailableSections(sectionsRes.data || []);
+      
+      // Load Timetable Configuration
+      try {
+        const configRes = await api.get('/timetable/config');
+        if (configRes.data) {
+          setWorkingDays(configRes.data.workingDays || []);
+          setSchoolStartTime(configRes.data.schoolStartTime);
+          setSchoolEndTime(configRes.data.schoolEndTime);
+          setPeriodDuration(configRes.data.periodDuration);
+          setAutoGenerate(configRes.data.autoGenerate);
+          setNumPeriods(configRes.data.numPeriods);
+        }
+      } catch (err) {
+        console.error('Failed to load timetable config:', err);
+      }
       
       const activeYear = yearsRes.data.find((y: any) => y.isActive) || yearsRes.data[0];
       if (activeYear) {
@@ -705,11 +973,12 @@ export default function TeacherClassManagement() {
     try {
       setIsLoading(true);
       // Fetch subjects, timings, workload & current timetable in parallel
-      const [workloadRes, timingsRes, timetableRes, subjectsRes] = await Promise.all([
+      const [workloadRes, timingsRes, timetableRes, subjectsRes, configRes] = await Promise.all([
         api.get(`/timetable/workload/class-section/${ttSelectedClassSectionId}`),
         api.get('/timetable/period-timings'),
         api.get(`/timetable/class/${ttSelectedClassSectionId}/periods?academicYearId=${ttSelectedAcademicYear}&startDate=${ttStartDate}&endDate=${ttEndDate}`),
-        api.get('/timetable/subjects')
+        api.get('/timetable/subjects'),
+        api.get('/timetable/config')
       ]);
 
       setClassSubjects(workloadRes.data.subjects || []);
@@ -719,32 +988,39 @@ export default function TeacherClassManagement() {
         setAllSubjects(subjectsRes.data);
       }
 
+      const activeDays = configRes.data?.workingDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      setWorkingDays(activeDays);
+
+      const dayShortMap: Record<string, string> = {
+        'Monday': 'MON', 'Tuesday': 'TUE', 'Wednesday': 'WED', 
+        'Thursday': 'THU', 'Friday': 'FRI', 'Saturday': 'SAT', 'Sunday': 'SUN'
+      };
+
       // Initialize timetable grid using actual period numbers from timings data
       const formattedData: Record<string, { subject: string; teacherId: string }> = {};
       const periodNumbers = (timingsRes.data || []).map((t: any) => t.periodNumber).filter(Boolean);
       const allPeriodNums = periodNumbers.length > 0 ? periodNumbers : [1, 2, 3, 4, 5, 6, 7, 8];
-      for (const day of ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']) {
+      
+      for (const day of activeDays) {
+        const dayShort = dayShortMap[day] || day.substring(0, 3).toUpperCase();
         for (const p of allPeriodNums) {
-          formattedData[`${day}-${p}`] = { subject: '', teacherId: '' };
+          formattedData[`${dayShort}-${p}`] = { subject: '', teacherId: '' };
         }
       }
 
       // Fill backend scheduled periods (flat array mapping)
       const backendData = Array.isArray(timetableRes.data) ? timetableRes.data : [];
       const cachedSubjectTeachers: Record<string, any[]> = {};
-      const dayMap: Record<string, string> = {
-        'Monday': 'MON', 'Tuesday': 'TUE', 'Wednesday': 'WED', 
-        'Thursday': 'THU', 'Friday': 'FRI', 'Saturday': 'SAT'
-      };
 
       for (const p of backendData) {
         const backDay = p.day;
         const periodNum = p.periodNumber;
-        const frontDay = dayMap[backDay];
+        const frontDay = dayShortMap[backDay] || backDay.substring(0, 3).toUpperCase();
 
         if (frontDay && periodNum) {
           const subId = p.subjectId || '';
           const tId = p.teacherId || '';
+
           formattedData[`${frontDay}-${periodNum}`] = {
             subject: subId,
             teacherId: tId
@@ -805,7 +1081,7 @@ export default function TeacherClassManagement() {
       const periodsList: any[] = [];
       const dayMap: Record<string, string> = {
         'MON': 'Monday', 'TUE': 'Tuesday', 'WED': 'Wednesday', 
-        'THU': 'Thursday', 'FRI': 'Friday', 'SAT': 'Saturday'
+        'THU': 'Thursday', 'FRI': 'Friday', 'SAT': 'Saturday', 'SUN': 'Sunday'
       };
 
       for (const key of Object.keys(timetableData)) {
@@ -818,6 +1094,10 @@ export default function TeacherClassManagement() {
         if (cell && cell.subject && cell.teacherId) {
           const backDay = dayMap[frontDay];
           if (backDay) {
+            // Verify this is not a break timing
+            const timing = timings.find(t => t.periodNumber === periodNum);
+            if (timing && timing.isBreak) continue;
+
             periodsList.push({
               day: backDay,
               periodNumber: periodNum,
@@ -1309,7 +1589,7 @@ export default function TeacherClassManagement() {
       )}
 
       {/* ── HEADER TITLE BLOCK ── */}
-      {currentStep === 0 && !isTimetableView && (
+      {currentStep === 0 && !isTimetableView && !isTimetableConfigView && (
         <div className="flex items-center justify-between border-b border-slate-200 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -1323,7 +1603,7 @@ export default function TeacherClassManagement() {
       {/* ════════════════════════════════════════════════
            STEP 0: WORKLOAD OVERVIEW LANDING
            ════════════════════════════════════════════════ */}
-      {currentStep === 0 && !isTimetableView && (
+      {currentStep === 0 && !isTimetableView && !isTimetableConfigView && (
         <div className="space-y-6 animate-in">
           
           {/* Workload Overview Banner & Action Controls */}
@@ -1356,6 +1636,9 @@ export default function TeacherClassManagement() {
                 </button>
                 <button onClick={enterSetupWizard} className="action-pill action-pill-timetable action-pill-primary">
                   <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> Add Class Section
+                </button>
+                <button onClick={() => { setIsTimetableConfigView(true); }} className="action-pill action-pill-timetable action-pill-primary">
+                  <Settings className="w-3.5 h-3.5 stroke-[2.5]" /> Timetable Setup
                 </button>
                 <button onClick={() => { setIsTimetableView(true); setShowTimetableGrid(false); }} className="action-pill action-pill-timetable">
                   <Calendar className="w-3.5 h-3.5 stroke-[2.5]" /> Timetable
@@ -2324,52 +2607,68 @@ export default function TeacherClassManagement() {
                       <th className="px-4 py-3.5 border border-slate-700 w-24">Day</th>
                       {timings.map(t => (
                         <th key={t.id} className="px-4 py-3.5 border border-slate-700 text-center">
-                          <div className="font-extrabold">P{t.periodNumber}</div>
+                          <div className="font-extrabold">{t.name || `P${t.periodNumber}`}</div>
                           <div className="text-[9px] opacity-80 font-normal mt-0.5">{t.startTime} - {t.endTime}</div>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
-                      <tr key={day} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-4 border border-slate-200 font-extrabold text-slate-700 text-sm bg-slate-50/50">
-                          {day}
-                        </td>
-                        {timings.map(t => {
-                          const cellKey = `${day}-${t.periodNumber}`;
-                          const cell = timetableData[cellKey] || { subject: '', teacherId: '' };
-                          return (
-                            <td key={t.periodNumber} className="p-3 border border-slate-200 min-w-[150px]">
-                              <div className="space-y-1.5">
-                                <select
-                                  value={cell.subject}
-                                  onChange={e => handleCellChange(day, t.periodNumber, 'subject', e.target.value)}
-                                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none"
-                                >
-                                  <option value="">Subject</option>
-                                  {allSubjects.map(sub => (
-                                    <option key={sub.id} value={sub.id}>{sub.name}</option>
-                                  ))}
-                                </select>
+                    {workingDays.map(day => {
+                      const dayShortMap: Record<string, string> = {
+                        'Monday': 'MON', 'Tuesday': 'TUE', 'Wednesday': 'WED', 
+                        'Thursday': 'THU', 'Friday': 'FRI', 'Saturday': 'SAT', 'Sunday': 'SUN'
+                      };
+                      const dayShort = dayShortMap[day] || day.substring(0, 3).toUpperCase();
+                      return (
+                        <tr key={day} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-4 border border-slate-200 font-extrabold text-slate-700 text-sm bg-slate-50/50">
+                            {dayShort}
+                          </td>
+                          {timings.map(t => {
+                            const cellKey = `${dayShort}-${t.periodNumber}`;
+                            const cell = timetableData[cellKey] || { subject: '', teacherId: '' };
+                            
+                            if (t.isBreak) {
+                              return (
+                                <td key={t.id} className="p-3 border border-slate-200 bg-slate-55/60 text-center font-semibold text-slate-450 italic select-none align-middle">
+                                  {t.name}
+                                </td>
+                              );
+                            }
 
-                                <select
-                                  value={cell.teacherId}
-                                  disabled={!cell.subject}
-                                  onChange={e => handleCellChange(day, t.periodNumber, 'teacherId', e.target.value)}
-                                  className={`w-full border rounded-lg px-2.5 py-1.5 text-xs outline-none ${cell.subject ? 'bg-white border-slate-200 text-slate-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
-                                >
-                                  <option value="">{cell.subject ? 'Select Teacher' : 'Select subject first'}</option>
-                                  {(subjectTeachers[cell.subject] || []).map(tch => (
-                                    <option key={tch.id || tch.Id} value={tch.id || tch.Id}>{tch.name || tch.Name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                            return (
+                              <td key={t.periodNumber} className="p-3 border border-slate-200 min-w-[150px]">
+                                <div className="space-y-1.5">
+                                  <select
+                                    value={cell.subject}
+                                    onChange={e => handleCellChange(dayShort, t.periodNumber, 'subject', e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none"
+                                  >
+                                    <option value="">Subject</option>
+                                    {allSubjects.map(sub => (
+                                      <option key={sub.id} value={sub.id}>{sub.name}</option>
+                                    ))}
+                                  </select>
+
+                                  <select
+                                    value={cell.teacherId}
+                                    disabled={!cell.subject}
+                                    onChange={e => handleCellChange(dayShort, t.periodNumber, 'teacherId', e.target.value)}
+                                    className={`w-full border rounded-lg px-2.5 py-1.5 text-xs outline-none ${cell.subject ? 'bg-white border-slate-200 text-slate-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
+                                  >
+                                    <option value="">{cell.subject ? 'Select Teacher' : 'Select subject first'}</option>
+                                    {(subjectTeachers[cell.subject] || []).map(tch => (
+                                      <option key={tch.id || tch.Id} value={tch.id || tch.Id}>{tch.name || tch.Name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2379,9 +2678,16 @@ export default function TeacherClassManagement() {
                   onClick={() => {
                     if (confirm('Clear entire grid layout inputs?')) {
                       const cleared: Record<string, { subject: string; teacherId: string }> = {};
-                      for (const day of ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']) {
-                        for (let p = 1; p <= 8; p++) {
-                          cleared[`${day}-${p}`] = { subject: '', teacherId: '' };
+                      const dayShortMap: Record<string, string> = {
+                        'Monday': 'MON', 'Tuesday': 'TUE', 'Wednesday': 'WED', 
+                        'Thursday': 'THU', 'Friday': 'FRI', 'Saturday': 'SAT', 'Sunday': 'SUN'
+                      };
+                      for (const day of workingDays) {
+                        const dayShort = dayShortMap[day] || day.substring(0, 3).toUpperCase();
+                        for (const t of timings) {
+                          if (!t.isBreak) {
+                            cleared[`${dayShort}-${t.periodNumber}`] = { subject: '', teacherId: '' };
+                          }
                         }
                       }
                       setTimetableData(cleared);
@@ -2400,6 +2706,411 @@ export default function TeacherClassManagement() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════
+           TIMETABLE CONFIGURATION VIEW
+           ════════════════════════════════════════════════ */}
+      {isTimetableConfigView && (
+        <div className="space-y-6 animate-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <Settings className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="text-[18px] font-bold text-slate-800">Timetable Structure Configuration</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Customize daily schedule formats, teaching periods, breaks, and working days</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setIsTimetableConfigView(false)}
+              className="px-4 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all"
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* COLUMN 1 & 2: SETUP CONFIG */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Card 1: Working Days & Working Hours */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+                <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                  <span className="w-1.5 h-3.5 bg-blue-500 rounded-full"></span> 1. School Operational Parameters
+                </h3>
+                
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">School Working Days *</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                      const isSelected = workingDays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setWorkingDays(workingDays.filter(d => d !== day));
+                            } else {
+                              setWorkingDays([...workingDays, day]);
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                            isSelected 
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">School Opening Hour *</label>
+                    <input
+                      type="text"
+                      value={schoolStartTime}
+                      onChange={e => setSchoolStartTime(e.target.value)}
+                      placeholder="e.g. 09:00 AM"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">School Closing Hour *</label>
+                    <input
+                      type="text"
+                      value={schoolEndTime}
+                      onChange={e => setSchoolEndTime(e.target.value)}
+                      placeholder="e.g. 04:00 PM"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Period Count & Breaks */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+                <h3 className="text-sm font-extrabold text-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-3.5 bg-indigo-500 rounded-full"></span> 2. Timetable Generation Settings
+                  </div>
+                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setAutoGenerate(true)}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${autoGenerate ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
+                    >
+                      Auto-Generate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAutoGenerate(false)}
+                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${!autoGenerate ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
+                    >
+                      Manual Mode
+                    </button>
+                  </div>
+                </h3>
+
+                {autoGenerate ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Teaching Period Duration (minutes) *</label>
+                      <input
+                        type="number"
+                        value={periodDuration}
+                        onChange={e => setPeriodDuration(Number(e.target.value))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Number of Teaching Periods *</label>
+                      <input
+                        type="number"
+                        value={numPeriods}
+                        onChange={e => setNumPeriods(Number(e.target.value))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-slate-500 text-xs">
+                    💡 <strong>Manual Mode Active:</strong> You can define each teaching period and break directly in the list on the right side. End Time must be after Start Time.
+                  </div>
+                )}
+
+                {/* Breaks Section */}
+                <div className="border-t border-slate-100 pt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Break Allocations</label>
+                    <button
+                      type="button"
+                      onClick={() => setConfigBreaksList([...configBreaksList, { name: 'Short Break', startTime: '10:30 AM', endTime: '10:45 AM' }])}
+                      className="px-2.5 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center gap-1 transition-all"
+                    >
+                      <Plus className="w-3 h-3" /> Add Break
+                    </button>
+                  </div>
+
+                  {configBreaksList.length === 0 ? (
+                    <div className="text-center py-4 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-400">
+                      No breaks configured. Click "Add Break" to register intervals.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {configBreaksList.map((brk, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100 animate-in">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={brk.name}
+                              onChange={e => {
+                                const copy = [...configBreaksList];
+                                copy[idx].name = e.target.value;
+                                setConfigBreaksList(copy);
+                              }}
+                              placeholder="Break Name (e.g. Lunch Break)"
+                              className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={brk.startTime}
+                              onChange={e => {
+                                const copy = [...configBreaksList];
+                                copy[idx].startTime = e.target.value;
+                                setConfigBreaksList(copy);
+                              }}
+                              placeholder="Start Time (01:00 PM)"
+                              className="w-28 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-center outline-none"
+                            />
+                            <input
+                              type="text"
+                              value={brk.endTime}
+                              onChange={e => {
+                                const copy = [...configBreaksList];
+                                copy[idx].endTime = e.target.value;
+                                setConfigBreaksList(copy);
+                              }}
+                              placeholder="End Time (01:45 PM)"
+                              className="w-28 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-center outline-none"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setConfigBreaksList(configBreaksList.filter((_, i) => i !== idx))}
+                            className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-all"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {autoGenerate && (
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleAutoGenerateTimetable}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                      >
+                        ⚡ Generate Periods &amp; Breaks
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMN 3: PERIOD PREVIEW / EDIT LIST */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5 flex flex-col h-[600px]">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                  <span className="w-1.5 h-3.5 bg-indigo-500 rounded-full"></span> Timetable Slots Preview
+                </h3>
+                {!autoGenerate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfigPeriodsList([
+                        ...configPeriodsList,
+                        { periodNumber: configPeriodsList.length + 1, name: `P${configPeriodsList.length + 1}`, startTime: '09:00 AM', endTime: '10:00 AM', isBreak: false }
+                      ]);
+                    }}
+                    className="text-[10px] text-blue-600 hover:underline font-bold"
+                  >
+                    + Add Slot
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                {configPeriodsList.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 text-xs italic">
+                    {autoGenerate 
+                      ? 'Configure settings and click "Generate Periods" to preview timetable structure.' 
+                      : 'Click "+ Add Slot" to register timetable slots manually.'}
+                  </div>
+                ) : (
+                  configPeriodsList.map((slot, idx) => {
+                    return (
+                      <div key={idx} className={`p-3 rounded-xl border transition-all ${
+                        slot.isBreak 
+                          ? 'bg-amber-50/40 border-amber-200' 
+                          : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        {autoGenerate ? (
+                          // Read-only list in auto-generate mode
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                              {slot.isBreak ? (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-extrabold text-[9px] uppercase">Break</span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-extrabold text-[9px] uppercase">Period</span>
+                              )}
+                              <span>{slot.name}</span>
+                            </div>
+                            <div className="font-semibold text-slate-500 text-right">
+                              {slot.startTime} - {slot.endTime}
+                            </div>
+                          </div>
+                        ) : (
+                          // Manual edit fields in manual mode
+                          <div className="space-y-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <input
+                                type="text"
+                                value={slot.name}
+                                onChange={e => {
+                                  const copy = [...configPeriodsList];
+                                  copy[idx].name = e.target.value;
+                                  setConfigPeriodsList(copy);
+                                }}
+                                className="font-bold bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 w-28 outline-none"
+                              />
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-1 font-bold text-[10px] text-slate-500">
+                                  <input
+                                    type="checkbox"
+                                    checked={slot.isBreak || false}
+                                    onChange={e => {
+                                      const copy = [...configPeriodsList];
+                                      copy[idx].isBreak = e.target.checked;
+                                      setConfigPeriodsList(copy);
+                                    }}
+                                    className="rounded border-slate-300"
+                                  />
+                                  Break
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfigPeriodsList(configPeriodsList.filter((_, i) => i !== idx))}
+                                  className="text-red-500 hover:text-red-600 font-bold"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                value={slot.startTime}
+                                onChange={e => {
+                                  const copy = [...configPeriodsList];
+                                  copy[idx].startTime = e.target.value;
+                                  setConfigPeriodsList(copy);
+                                }}
+                                placeholder="Start (e.g. 09:00 AM)"
+                                className="bg-white border border-slate-200 rounded px-2 py-1 text-slate-600 text-center outline-none"
+                              />
+                              <input
+                                type="text"
+                                value={slot.endTime}
+                                onChange={e => {
+                                  const copy = [...configPeriodsList];
+                                  copy[idx].endTime = e.target.value;
+                                  setConfigPeriodsList(copy);
+                                }}
+                                placeholder="End (e.g. 09:45 AM)"
+                                className="bg-white border border-slate-200 rounded px-2 py-1 text-slate-600 text-center outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Validation errors */}
+              {configErrors.length > 0 && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-1 text-[11px] text-red-700 max-h-24 overflow-y-auto">
+                  {configErrors.map((err, i) => (
+                    <div key={i} className="font-semibold">• {err}</div>
+                  ))}
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTimetableConfigView(false)}
+                  className="flex-1 py-2 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-50 transition-all text-center"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveConfig(false)}
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-sm text-center"
+                >
+                  Save Configuration
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TIMETABLE RESET WARNING MODAL ── */}
+      {showConfirmChangeConfigModal && (
+        <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-100 shadow-2xl text-center space-y-4">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mx-auto">
+              ⚠️
+            </div>
+            <h3 className="font-extrabold text-slate-800 text-base">Overwriting Existing Timetables?</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Changing the timetable configuration will clear all currently active class timetable grid schedules for this tenant. 
+              <br /><span className="font-bold text-red-500 mt-2 block">This action is permanent and cannot be undone.</span>
+              <br /><br />Do you wish to proceed and apply the new structure?
+            </p>
+            <div className="flex gap-2 pt-2 text-xs">
+              <button 
+                onClick={() => setShowConfirmChangeConfigModal(false)}
+                className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl"
+              >
+                No, Keep Existing
+              </button>
+              <button 
+                onClick={() => handleSaveConfig(true)}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl"
+              >
+                Yes, Overwrite &amp; Save
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

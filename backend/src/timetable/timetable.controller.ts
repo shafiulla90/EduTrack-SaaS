@@ -16,6 +16,7 @@ import {
   SaveSubstituteDto,
   SaveTimetablePeriodsDto,
   PeriodTimingDto,
+  SaveTimetableConfigDto,
 } from './dto/timetable.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,6 +67,21 @@ export class TimetableController {
   @Post('period-timings')
   savePeriodTimings(@Body() dto: PeriodTimingDto[]) {
     return this.timetableService.savePeriodTimings(dto);
+  }
+
+  @Get('config')
+  getTimetableConfig() {
+    return this.timetableService.getTimetableConfig();
+  }
+
+  @Get('config/check-existing')
+  checkExistingTimetables() {
+    return this.timetableService.checkExistingTimetables();
+  }
+
+  @Post('config')
+  saveTimetableConfig(@Body() dto: SaveTimetableConfigDto) {
+    return this.timetableService.saveTimetableConfig(dto);
   }
 
   @Get('subjects')
