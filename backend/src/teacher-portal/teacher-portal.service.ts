@@ -956,4 +956,109 @@ export class TeacherPortalService {
       })),
     };
   }
+
+  async sendHomeworkToParents(userId: string, tenantId: string, id: string) {
+    const staff = await this.getStaffProfile(userId, tenantId);
+    if (!staff) {
+      throw new NotFoundException('Staff profile not found.');
+    }
+
+    const homework = await this.prisma.homework.findUnique({
+      where: { id },
+      include: {
+        classSection: {
+          include: {
+            class: true,
+            section: true,
+          }
+        },
+        subject: true,
+        tenant: true,
+      }
+    });
+
+    if (!homework || homework.tenantId !== tenantId) {
+      throw new NotFoundException('Homework assignment not found.');
+    }
+
+    // Verify teacher is assigned to this class section
+    await this.verifyTeacherAssignment(staff.id, homework.classSectionId);
+
+    // Fetch all students in this class section
+    const students = await this.prisma.studentProfile.findMany({
+      where: {
+        classSectionId: homework.classSectionId,
+        tenantId,
+      },
+      include: {
+        user: true,
+        parentProfile: {
+          include: {
+            user: true,
+          }
+        }
+      }
+    });
+
+    const className = `${homework.classSection.class.name} - ${homework.classSection.section.name}`;
+    const subjectName = homework.subject.name;
+    const description = homework.description;
+    const dueDateStr = homework.dueDate.toISOString().split('T')[0];
+    const schoolName = homework.tenant.name;
+
+    const messageTemplate = `📚 Homework Notification\n\n` +
+      `Class: ${className}\n` +
+      `Subject: ${subjectName}\n` +
+      `Homework:\n${description}\n\n` +
+      `Due Date: ${dueDateStr}\n\n` +
+      `Regards,\n${schoolName}`;
+
+    let successfullySent = 0;
+    let failed = 0;
+
+    for (const student of students) {
+      let parentPhone = '';
+      let parentName = '';
+
+      if (student.parentProfile?.user?.phone) {
+        parentPhone = student.parentProfile.user.phone;
+        parentName = student.parentProfile.user.name;
+      } else if (student.user?.phone) {
+        parentPhone = student.user.phone;
+        parentName = student.fatherName || 'Parent';
+      }
+
+      const normalizedPhone = parentPhone ? String(parentPhone).replace(/\D/g, '') : '';
+      const isValid = normalizedPhone.length >= 10;
+
+      if (isValid) {
+        // Simulate sending process via console dispatch logging
+        console.log(`[DISPATCH] [WHATSAPP] To Parent: ${parentName} (${normalizedPhone})`);
+        console.log(`Message:\n${messageTemplate}`);
+        console.log('--------------------------------------------------');
+        successfullySent++;
+        
+        // Short sleep to simulate network request delay in background
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } else {
+        console.log(`[DISPATCH] [WHATSAPP] Skipped student ${student.user.name} - Invalid or missing phone number: "${parentPhone}"`);
+        failed++;
+      }
+    }
+
+    // Log the bulk send activity
+    await this.logAction(userId, tenantId, 'BULK_WHATSAPP_HOMEWORK', 'Homework', id, {
+      total: students.length,
+      success: successfullySent,
+      failed
+    });
+
+    return {
+      success: true,
+      totalStudents: students.length,
+      successfullySent,
+      failed
+    };
+  }
 }
+

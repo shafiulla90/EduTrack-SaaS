@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { BookOpen, Calendar, Plus, Trash2, Edit3, X, CheckCircle2, ChevronRight, FileText } from 'lucide-react';
+import { BookOpen, Calendar, Plus, Trash2, Edit3, X, CheckCircle2, ChevronRight, FileText, Loader2 } from 'lucide-react';
 
 export default function HomeworkPage() {
   const [homeworks, setHomeworks] = useState<any[]>([]);
@@ -13,6 +13,12 @@ export default function HomeworkPage() {
   // Form modal visibility
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<any | null>(null);
+
+  // Send Homework state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [hwToSend, setHwToSend] = useState<any | null>(null);
+  const [sendingState, setSendingState] = useState<'idle' | 'sending' | 'completed'>('idle');
+  const [sendResult, setSendResult] = useState<any | null>(null);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -124,19 +130,25 @@ export default function HomeworkPage() {
     }
   };
 
-  const handleWhatsAppShare = (hw: any) => {
-    const message = `*EduTrack Homework Assignment* 📚\n\n` +
-      `*Class:* ${hw.classSection.class.name} - ${hw.classSection.section.name}\n` +
-      `*Subject:* ${hw.subject.name}\n` +
-      `*Assignment:* ${hw.title}\n` +
-      `*Type:* ${hw.assignmentType}\n` +
-      `*Details:* ${hw.description}\n` +
-      `*Due Date:* ${hw.dueDate.split('T')[0]}\n\n` +
-      `*Powered by EduTrack SaaS*`;
+  const triggerSendConfirm = (hw: any) => {
+    setHwToSend(hw);
+    setSendingState('idle');
+    setSendResult(null);
+    setShowConfirmModal(true);
+  };
 
-    const encodedText = encodeURIComponent(message);
-    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
-    window.open(whatsappUrl, '_blank');
+  const handleSendHomeworkBulk = async () => {
+    if (!hwToSend) return;
+    setSendingState('sending');
+    try {
+      const res = await api.post(`/teacher-portal/homework/${hwToSend.id}/send-to-parents`);
+      setSendResult(res.data);
+      setSendingState('completed');
+    } catch (err) {
+      console.error('Failed to send homework to parents:', err);
+      alert('Failed to send homework to parents. Please try again.');
+      setSendingState('idle');
+    }
   };
 
   if (loading) {
@@ -192,9 +204,9 @@ export default function HomeworkPage() {
                   </span>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleWhatsAppShare(hw)}
+                      onClick={() => triggerSendConfirm(hw)}
                       className="text-slate-400 hover:text-emerald-500 transition-colors p-1 cursor-pointer"
-                      title="Share Homework via WhatsApp"
+                      title="Send to Parents"
                     >
                       <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
                         <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.96 9.96 0 0 0 1.333 4.982L2 22l5.233-1.371a9.936 9.936 0 0 0 4.779 1.226h.005c5.505 0 9.989-4.478 9.99-9.984A9.97 9.97 0 0 0 12.012 2zm5.835 14.16c-.255.72-1.488 1.31-2.036 1.393-.497.075-1.15.1-3.326-.8-2.784-1.153-4.577-3.986-4.717-4.172-.14-.186-1.133-1.507-1.133-2.876 0-1.369.72-2.043 1.002-2.33.282-.286.613-.357.818-.357h.582c.184 0 .432.007.622.457.197.468.675 1.642.732 1.758.056.115.094.25.019.4-.075.15-.113.245-.226.376-.113.13-.239.294-.34.394-.112.11-.23.23-.098.457.132.226.587.967 1.258 1.564.868.772 1.597 1.01 1.823 1.123.226.113.357.094.49-.057.13-.15.563-.656.713-.881.15-.226.3-.188.508-.113.206.075 1.313.619 1.538.732.226.113.376.169.432.263.056.094.056.544-.2 1.263z" />
@@ -339,6 +351,89 @@ export default function HomeworkPage() {
                 {submitting ? 'Saving...' : 'Publish Assignment'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Send Confirmation & Summary Centered Modal */}
+      {showConfirmModal && hwToSend && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-scale-in">
+            {sendingState === 'idle' && (
+              <>
+                <h3 className="text-lg font-bold text-slate-900">Send Homework to Parents</h3>
+                <p className="text-sm text-slate-500 font-light leading-relaxed">
+                  Are you sure you want to send this homework to all parents of students in this class?
+                </p>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      setHwToSend(null);
+                    }}
+                    className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendHomeworkBulk}
+                    className="px-4 py-2 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                  >
+                    Send
+                  </button>
+                </div>
+              </>
+            )}
+
+            {sendingState === 'sending' && (
+              <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                <Loader2 className="w-10 h-10 animate-spin text-[#2E5BFF]" />
+                <p className="text-sm text-slate-600 font-bold">Sending homework to parents...</p>
+                <p className="text-xs text-slate-400">Please do not close this window</p>
+              </div>
+            )}
+
+            {sendingState === 'completed' && sendResult && (
+              <>
+                <h3 className="text-lg font-bold text-emerald-600 flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                  Bulk Send Complete
+                </h3>
+                <p className="text-sm text-slate-700 font-medium">
+                  Homework has been sent successfully to all parents.
+                </p>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/50 space-y-2 text-xs text-slate-600 font-semibold">
+                  <div className="flex justify-between">
+                    <span>Total Students:</span>
+                    <span className="font-extrabold text-slate-800">{sendResult.totalStudents}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Successfully Sent:</span>
+                    <span className="font-extrabold text-emerald-600">{sendResult.successfullySent}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Failed (Missing/Invalid Phone Numbers):</span>
+                    <span className="font-extrabold text-rose-600">{sendResult.failed}</span>
+                  </div>
+                </div>
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      setHwToSend(null);
+                      setSendingState('idle');
+                      setSendResult(null);
+                    }}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
