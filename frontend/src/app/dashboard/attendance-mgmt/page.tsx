@@ -1,8 +1,44 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Calendar, Search, Users, Check, X, ShieldAlert, Sparkles, RefreshCw, Save } from 'lucide-react';
+
+interface StudentCardProps {
+  student: any;
+  status: string;
+  onToggle: (studentId: string, currentStatus: string) => void;
+}
+
+const StudentCard = React.memo(({ student, status, onToggle }: StudentCardProps) => {
+  const isAbsent = status === 'ABSENT';
+
+  return (
+    <div
+      onClick={() => onToggle(student.Id, status)}
+      className={`p-4 rounded-3xl border transition-all duration-200 cursor-pointer select-none flex justify-between items-center min-h-[72px] active:scale-[0.99] touch-pan-y ${
+        isAbsent
+          ? 'bg-rose-50/70 border-rose-200 hover:bg-rose-100/50'
+          : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+      }`}
+    >
+      <div>
+        <h4 className="font-bold text-slate-800 text-[14px]">{student.Name}</h4>
+        <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Roll: {student.Roll_No__c || 'N/A'}</p>
+      </div>
+
+      <div className="flex items-center justify-end">
+        {isAbsent && (
+          <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-500 text-white rounded-xl text-[11px] font-bold shadow-md shadow-rose-500/15 animate-in fade-in zoom-in-95 duration-150">
+            <X className="w-3.5 h-3.5" />
+            <span>Absent</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+StudentCard.displayName = 'StudentCard';
 
 export default function AttendanceMgmtPage() {
   const [classes, setClasses] = useState<any[]>([]);
@@ -163,6 +199,11 @@ export default function AttendanceMgmtPage() {
   const handleStatusChange = (studentId: string, status: string) => {
     setSheet(prev => ({ ...prev, [studentId]: status }));
   };
+
+  const handleToggle = useCallback((studentId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'ABSENT' ? 'PRESENT' : 'ABSENT';
+    setSheet(prev => ({ ...prev, [studentId]: nextStatus }));
+  }, []);
 
   const applyBulkStatus = (status: string) => {
     const updated = { ...sheet };
@@ -398,46 +439,12 @@ export default function AttendanceMgmtPage() {
               filteredStudents.map((s) => {
                 const currentStatus = sheet[s.Id] || 'PRESENT';
                 return (
-                  <div key={s.Id} className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col gap-3 justify-between sm:flex-row sm:items-center sm:gap-0">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-[14px]">{s.Name}</h4>
-                      <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Roll: {s.Roll_No__c || 'N/A'}</p>
-                    </div>
-
-                    {/* Touch Friendly Selector pills */}
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => handleStatusChange(s.Id, 'PRESENT')}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                          currentStatus === 'PRESENT'
-                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/10'
-                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        Present
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange(s.Id, 'ABSENT')}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                          currentStatus === 'ABSENT'
-                            ? 'bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-500/10'
-                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        Absent
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange(s.Id, 'LATE')}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
-                          currentStatus === 'LATE'
-                            ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/10'
-                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        Late
-                      </button>
-                    </div>
-                  </div>
+                  <StudentCard
+                    key={s.Id}
+                    student={s}
+                    status={currentStatus}
+                    onToggle={handleToggle}
+                  />
                 );
               })
             )}
