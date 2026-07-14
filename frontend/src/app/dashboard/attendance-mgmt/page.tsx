@@ -25,18 +25,25 @@ interface StudentCardProps {
   student: any;
   status: string;
   onToggle: (studentId: string, currentStatus: string) => void;
+  isReadOnly?: boolean;
 }
 
-const StudentCard = React.memo(({ student, status, onToggle }: StudentCardProps) => {
+const StudentCard = React.memo(({ student, status, onToggle, isReadOnly = false }: StudentCardProps) => {
   const isAbsent = status === 'ABSENT';
 
   return (
     <div
-      onClick={() => onToggle(student.Id, status)}
-      className={`p-4 rounded-3xl border transition-all duration-200 cursor-pointer select-none flex justify-between items-center min-h-[72px] active:scale-[0.99] touch-pan-y ${
+      onClick={() => {
+        if (!isReadOnly) {
+          onToggle(student.Id, status);
+        }
+      }}
+      className={`p-4 rounded-3xl border transition-all duration-200 select-none flex justify-between items-center min-h-[72px] ${
+        isReadOnly ? 'cursor-default opacity-90' : 'cursor-pointer active:scale-[0.99] touch-pan-y'
+      } ${
         isAbsent
-          ? 'bg-rose-50/70 border-rose-200 hover:bg-rose-100/50'
-          : 'bg-emerald-50/60 border-emerald-100 hover:bg-emerald-100/40 hover:border-emerald-200 hover:shadow-xs'
+          ? `bg-rose-50/70 border-rose-200 ${!isReadOnly ? 'hover:bg-rose-100/50' : ''}`
+          : `bg-emerald-50/60 border-emerald-100 ${!isReadOnly ? 'hover:bg-emerald-100/40 hover:border-emerald-200 hover:shadow-xs' : ''}`
       }`}
     >
       <div>
@@ -78,8 +85,18 @@ export default function AttendanceMgmtPage() {
   
   // Sheet states
   const [sheet, setSheet] = useState<{ [studentId: string]: string }>({});
+  const [originalSheet, setOriginalSheet] = useState<{ [studentId: string]: string }>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+
+  // Pre-submitted session states
+  const [sessionExists, setSessionExists] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState<any>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
+
+  // Confirmation Overlays State
+  const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
+  const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
 
   // Offline Sync States
   const [isOffline, setIsOffline] = useState(false);
@@ -186,6 +203,10 @@ export default function AttendanceMgmtPage() {
     if (!selectedClass || !selectedSection) return;
     setLoadingStudents(true);
     setMessage({ type: '', text: '' });
+    setSessionExists(false);
+    setSessionInfo(null);
+    setIsReadOnly(false);
+
     try {
       // 1. Fetch students list
       const rosterRes = await api.get(`/teacher-portal/attendance/students?classVal=${encodeURIComponent(selectedClass)}&sectionVal=${encodeURIComponent(selectedSection)}`);
@@ -203,9 +224,12 @@ export default function AttendanceMgmtPage() {
       });
 
       setSheet(initialSheet);
+      setOriginalSheet(initialSheet);
+
       if (sessionRes.data.sessionExists) {
-        const timeStr = sessionRes.data.createdAt ? formatLocalTime(sessionRes.data.createdAt) : sessionRes.data.createdTime;
-        setMessage({ type: 'info', text: `Attendance sheet was previously submitted by ${sessionRes.data.teacherName} at ${timeStr}.` });
+        setSessionExists(true);
+        setSessionInfo(sessionRes.data);
+        setIsReadOnly(true);
       }
     } catch (err) {
       console.error('Failed to load roster:', err);
@@ -224,6 +248,45 @@ export default function AttendanceMgmtPage() {
     setSheet(prev => ({ ...prev, [studentId]: nextStatus }));
   }, []);
 
+  const handleCancelEdit = () => {
+    setSheet(originalSheet);
+    setIsReadOnly(true);
+    showToast('Editing cancelled. Original attendance restored.', 'info');
+  };
+
+  const formatDateLong = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const formatLocalDateTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const formattedDate = date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+      let hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+      const hoursStr = hours < 10 ? '0' + hours : hours;
+      return `${formattedDate}, ${hoursStr}:${minutesStr} ${ampm}`;
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isLocked = sessionExists && selectedDate !== todayStr;
+
+  const hasChanges = Object.keys(sheet).some(id => sheet[id] !== originalSheet[id]);
+  const isSaveDisabled = sessionExists ? (!hasChanges || saving) : saving;
+
   const applyBulkStatus = (status: string) => {
     const updated = { ...sheet };
     students.forEach(s => {
@@ -234,7 +297,15 @@ export default function AttendanceMgmtPage() {
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
+    if (sessionExists) {
+      setShowSaveConfirmModal(true);
+    } else {
+      executeSave();
+    }
+  };
+
+  const executeSave = async () => {
     setMessage({ type: '', text: '' });
     
     // Parse absent students
@@ -266,12 +337,17 @@ export default function AttendanceMgmtPage() {
     setSaving(true);
     try {
       await api.post('/teacher-portal/attendance/save', payload);
-      showToast('Attendance saved and synchronized successfully!', 'success');
-      setMessage({ type: 'success', text: 'Attendance saved and synchronized successfully!' });
-      // Reload roster data to fetch audit times
+      if (sessionExists) {
+        showToast('✅ Attendance updated successfully.', 'success');
+        setMessage({ type: 'success', text: 'Attendance updated successfully.' });
+      } else {
+        showToast('Attendance saved and synchronized successfully!', 'success');
+        setMessage({ type: 'success', text: 'Attendance saved and synchronized successfully!' });
+      }
+      // Reload roster data to fetch audit times and restore read-only
       await handleLoadRoster();
     } catch (err: any) {
-      console.error('Save attendance error:', err);
+      console.error('Save/Update attendance error:', err);
       // Fallback: save to offline queue on timeout or API crash
       const queueStr = localStorage.getItem('edutrack_offline_attendance_queue');
       const queue = queueStr ? JSON.parse(queueStr) : [];
@@ -418,23 +494,102 @@ export default function AttendanceMgmtPage() {
 
       {/* Roster & marking section */}
       {students.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-4 animate-in fade-in duration-200">
           
-          {/* Quick Roster Actions / Bulk Operations */}
+          {/* Green success banner & summary card when attendance is already submitted and we are in read-only mode */}
+          {sessionExists && isReadOnly && sessionInfo && (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <Check className="w-5 h-5 shrink-0 text-emerald-600" />
+                <span>
+                  ✅ Attendance for {selectedClass} - {selectedSection} has already been submitted for {formatDateLong(selectedDate)}.
+                </span>
+              </div>
+
+              {/* Metrics summary card */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center py-2.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total</span>
+                    <span className="block text-lg font-extrabold text-slate-800 mt-0.5">{sessionInfo.total}</span>
+                  </div>
+                  <div className="text-center py-2.5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
+                    <span className="block text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Present</span>
+                    <span className="block text-lg font-extrabold text-emerald-600 mt-0.5">{sessionInfo.present}</span>
+                  </div>
+                  <div className="text-center py-2.5 bg-rose-50/50 rounded-2xl border border-rose-100/50">
+                    <span className="block text-[10px] font-semibold text-rose-500 uppercase tracking-wider">Absent</span>
+                    <span className="block text-lg font-extrabold text-rose-600 mt-0.5">{sessionInfo.absent}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs font-semibold text-slate-500 border-t border-slate-100 pt-4 px-1">
+                  <div className="flex justify-between">
+                    <span>Status:</span>
+                    <span className="text-emerald-600 font-bold">Submitted</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>{sessionInfo.createdAt !== sessionInfo.updatedAt ? 'Last Updated:' : 'Submitted:'}</span>
+                    <span className="text-slate-700">
+                      {sessionInfo.createdAt !== sessionInfo.updatedAt
+                        ? `${formatLocalDateTime(sessionInfo.updatedAt)} by ${sessionInfo.teacherName}`
+                        : `${formatLocalDateTime(sessionInfo.createdAt)} by ${sessionInfo.teacherName}`
+                      }
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (isLocked) {
+                      showToast('Attendance is locked and cannot be updated.', 'warning');
+                    } else {
+                      setShowEditConfirmModal(true);
+                    }
+                  }}
+                  disabled={isLocked}
+                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Sparkles className="w-4 h-4 text-brand-400" />
+                  Update Attendance
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Locked warning banner */}
+          {isLocked && isReadOnly && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 shrink-0 text-amber-600" />
+              <span>
+                Attendance has been locked and can no longer be modified. Please contact the school administrator.
+              </span>
+            </div>
+          )}
+
+          {/* Quick Roster Actions / Bulk Operations (Hidden in read-only mode) */}
           <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3">
             <div className="flex gap-2 w-full sm:w-auto">
-              <button
-                onClick={() => applyBulkStatus('PRESENT')}
-                className="flex-1 sm:flex-initial px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-100"
-              >
-                <Check className="w-4 h-4" /> Bulk Present
-              </button>
-              <button
-                onClick={() => applyBulkStatus('ABSENT')}
-                className="flex-1 sm:flex-initial px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-rose-100"
-              >
-                <X className="w-4 h-4" /> Bulk Absent
-              </button>
+              {!isReadOnly ? (
+                <>
+                  <button
+                    onClick={() => applyBulkStatus('PRESENT')}
+                    className="flex-1 sm:flex-initial px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-100"
+                  >
+                    <Check className="w-4 h-4" /> Bulk Present
+                  </button>
+                  <button
+                    onClick={() => applyBulkStatus('ABSENT')}
+                    className="flex-1 sm:flex-initial px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-rose-100"
+                  >
+                    <X className="w-4 h-4" /> Bulk Absent
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-500 rounded-xl text-[11px] font-bold">
+                  <span>Read-Only Mode</span>
+                </div>
+              )}
             </div>
             
             {/* Quick search input */}
@@ -465,24 +620,99 @@ export default function AttendanceMgmtPage() {
                     student={s}
                     status={currentStatus}
                     onToggle={handleToggle}
+                    isReadOnly={isReadOnly}
                   />
                 );
               })
             )}
           </div>
 
-          {/* Sticky Bottom Save Button bar */}
-          <div className="fixed bottom-16 lg:bottom-4 left-0 right-0 p-4 bg-transparent z-40 max-w-md mx-auto sm:max-w-7xl flex justify-end pointer-events-none">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="pointer-events-auto flex items-center gap-2 px-6 py-3.5 bg-slate-900 text-white hover:bg-slate-800 font-bold rounded-full text-xs shadow-2xl transition-all cursor-pointer transform hover:scale-105"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? 'Syncing...' : 'Save Attendance'}
-            </button>
-          </div>
+          {/* Sticky Bottom Save / Cancel Button bar */}
+          {!isReadOnly && (
+            <div className="fixed bottom-16 lg:bottom-4 left-0 right-0 p-4 bg-transparent z-40 max-w-md mx-auto sm:max-w-7xl flex justify-end pointer-events-none gap-3">
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="pointer-events-auto flex items-center gap-2 px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-full text-xs shadow-2xl transition-all cursor-pointer transform hover:scale-105"
+              >
+                Cancel
+              </button>
 
+              {isSaveDisabled && sessionExists && (
+                <div className="pointer-events-auto flex items-center px-4 py-3 bg-slate-50 border border-slate-200 rounded-full text-[11px] font-bold text-slate-400 shadow-sm">
+                  No changes detected
+                </div>
+              )}
+
+              <button
+                onClick={handleSave}
+                disabled={isSaveDisabled}
+                className="pointer-events-auto flex items-center gap-2 px-6 py-3.5 bg-slate-900 text-white hover:bg-slate-800 font-bold rounded-full text-xs shadow-2xl transition-all cursor-pointer transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Syncing...' : (sessionExists ? 'Update Attendance' : 'Save Attendance')}
+              </button>
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* Confirmation Modal for entering edit mode */}
+      {showEditConfirmModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Update Attendance?</h3>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Attendance has already been submitted for this class. Do you want to modify the submitted attendance?
+            </p>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                onClick={() => setShowEditConfirmModal(false)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowEditConfirmModal(false);
+                  setIsReadOnly(false);
+                }}
+                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-[11px] shadow-md transition-all cursor-pointer"
+              >
+                Update Attendance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for saving updates */}
+      {showSaveConfirmModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Confirm Attendance Update</h3>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Are you sure you want to update the submitted attendance? This will overwrite the previously saved attendance for this class and date.
+            </p>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                onClick={() => setShowSaveConfirmModal(false)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowSaveConfirmModal(false);
+                  executeSave();
+                }}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[11px] shadow-md transition-all cursor-pointer"
+              >
+                Confirm Update
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
