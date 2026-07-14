@@ -391,7 +391,14 @@ export default function TeacherClassManagement() {
         periodDuration,
         autoGenerate,
         numPeriods,
-        periods: configPeriodsList
+        periods: configPeriodsList.map(pt => ({
+          id: pt.id,
+          periodNumber: Number(pt.periodNumber),
+          name: pt.name,
+          isBreak: pt.isBreak || false,
+          startTime: pt.startTime,
+          endTime: pt.endTime
+        }))
       });
 
       showToast('Timetable configuration saved successfully.', 'success');
