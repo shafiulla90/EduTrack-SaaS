@@ -5,6 +5,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import express from 'express';
+import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
+
+// Ensure uploads folder exists in workspace
+const uploadsDir = join(__dirname, '..', 'uploads');
+if (!existsSync(uploadsDir)) {
+  mkdirSync(uploadsDir, { recursive: true });
+}
 
 let cachedServer: any;
 
@@ -13,6 +21,10 @@ async function bootstrap() {
     const expressApp = express();
     expressApp.use(express.json({ limit: '10mb' }));
     expressApp.use(express.urlencoded({ limit: '10mb', extended: true }));
+    
+    // Serve static uploaded files
+    expressApp.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
+
     const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), { bodyParser: false });
 
     app.enableCors({
@@ -46,6 +58,7 @@ if (!process.env.VERCEL) {
     const app = await NestFactory.create(AppModule, { bodyParser: false });
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ limit: '10mb', extended: true }));
+    app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
     app.enableCors({
       origin: true,

@@ -190,13 +190,14 @@ model ParentProfile {
 }
 
 model StudentProfile {
-  id         String  @id @default(uuid())
-  userId     String  @unique
-  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rollNo     String?
-  fatherName String?
-  motherName String?
-  aadharNo   String?
+  id              String  @id @default(uuid())
+  userId          String  @unique
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rollNo          String?
+  fatherName      String?
+  motherName      String?
+  aadharNo        String?
+  profilePhotoUrl String?
 
   parentProfileId String?
   parentProfile   ParentProfile? @relation(fields: [parentProfileId], references: [id], onDelete: SetNull)

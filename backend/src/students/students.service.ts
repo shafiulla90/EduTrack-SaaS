@@ -3,10 +3,14 @@ import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { Role, PaymentStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { StorageService } from '../common/storage.service';
 
 @Injectable()
 export class StudentsService implements OnModuleInit {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageService: StorageService,
+  ) {}
 
   async onModuleInit() {
     try {
@@ -170,6 +174,11 @@ export class StudentsService implements OnModuleInit {
         }
       }
 
+      let profilePhotoUrl: string | null = null;
+      if (data.profilePhotoUrl && data.profilePhotoUrl.startsWith('data:')) {
+        profilePhotoUrl = await this.storageService.uploadImage(data.profilePhotoUrl, tenantId, user.id, `student-${user.id}`);
+      }
+
       const profile = await tx.studentProfile.create({
         data: {
           userId: user.id,
@@ -178,6 +187,7 @@ export class StudentsService implements OnModuleInit {
           motherName: data.motherName,
           aadharNo: data.aadharNo,
           classSectionId: classSectionId || null,
+          profilePhotoUrl,
           tenantId,
         },
       });
@@ -944,15 +954,20 @@ export class StudentsService implements OnModuleInit {
     const tenantId = this.getTenantId();
 
     const profile = await this.prisma.studentProfile.findUnique({
-      where: { id: studentId },
-      include: { user: true }
+        where: { id: studentId },
+        include: { user: true },
     });
-          if (!profile || profile.user.tenantId !== tenantId) {
-      throw new NotFoundException('Student profile not found');
+    if (!profile || profile.user.tenantId !== tenantId) {
+        throw new NotFoundException('Student profile not found');
+    }
+
+    // Delete profile photo if exists
+    if (profile.profilePhotoUrl) {
+        await this.storageService.deleteImage(profile.profilePhotoUrl);
     }
 
     await this.prisma.user.delete({
-      where: { id: profile.userId }
+        where: { id: profile.userId },
     });
 
     return { success: true };
@@ -1011,6 +1026,22 @@ export class StudentsService implements OnModuleInit {
       if (data.aadharNo !== undefined) profileUpdates.aadharNo = data.aadharNo;
       if (data.rollNo !== undefined) profileUpdates.rollNo = data.rollNo;
       if (data.classSectionId !== undefined) profileUpdates.classSectionId = data.classSectionId;
+
+      if (data.profilePhotoUrl !== undefined) {
+        if (data.profilePhotoUrl === null || data.profilePhotoUrl === '') {
+          // Remove existing photo if any
+          if (profile.profilePhotoUrl) {
+            await this.storageService.deleteImage(profile.profilePhotoUrl);
+          }
+          profileUpdates.profilePhotoUrl = null;
+        } else if (data.profilePhotoUrl.startsWith('data:')) {
+          // Delete old photo before uploading new one
+          if (profile.profilePhotoUrl) {
+            await this.storageService.deleteImage(profile.profilePhotoUrl);
+          }
+          profileUpdates.profilePhotoUrl = await this.storageService.uploadImage(data.profilePhotoUrl, tenantId, profile.userId, `student-${profile.userId}`);
+        }
+      }
 
       if (Object.keys(profileUpdates).length) {
         await tx.studentProfile.update({ where: { id: studentId }, data: profileUpdates });
