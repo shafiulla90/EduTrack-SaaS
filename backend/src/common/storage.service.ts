@@ -77,6 +77,10 @@ export class StorageService {
 
     // 2. Local fallback storage
     try {
+      if (process.env.VERCEL) {
+        // On Vercel, return the base64 data URL directly to save in the database
+        return base64Data;
+      }
       const relativePath = `/uploads/${storageKey}`;
       const absolutePath = join(__dirname, '..', '..', 'uploads', storageKey);
       // Ensure directory exists
@@ -88,7 +92,8 @@ export class StorageService {
 
     } catch (err) {
       console.error('[StorageService] Local storage write failed:', err);
-      throw new BadRequestException('Failed to store profile photo.');
+      // Fallback: If local storage write fails, return the base64 data URL directly
+      return base64Data;
     }
   }
 

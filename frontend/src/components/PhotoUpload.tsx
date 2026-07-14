@@ -12,14 +12,17 @@ export default function PhotoUpload({ value, onChange, className = '' }: PhotoUp
   const [preview, setPreview] = useState<string | null>(value || null);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   useEffect(() => {
     setPreview(value || null);
+    setImageLoadError(false);
   }, [value]);
 
   const validateAndProcessFile = (file: File) => {
     setError(null);
-
+    setImageLoadError(false);
+    
     // 1. Format Validation
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
@@ -71,6 +74,7 @@ export default function PhotoUpload({ value, onChange, className = '' }: PhotoUp
         // Convert canvas to base64 jpeg data URL
         const base64Data = canvas.toDataURL('image/jpeg', 0.8);
         setPreview(base64Data);
+        setImageLoadError(false);
         onChange(base64Data);
       };
       img.onerror = () => {
@@ -115,6 +119,7 @@ export default function PhotoUpload({ value, onChange, className = '' }: PhotoUp
     e.stopPropagation();
     setPreview(null);
     setError(null);
+    setImageLoadError(false);
     onChange(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -144,16 +149,21 @@ export default function PhotoUpload({ value, onChange, className = '' }: PhotoUp
       {preview ? (
         <div className="flex items-center gap-5">
           <div className="relative group w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 border-slate-200 shadow-md">
-            <img
-              src={getDisplayUrl(preview)}
-              alt="Profile Preview"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // If it fails to load, fall back to showing a blank profile state
-                e.currentTarget.src = '';
-                setError('Failed to load the uploaded profile photo.');
-              }}
-            />
+            {preview && !imageLoadError ? (
+              <img
+                src={getDisplayUrl(preview)}
+                alt="Profile Preview"
+                className="w-full h-full object-cover"
+                onError={() => {
+                  setImageLoadError(true);
+                  setError('Failed to load the uploaded profile photo.');
+                }}
+              />
+            ) : (
+              <div className="w-full h-full bg-slate-50 flex items-center justify-center text-slate-400">
+                <Camera className="w-8 h-8" />
+              </div>
+            )}
             <button
               type="button"
               onClick={handleSelectClick}

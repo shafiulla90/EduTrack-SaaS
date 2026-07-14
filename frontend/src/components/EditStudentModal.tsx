@@ -69,27 +69,29 @@ export default function EditStudentModal({ student, onClose, onSave }: EditStude
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl mx-4 bg-white rounded-2xl shadow-2xl p-6 md:p-8 animate-fade-in border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xs p-4">
+      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-fade-in border border-slate-100 min-h-0">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition p-1.5 rounded-full hover:bg-slate-100"
+          type="button"
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition p-1.5 rounded-full hover:bg-slate-100 z-10"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
         
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-950">Edit Student Profile</h2>
+        <div className="p-5 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-lg font-bold text-slate-950">Edit Student Profile</h2>
           <p className="text-xs text-slate-500 mt-1 font-medium">Update the student's personal and parent details.</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-3 bg-rose-50 border border-rose-100 text-rose-700 text-xs font-semibold rounded-xl leading-relaxed">
+          <div className="mx-5 mt-4 p-3 bg-rose-50 border border-rose-100 text-rose-700 text-xs font-semibold rounded-xl leading-relaxed">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="p-5 overflow-y-auto flex-1 space-y-4">
           {/* Section 1: Academic Info (Read-Only) & Roll Number */}
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -206,19 +208,21 @@ export default function EditStudentModal({ student, onClose, onSave }: EditStude
             </div>
           </div>
 
-          {/* Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-slate-100">
+          </div>
+
+          {/* Buttons Footer (fixed at bottom) */}
+          <div className="flex gap-3 p-5 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl flex-shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 text-xs font-bold transition-all min-h-[44px]"
+              className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-850 bg-white hover:bg-slate-50 text-xs font-bold transition-all min-h-[40px] cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-[#254EDB] text-white text-xs font-extrabold transition-all min-h-[44px] flex items-center justify-center gap-2"
+              className="flex-1 py-2 rounded-xl bg-[#2E5BFF] hover:bg-[#254EDB] text-white text-xs font-extrabold transition-all min-h-[40px] flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (
                 <>
