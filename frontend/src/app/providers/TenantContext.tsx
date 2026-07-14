@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, getStoredToken, getStoredTenantId, getActiveRole } from '@/lib/api';
 import { useSchoolSetupUpdate } from '@/lib/events';
 
 interface TenantContextType {
@@ -28,14 +28,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('token');
+      return getStoredToken();
     }
     return null;
   });
   const pathname = usePathname();
 
   const fetchTenantData = async () => {
-    const currentToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const currentToken = typeof window !== 'undefined' ? getStoredToken() : null;
     if (!currentToken) {
       try {
         const response = await api.get('/tenant/public-branding');
@@ -46,7 +46,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           setAdminName(data.name || "");
           setLogoUrl(data.logoUrl || null);
           if (typeof window !== 'undefined' && data.id) {
-            localStorage.setItem('tenantId', data.id);
+            const role = getActiveRole();
+            if (role === 'TEACHER') {
+              localStorage.setItem('teacher_tenantId', data.id);
+            } else {
+              localStorage.setItem('admin_tenantId', data.id);
+            }
           }
         }
       } catch (err) {
@@ -69,6 +74,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setSetupStats(data);
       setCurrentUser(data.currentUser || null);
       
+      if (typeof window !== 'undefined' && data.currentUser?.role) {
+        if (data.currentUser.role === 'TEACHER') {
+          sessionStorage.setItem('active_role', 'TEACHER');
+        } else if (data.currentUser.role === 'SCHOOL_ADMIN') {
+          sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
+        }
+      }
+      
       const setupObj = data.setup;
       if (setupObj) {
         setSchoolName(setupObj.schoolName || "");
@@ -76,7 +89,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setAdminName(setupObj.adminName || "");
         setLogoUrl(setupObj.schoolLogo || null);
         if (typeof window !== 'undefined' && setupObj.tenantId) {
-          localStorage.setItem('tenantId', setupObj.tenantId);
+          const role = getActiveRole();
+          if (role === 'TEACHER') {
+            localStorage.setItem('teacher_tenantId', setupObj.tenantId);
+          } else {
+            localStorage.setItem('admin_tenantId', setupObj.tenantId);
+          }
         }
       } else {
         setSchoolName("");
@@ -99,7 +117,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   // Sync token from localStorage on routing/pathname changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const currentToken = localStorage.getItem('token');
+      const currentToken = getStoredToken();
       if (currentToken !== token) {
         setToken(currentToken);
       }

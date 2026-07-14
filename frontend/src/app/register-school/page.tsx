@@ -68,12 +68,13 @@ function RegisterSchoolContent() {
       const data = response.data;
       
       if (data.success && data.access_token) {
-        // Store JWT token and new Tenant ID in local storage
-        localStorage.setItem('token', data.access_token);
-        localStorage.setItem('tenantId', data.user.tenantId);
+        // Store JWT token and new Tenant ID in local storage under admin namespace
+        localStorage.setItem('admin_token', data.access_token);
+        localStorage.setItem('admin_tenantId', data.user.tenantId);
         if (data.user.phone) {
-          localStorage.setItem('userPhone', data.user.phone);
+          localStorage.setItem('admin_userPhone', data.user.phone);
         }
+        sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
 
         // Fetch tenant details immediately to verify branding is ready
         try {

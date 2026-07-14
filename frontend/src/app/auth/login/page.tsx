@@ -25,39 +25,64 @@ export default function LoginPage() {
     }
 
     // Check if session is already active for this phone number
-    const cachedToken = localStorage.getItem('token');
-    const cachedTenant = localStorage.getItem('tenantId');
-    const cachedPhone = localStorage.getItem('userPhone');
+    const adminToken = localStorage.getItem('admin_token');
+    const adminPhone = localStorage.getItem('admin_userPhone');
+    const teacherToken = localStorage.getItem('teacher_token');
+    const teacherPhone = localStorage.getItem('teacher_userPhone');
 
-    if (cachedToken && cachedTenant && cachedPhone) {
-      const normCleaned = cleanedPhone.slice(-10);
-      const normCached = cachedPhone.replace(/\D/g, '').slice(-10);
+    let matchingToken = null;
+    let matchingRole = '';
 
+    const normCleaned = cleanedPhone.slice(-10);
+
+    if (adminToken && adminPhone) {
+      const normCached = adminPhone.replace(/\D/g, '').slice(-10);
       if (normCleaned === normCached) {
-        setLoading(true);
-        try {
-          // Verify token validity by calling profile endpoint
-          await api.get('/auth/profile', {
-            headers: {
-              'Authorization': `Bearer ${cachedToken}`
-            }
-          });
-          // Session is valid, load tenant branding and go directly to dashboard
-          try {
-            await refresh();
-          } catch (e) {
-            console.error('Failed to pre-fetch school profile:', e);
+        matchingToken = adminToken;
+        matchingRole = 'SCHOOL_ADMIN';
+      }
+    }
+    if (!matchingToken && teacherToken && teacherPhone) {
+      const normCached = teacherPhone.replace(/\D/g, '').slice(-10);
+      if (normCleaned === normCached) {
+        matchingToken = teacherToken;
+        matchingRole = 'TEACHER';
+      }
+    }
+
+    if (matchingToken) {
+      setLoading(true);
+      try {
+        // Verify token validity by calling profile endpoint
+        await api.get('/auth/profile', {
+          headers: {
+            'Authorization': `Bearer ${matchingToken}`
           }
-          router.push('/dashboard');
-          return;
-        } catch (err) {
-          // Token is expired or invalid, clear cache and proceed to normal OTP flow
-          localStorage.removeItem('token');
-          localStorage.removeItem('tenantId');
-          localStorage.removeItem('userPhone');
-        } finally {
-          setLoading(false);
+        });
+        
+        sessionStorage.setItem('active_role', matchingRole);
+        
+        // Session is valid, load tenant branding and go directly to dashboard
+        try {
+          await refresh();
+        } catch (e) {
+          console.error('Failed to pre-fetch school profile:', e);
         }
+        router.push('/dashboard');
+        return;
+      } catch (err) {
+        // Token is expired or invalid, clear specific cache and proceed to normal OTP flow
+        if (matchingRole === 'TEACHER') {
+          localStorage.removeItem('teacher_token');
+          localStorage.removeItem('teacher_tenantId');
+          localStorage.removeItem('teacher_userPhone');
+        } else {
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_tenantId');
+          localStorage.removeItem('admin_userPhone');
+        }
+      } finally {
+        setLoading(false);
       }
     }
 

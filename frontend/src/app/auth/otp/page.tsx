@@ -75,11 +75,22 @@ function OtpContent() {
       const data = response.data;
       if (data.registered) {
         setSuccessMsg('Authenticated! Loading school profile...');
-        // Store JWT token and Tenant ID in local storage
-        localStorage.setItem('token', data.access_token);
-        localStorage.setItem('tenantId', data.user.tenantId);
-        if (data.user.phone) {
-          localStorage.setItem('userPhone', data.user.phone);
+        // Store JWT token and Tenant ID in role-isolated local storage namespaces
+        const role = data.user.role;
+        if (role === 'TEACHER') {
+          localStorage.setItem('teacher_token', data.access_token);
+          localStorage.setItem('teacher_tenantId', data.user.tenantId);
+          if (data.user.phone) {
+            localStorage.setItem('teacher_userPhone', data.user.phone);
+          }
+          sessionStorage.setItem('active_role', 'TEACHER');
+        } else {
+          localStorage.setItem('admin_token', data.access_token);
+          localStorage.setItem('admin_tenantId', data.user.tenantId);
+          if (data.user.phone) {
+            localStorage.setItem('admin_userPhone', data.user.phone);
+          }
+          sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
         }
         
         setSuccessMsg('Authenticated! Redirecting...');

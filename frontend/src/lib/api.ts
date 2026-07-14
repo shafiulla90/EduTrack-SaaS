@@ -9,6 +9,54 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
     ? 'http://localhost:3001'          // Server-side rendering in dev: direct backend call
     : '/api';                          // Client-side on Vercel: use Next.js proxy route
 
+export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' {
+  if (typeof window === 'undefined') return 'SCHOOL_ADMIN';
+  
+  let role = sessionStorage.getItem('active_role') as 'TEACHER' | 'SCHOOL_ADMIN' | null;
+  if (!role) {
+    if (localStorage.getItem('teacher_token') && !localStorage.getItem('admin_token')) {
+      role = 'TEACHER';
+    } else {
+      role = 'SCHOOL_ADMIN';
+    }
+    sessionStorage.setItem('active_role', role);
+  }
+  return role;
+}
+
+export function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const role = getActiveRole();
+  return role === 'TEACHER' ? localStorage.getItem('teacher_token') : localStorage.getItem('admin_token');
+}
+
+export function getStoredTenantId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const role = getActiveRole();
+  return role === 'TEACHER' ? localStorage.getItem('teacher_tenantId') : localStorage.getItem('admin_tenantId');
+}
+
+export function getStoredUserPhone(): string | null {
+  if (typeof window === 'undefined') return null;
+  const role = getActiveRole();
+  return role === 'TEACHER' ? localStorage.getItem('teacher_userPhone') : localStorage.getItem('admin_userPhone');
+}
+
+export function clearStoredAuth() {
+  if (typeof window === 'undefined') return;
+  const role = getActiveRole();
+  if (role === 'TEACHER') {
+    localStorage.removeItem('teacher_token');
+    localStorage.removeItem('teacher_tenantId');
+    localStorage.removeItem('teacher_userPhone');
+  } else {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_tenantId');
+    localStorage.removeItem('admin_userPhone');
+  }
+  sessionStorage.removeItem('active_role');
+}
+
 export function getTenantFromHostname(): string {
   if (typeof window === 'undefined') return 'demo-school';
 
@@ -34,7 +82,7 @@ export function getTenantFromHostname(): string {
   }
 
   // Fallback to localStorage
-  const stored = localStorage.getItem('tenantId');
+  const stored = getStoredTenantId();
   if (stored) return stored;
 
   return 'demo-school';
@@ -52,7 +100,7 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
+      const token = getStoredToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -69,9 +117,7 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('tenantId');
-        localStorage.removeItem('userPhone');
+        clearStoredAuth();
         // Prevent redirect loop if already on login, otp, or onboarding pages
         const path = window.location.pathname;
         if (!path.includes('/auth/login') && !path.includes('/auth/otp') && !path.includes('/register-school')) {

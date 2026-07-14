@@ -3,15 +3,15 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, getStoredToken, getStoredTenantId, clearStoredAuth } from '@/lib/api';
 
 export default function OnboardingRouterPage() {
   const router = useRouter();
 
   useEffect(() => {
     const checkStatus = async () => {
-      const token = localStorage.getItem('token');
-      const tenantId = localStorage.getItem('tenantId');
+      const token = getStoredToken();
+      const tenantId = getStoredTenantId();
 
       if (!token || !tenantId) {
         router.push('/auth/login');
@@ -28,9 +28,7 @@ export default function OnboardingRouterPage() {
       } catch (err) {
         console.error('Onboarding status check failed:', err);
         // Clear corrupt storage and send to login
-        localStorage.removeItem('token');
-        localStorage.removeItem('tenantId');
-        localStorage.removeItem('userPhone');
+        clearStoredAuth();
         router.push('/auth/login');
       }
     };
