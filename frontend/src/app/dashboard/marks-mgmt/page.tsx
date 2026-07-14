@@ -69,9 +69,10 @@ export default function MarksMgmtPage() {
       });
       setMarksSheet(initialSheet);
       setAutosaveStatus('All changes saved');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load roster:', err);
-      setMessage({ type: 'error', text: 'Failed to load class marks roster.' });
+      const errMsg = err.response?.data?.message || 'Failed to load class marks roster.';
+      setMessage({ type: 'error', text: errMsg });
     } finally {
       setLoadingStudents(false);
     }
@@ -242,12 +243,15 @@ export default function MarksMgmtPage() {
               value={selectedClass}
               onChange={(e) => {
                 setSelectedClass(e.target.value);
+                setSelectedSubject('');
                 setStudents([]);
               }}
               className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
             >
               <option value="">Select...</option>
-              {classes.map(c => <option key={c.classSectionId} value={c.classSectionId}>{c.className}</option>)}
+              {Array.from(new Map(classes.map(c => [c.classSectionId, c.className])).entries()).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
             </select>
           </div>
 
@@ -260,10 +264,17 @@ export default function MarksMgmtPage() {
                   setSelectedSubject(e.target.value);
                   setStudents([]);
                 }}
-                className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+                disabled={!selectedClass}
+                className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">Select...</option>
-                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {classes
+                  .filter(c => c.classSectionId === selectedClass)
+                  .map(c => (
+                    <option key={c.subjectId} value={c.subjectId}>
+                      {c.subjectName}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>
@@ -365,6 +376,16 @@ export default function MarksMgmtPage() {
             </button>
           </div>
 
+        </div>
+      )}
+
+      {students.length === 0 && (
+        <div className="bg-white py-12 text-center text-slate-400 text-xs font-semibold rounded-3xl border border-slate-200 shadow-sm px-6">
+          {!selectedClass || !selectedSubject || !selectedExam ? (
+            <p className="text-slate-500">Please select a Class Section and Subject to continue.</p>
+          ) : (
+            <p className="text-slate-500">Click &ldquo;Load Roster&rdquo; to fetch the student listing.</p>
+          )}
         </div>
       )}
 

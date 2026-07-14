@@ -469,14 +469,95 @@ export class TeacherPortalService {
   // 5. Marks & Exam Management (Strict permission checked proxy to existing service)
   async getExamMarksEntryList(userId: string, tenantId: string, subjectId: string, examName: string, classSectionId: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    await this.verifyTeacherAssignment(staff.id, classSectionId, subjectId);
+    
+    // 1. Verify ClassSection exists
+    const classSection = await this.prisma.classSection.findFirst({
+      where: { id: classSectionId, tenantId },
+      include: { class: true, section: true }
+    });
+    if (!classSection) {
+      throw new BadRequestException('The selected class and section do not exist.');
+    }
+
+    // 2. Verify teacher assignment
+    try {
+      await this.verifyTeacherAssignment(staff.id, classSectionId, subjectId);
+    } catch (e) {
+      throw new BadRequestException('You are not assigned to teach this subject.');
+    }
+
+    // 3. Verify subject exists
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, tenantId }
+    });
+    if (!subject) {
+      throw new BadRequestException('The selected subject does not exist.');
+    }
+
+    // 4. Verify Academic Year is active
+    const cls = await this.prisma.class.findFirst({
+      where: { id: classSection.classId, tenantId },
+      include: { academicYear: true }
+    });
+    if (!cls || !cls.academicYear || !cls.academicYear.isActive) {
+      throw new BadRequestException('The selected class belongs to an inactive or invalid Academic Year.');
+    }
+
+    // 5. Verify Exam exists
+    const exam = await this.prisma.exam.findFirst({
+      where: {
+        tenantId,
+        classSectionId,
+        name: { equals: examName, mode: 'insensitive' },
+      },
+    });
+    if (!exam) {
+      throw new BadRequestException('The selected exam is not available.');
+    }
+
+    // 6. Verify students exist
+    const studentCount = await this.prisma.studentProfile.count({
+      where: {
+        classSectionId,
+        user: { tenantId, isActive: true },
+      },
+    });
+    if (studentCount === 0) {
+      throw new BadRequestException('No students found for the selected class and section.');
+    }
 
     return this.examsService.getStudentsForMarksEntry(subjectId, examName, classSectionId);
   }
 
   async saveExamMarksList(userId: string, tenantId: string, data: any) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    await this.verifyTeacherAssignment(staff.id, data.classSectionId, data.subjectId);
+    
+    // 1. Verify ClassSection exists
+    const classSection = await this.prisma.classSection.findFirst({
+      where: { id: data.classSectionId, tenantId }
+    });
+    if (!classSection) {
+      throw new BadRequestException('The selected class and section do not exist.');
+    }
+
+    // 2. Verify teacher assignment
+    try {
+      await this.verifyTeacherAssignment(staff.id, data.classSectionId, data.subjectId);
+    } catch (e) {
+      throw new BadRequestException('You are not assigned to teach this subject.');
+    }
+
+    // 3. Verify Exam exists
+    const exam = await this.prisma.exam.findFirst({
+      where: {
+        tenantId,
+        classSectionId: data.classSectionId,
+        name: { equals: data.examName, mode: 'insensitive' },
+      },
+    });
+    if (!exam) {
+      throw new BadRequestException('The selected exam is not available.');
+    }
 
     const result = await this.examsService.saveMarks(data.marks, data.examName, data.classSectionId, data.subjectId);
     await this.logAction(userId, tenantId, 'RECORD_UPDATE', 'ExamMark', undefined, {
