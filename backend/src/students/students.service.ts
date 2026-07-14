@@ -492,17 +492,7 @@ export class StudentsService implements OnModuleInit {
           continue;
         }
 
-        // Check if phone number is already registered to prevent Prisma user.create unique constraint crash
-        const normalizedPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
-        let finalPhone = normalizedPhone;
-        if (normalizedPhone) {
-          const phoneExists = await this.prisma.user.findFirst({
-            where: { phone: normalizedPhone }
-          });
-          if (phoneExists) {
-            finalPhone = null; // Bypassed duplicate phone gracefully to allow student import success
-          }
-        }
+        const finalPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
 
         // Perform user creation transaction
         await this.prisma.$transaction(async (tx) => {
@@ -1006,15 +996,6 @@ export class StudentsService implements OnModuleInit {
       if (data.phone) {
         const normalizedPhone = data.phone.replace(/\D/g, '').slice(-10);
         if (normalizedPhone) {
-          const phoneExists = await tx.user.findFirst({
-            where: {
-              phone: normalizedPhone,
-              id: { not: profile.userId }
-            }
-          });
-          if (phoneExists) {
-            throw new ConflictException('Phone number is already in use by another user');
-          }
           userUpdates.phone = normalizedPhone;
         }
       }
