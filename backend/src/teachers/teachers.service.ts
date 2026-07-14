@@ -97,6 +97,11 @@ export class TeachersService {
             avatarUrl: true,
           },
         },
+        teacherSkills: {
+          include: {
+            subject: { select: { id: true, name: true } },
+          },
+        },
         _count: {
           select: { teacherAssignments: true },
         },

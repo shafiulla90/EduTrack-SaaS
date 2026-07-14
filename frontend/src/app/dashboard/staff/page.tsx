@@ -190,7 +190,13 @@ export default function SchoolStaffPage() {
           status: t.status || 'Active',
           accountNumber: '',
           ifsc: '',
-          skills: t.subjectsTaught?.map((sub: string) => ({ subject: sub, level: 'Expert', exp: 5 })) || [],
+          skills: t.teacherSkills?.length > 0
+            ? t.teacherSkills.map((sk: any) => ({
+                subject: sk.subject?.name || sk.subjectId || 'Unknown',
+                level: sk.skillLevel || 'Expert',
+                exp: sk.yearsOfExperience ?? 0,
+              }))
+            : (t.subjectsTaught?.map((sub: string) => ({ subject: sub, level: 'Expert', exp: 5 })) || []),
           salaryStatus: 'Pending',
           gradient: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length]
         };
