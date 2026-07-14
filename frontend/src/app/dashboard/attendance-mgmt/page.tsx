@@ -3,6 +3,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Calendar, Search, Users, Check, X, ShieldAlert, Sparkles, RefreshCw, Save } from 'lucide-react';
+import { useToast } from '@/components/Toast';
+
+const formatLocalTime = (isoString: string) => {
+  try {
+    const date = new Date(isoString);
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+    const hoursStr = hours < 10 ? '0' + hours : hours;
+    return `${hoursStr}:${minutesStr} ${ampm}`;
+  } catch (e) {
+    return '';
+  }
+};
 
 interface StudentCardProps {
   student: any;
@@ -41,6 +58,7 @@ const StudentCard = React.memo(({ student, status, onToggle }: StudentCardProps)
 StudentCard.displayName = 'StudentCard';
 
 export default function AttendanceMgmtPage() {
+  const { showToast } = useToast();
   const [classes, setClasses] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -186,7 +204,8 @@ export default function AttendanceMgmtPage() {
 
       setSheet(initialSheet);
       if (sessionRes.data.sessionExists) {
-        setMessage({ type: 'info', text: `Attendance sheet was previously submitted by ${sessionRes.data.teacherName} at ${sessionRes.data.createdTime}.` });
+        const timeStr = sessionRes.data.createdAt ? formatLocalTime(sessionRes.data.createdAt) : sessionRes.data.createdTime;
+        setMessage({ type: 'info', text: `Attendance sheet was previously submitted by ${sessionRes.data.teacherName} at ${timeStr}.` });
       }
     } catch (err) {
       console.error('Failed to load roster:', err);
@@ -247,6 +266,7 @@ export default function AttendanceMgmtPage() {
     setSaving(true);
     try {
       await api.post('/teacher-portal/attendance/save', payload);
+      showToast('Attendance saved and synchronized successfully!', 'success');
       setMessage({ type: 'success', text: 'Attendance saved and synchronized successfully!' });
       // Reload roster data to fetch audit times
       await handleLoadRoster();
@@ -258,6 +278,7 @@ export default function AttendanceMgmtPage() {
       queue.push(payload);
       localStorage.setItem('edutrack_offline_attendance_queue', JSON.stringify(queue));
       setPendingQueueCount(queue.length);
+      showToast('Connection failed. Saved locally to sync queue.', 'warning');
       setMessage({ type: 'warning', text: 'Server connection failed. Saved locally to sync queue.' });
     } finally {
       setSaving(false);

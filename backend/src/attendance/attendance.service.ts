@@ -373,6 +373,8 @@ export class AttendanceService {
       teacherName: session.takenBy?.user?.name || 'Unknown',
       createdTime: this.formatTime(session.createdAt),
       lastUpdatedTime: this.formatTime(session.updatedAt),
+      createdAt: session.createdAt.toISOString(),
+      updatedAt: session.updatedAt.toISOString(),
       total: session.totalStudents,
       present: session.presentCount,
       absent: session.absentCount,
