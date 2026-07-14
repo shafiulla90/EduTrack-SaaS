@@ -52,10 +52,15 @@ const StudentCard = React.memo(({ student, status, onToggle, isReadOnly = false 
       </div>
 
       <div className="flex items-center justify-end">
-        {isAbsent && (
+        {isAbsent ? (
           <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-500 text-white rounded-xl text-[11px] font-bold shadow-md shadow-rose-500/15 animate-in fade-in zoom-in-95 duration-150">
             <X className="w-3.5 h-3.5" />
             <span>Absent</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 text-white rounded-xl text-[11px] font-bold shadow-md shadow-emerald-500/15 animate-in fade-in zoom-in-95 duration-150">
+            <Check className="w-3.5 h-3.5" />
+            <span>Present</span>
           </div>
         )}
       </div>
