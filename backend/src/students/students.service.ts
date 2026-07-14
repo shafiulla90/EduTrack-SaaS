@@ -706,6 +706,7 @@ export class StudentsService implements OnModuleInit {
         balanceDue,
         paidAmount,
         parentEmail: '',
+        profilePhotoUrl: s.profilePhotoUrl || null,
       };
     });
   }

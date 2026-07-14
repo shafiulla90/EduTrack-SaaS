@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import EditStudentModal from '@/components/EditStudentModal';
 import { useSchoolSetupUpdate } from '@/lib/events';
 import { useToast } from '@/components/Toast';
+import StudentAvatar from '@/components/StudentAvatar';
 
 interface Student {
   id: string;
@@ -187,37 +188,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
     }
   };
 
-  const getInitials = (name: string) => {
-    if (!name) return '?';
-    const parts = name.split(' ');
-    if (parts.length === 1) return parts[0].substring(0, 1).toUpperCase();
-    return (parts[0].substring(0, 1) + parts[parts.length - 1].substring(0, 1)).toUpperCase();
-  };
 
-  const getStudentPhotoUrl = (url: string | null | undefined) => {
-    if (!url) return '';
-    if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
-    }
-    return `/api${url.startsWith('/') ? '' : '/'}${url}`;
-  };
-
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      'bg-blue-50 text-blue-600 border-blue-100',
-      'bg-indigo-50 text-indigo-600 border-indigo-100',
-      'bg-purple-50 text-purple-600 border-purple-100',
-      'bg-pink-50 text-pink-600 border-pink-100',
-      'bg-teal-50 text-teal-600 border-teal-100',
-      'bg-emerald-50 text-emerald-600 border-emerald-100',
-    ];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
-  };
 
   // Switch to detail view and load details
   const handleViewDetails = async (student: Student) => {
@@ -502,25 +473,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                         <td className="px-6 py-4 font-mono text-xs text-blue-600 font-bold">{student.rollNo}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            {student.profilePhotoUrl ? (
-                              <img
-                                src={getStudentPhotoUrl(student.profilePhotoUrl)}
-                                alt={student.name}
-                                className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const sibling = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (sibling) sibling.style.display = 'flex';
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border select-none ${getAvatarColor(student.name)}`}
-                              style={{ display: student.profilePhotoUrl ? 'none' : 'flex' }}
-                            >
-                              {getInitials(student.name)}
-                            </div>
+                            <StudentAvatar studentName={student.name} profilePhotoUrl={student.profilePhotoUrl} size="sm" />
                             <div>
                               <div className="font-bold text-slate-800">{student.name}</div>
                               <div className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</div>
@@ -601,25 +554,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                   <div key={student.id} className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
-                        {student.profilePhotoUrl ? (
-                          <img
-                            src={getStudentPhotoUrl(student.profilePhotoUrl)}
-                            alt={student.name}
-                            className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              const sibling = e.currentTarget.nextElementSibling as HTMLElement;
-                              if (sibling) sibling.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border select-none ${getAvatarColor(student.name)}`}
-                          style={{ display: student.profilePhotoUrl ? 'none' : 'flex' }}
-                        >
-                          {getInitials(student.name)}
-                        </div>
+                        <StudentAvatar studentName={student.name} profilePhotoUrl={student.profilePhotoUrl} size="sm" />
                         <div>
                           <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-bold font-mono">
                             Roll: {student.rollNo}
@@ -751,24 +686,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div className="flex items-center gap-3">
-                {activeStudent.profilePhotoUrl ? (
-                  <img
-                    src={getStudentPhotoUrl(activeStudent.profilePhotoUrl)}
-                    alt={activeStudent.name}
-                    className="w-12 h-12 rounded-full object-cover border-slate-200 shadow-sm"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      const sibling = e.currentTarget.nextElementSibling as HTMLElement;
-                      if (sibling) sibling.style.display = 'flex';
-                    }}
-                  />
-                ) : null}
-                <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm border select-none ${getAvatarColor(activeStudent.name)} shadow-sm`}
-                  style={{ display: activeStudent.profilePhotoUrl ? 'none' : 'flex' }}
-                >
-                  {getInitials(activeStudent.name)}
-                </div>
+                <StudentAvatar studentName={activeStudent.name} profilePhotoUrl={activeStudent.profilePhotoUrl} size="md" />
                 <div>
                   <h2 className="text-[24px] font-extrabold text-slate-900 leading-none">
                     {activeStudent.name}
