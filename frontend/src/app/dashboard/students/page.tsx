@@ -26,6 +26,7 @@ interface Student {
   paidAmount: number;
   balanceDue: number;
   academicYearId?: string;
+  profilePhotoUrl?: string | null;
 }
 
 export default function StudentsDirectory() {
@@ -132,7 +133,8 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
           aadharNo: s.aadharNo || 'N/A',
           paidAmount: paid,
           balanceDue: due,
-          academicYearId: s.classSection?.class?.academicYearId || ''
+          academicYearId: s.classSection?.class?.academicYearId || '',
+          profilePhotoUrl: s.profilePhotoUrl || null,
         };
       }));
     } catch (err) {
@@ -192,6 +194,31 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
     return (parts[0].substring(0, 1) + parts[parts.length - 1].substring(0, 1)).toUpperCase();
   };
 
+  const getStudentPhotoUrl = (url: string | null | undefined) => {
+    if (!url) return '';
+    if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    return `/api${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const getAvatarColor = (name: string) => {
+    const colors = [
+      'bg-blue-50 text-blue-600 border-blue-100',
+      'bg-indigo-50 text-indigo-600 border-indigo-100',
+      'bg-purple-50 text-purple-600 border-purple-100',
+      'bg-pink-50 text-pink-600 border-pink-100',
+      'bg-teal-50 text-teal-600 border-teal-100',
+      'bg-emerald-50 text-emerald-600 border-emerald-100',
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  };
+
   // Switch to detail view and load details
   const handleViewDetails = async (student: Student) => {
     try {
@@ -203,6 +230,26 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
       
       const data = detailsRes.data;
       const casesData = casesRes.data;
+
+      const paid = data.paidAmount !== undefined ? Number(data.paidAmount) : (data.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount), 0) || 0);
+      const due = data.balanceDue !== undefined ? Number(data.balanceDue) : (data.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.remainingBalance), 0) || 0);
+      
+      const fullStudent: Student = {
+        id: data.id,
+        rollNo: data.rollNo || 'N/A',
+        name: data.user?.name || 'Unknown Student',
+        email: data.user?.email || 'N/A',
+        phone: data.user?.phone || 'N/A',
+        class: data.classSection?.class?.name || 'N/A',
+        section: data.classSection?.section?.name || 'N/A',
+        fatherName: data.fatherName || 'N/A',
+        motherName: data.motherName || 'N/A',
+        aadharNo: data.aadharNo || 'N/A',
+        paidAmount: paid,
+        balanceDue: due,
+        academicYearId: data.classSection?.class?.academicYearId || '',
+        profilePhotoUrl: data.profilePhotoUrl || null,
+      };
 
       // Group exams
       const examsMap: Record<string, any> = {};
@@ -273,7 +320,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
         setSelectedExamTab('Unit Test');
       }
 
-      setActiveStudent(student);
+      setActiveStudent(fullStudent);
       setExpandedInvoices({});
       setExpandedExams({});
       setTempDiscount(0);
@@ -454,8 +501,31 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                         </td>
                         <td className="px-6 py-4 font-mono text-xs text-blue-600 font-bold">{student.rollNo}</td>
                         <td className="px-6 py-4">
-                          <div className="font-bold text-slate-800">{student.name}</div>
-                          <div className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</div>
+                          <div className="flex items-center gap-3">
+                            {student.profilePhotoUrl ? (
+                              <img
+                                src={getStudentPhotoUrl(student.profilePhotoUrl)}
+                                alt={student.name}
+                                className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+                                  if (sibling) sibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border select-none ${getAvatarColor(student.name)}`}
+                              style={{ display: student.profilePhotoUrl ? 'none' : 'flex' }}
+                            >
+                              {getInitials(student.name)}
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-800">{student.name}</div>
+                              <div className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</div>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <span className="px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 text-xs font-semibold">
@@ -530,12 +600,33 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                 return (
                   <div key={student.id} className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
-                      <div>
-                        <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-bold font-mono">
-                          Roll: {student.rollNo}
-                        </span>
-                        <h4 className="text-sm font-bold text-slate-800 mt-1">{student.name}</h4>
-                        <p className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</p>
+                      <div className="flex items-center gap-3">
+                        {student.profilePhotoUrl ? (
+                          <img
+                            src={getStudentPhotoUrl(student.profilePhotoUrl)}
+                            alt={student.name}
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (sibling) sibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border select-none ${getAvatarColor(student.name)}`}
+                          style={{ display: student.profilePhotoUrl ? 'none' : 'flex' }}
+                        >
+                          {getInitials(student.name)}
+                        </div>
+                        <div>
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-bold font-mono">
+                            Roll: {student.rollNo}
+                          </span>
+                          <h4 className="text-sm font-bold text-slate-800 mt-1">{student.name}</h4>
+                          <p className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</p>
+                        </div>
                       </div>
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
                         hasDue 
@@ -659,13 +750,33 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
-              <div>
-                <h2 className="text-[24px] font-extrabold text-slate-900 leading-none">
-                  {activeStudent.name}
-                </h2>
-                <p className="text-slate-500 text-xs font-semibold mt-2">
-                  Class: {activeStudent.class} | Section: {activeStudent.section}
-                </p>
+              <div className="flex items-center gap-3">
+                {activeStudent.profilePhotoUrl ? (
+                  <img
+                    src={getStudentPhotoUrl(activeStudent.profilePhotoUrl)}
+                    alt={activeStudent.name}
+                    className="w-12 h-12 rounded-full object-cover border-slate-200 shadow-sm"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+                      if (sibling) sibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm border select-none ${getAvatarColor(activeStudent.name)} shadow-sm`}
+                  style={{ display: activeStudent.profilePhotoUrl ? 'none' : 'flex' }}
+                >
+                  {getInitials(activeStudent.name)}
+                </div>
+                <div>
+                  <h2 className="text-[24px] font-extrabold text-slate-900 leading-none">
+                    {activeStudent.name}
+                  </h2>
+                  <p className="text-slate-500 text-xs font-semibold mt-2">
+                    Class: {activeStudent.class} | Section: {activeStudent.section}
+                  </p>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -676,6 +787,12 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
               }`}>
                 {isPaidClear ? 'Financial Clear' : 'Outstanding Balances'}
               </span>
+              <button
+                onClick={() => setEditingStudent(activeStudent)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-650 hover:text-green-600 hover:border-green-200 hover:bg-green-50/30 transition-all text-xs font-bold min-h-[44px]"
+              >
+                Edit Profile
+              </button>
               <button
                 onClick={() => setDeleteConfirm({
                   show: true,
@@ -1128,9 +1245,13 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
         <EditStudentModal
           student={editingStudent}
           onClose={() => setEditingStudent(null)}
-          onSave={() => {
+          onSave={async () => {
+            const updatedId = editingStudent.id;
             setEditingStudent(null);
-            loadStudents();
+            await loadStudents();
+            if (activeStudent && activeStudent.id === updatedId) {
+              await handleViewDetails({ id: updatedId } as Student);
+            }
           }}
         />
       )}

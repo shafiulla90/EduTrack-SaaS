@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
+import PhotoUpload from '@/components/PhotoUpload';
 
 interface Product {
   id: string;
@@ -30,7 +31,26 @@ export default function AdmissionsPage() {
   const [concessionAmount, setConcessionAmount] = useState<string>('0');
 
   // Form profile
-  const [tempStudent, setTempStudent] = useState({
+  const [tempStudent, setTempStudent] = useState<{
+    firstName: string;
+    lastName: string;
+    fatherName: string;
+    motherName: string;
+    dob: string;
+    phone: string;
+    emergencyContact: string;
+    email: string;
+    aadharNo: string;
+    village: string;
+    city: string;
+    pincode: string;
+    state: string;
+    country: string;
+    selectedClass: string;
+    selectedSection: string;
+    academicYear: string;
+    profilePhotoUrl: string | null;
+  }>({
     firstName: '',
     lastName: '',
     fatherName: '',
@@ -47,7 +67,8 @@ export default function AdmissionsPage() {
     country: '',
     selectedClass: '',
     selectedSection: '',
-    academicYear: ''
+    academicYear: '',
+    profilePhotoUrl: null,
   });
 
   useEffect(() => {
@@ -211,7 +232,8 @@ export default function AdmissionsPage() {
               city: tempStudent.city,
               pincode: tempStudent.pincode,
               state: tempStudent.state,
-              country: tempStudent.country
+              country: tempStudent.country,
+              profilePhotoUrl: tempStudent.profilePhotoUrl
             },
             selectedPricebookEntryIds: selectedProductIds,
             concessionAmount: concessionVal
@@ -403,6 +425,13 @@ export default function AdmissionsPage() {
                       placeholder="e.g. 1234 5678 9012"
                       className="border border-slate-200 bg-slate-50 px-4 py-2.5 rounded-xl outline-none"
                       maxLength={14}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="font-semibold text-slate-700">Student Profile Photo</label>
+                    <PhotoUpload
+                      value={tempStudent.profilePhotoUrl}
+                      onChange={(val) => setTempStudent(prev => ({ ...prev, profilePhotoUrl: val }))}
                     />
                   </div>
                 </div>
@@ -634,9 +663,17 @@ export default function AdmissionsPage() {
             {currentStep === 4 && (
               <div className="space-y-6">
                 <div className="flex items-center gap-4 border-b border-slate-100 pb-4">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-extrabold text-[20px]">
-                    {((tempStudent.firstName || '?')[0] + (tempStudent.lastName || '')[0]).toUpperCase()}
-                  </div>
+                  {tempStudent.profilePhotoUrl ? (
+                    <img
+                      src={tempStudent.profilePhotoUrl}
+                      alt="Student Preview"
+                      className="w-14 h-14 rounded-full object-cover border border-slate-200"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-extrabold text-[20px]">
+                      {((tempStudent.firstName || '?')[0] + (tempStudent.lastName || '')[0]).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <h3 className="font-bold text-lg text-slate-800">{tempStudent.firstName} {tempStudent.lastName}</h3>
                     <p className="text-xs text-slate-400 mt-1">
@@ -758,7 +795,8 @@ export default function AdmissionsPage() {
                         country: '',
                         selectedClass: classes.length > 0 ? classes[0].value : '',
                         selectedSection: '',
-                        academicYear: academicYears.length > 0 ? academicYears[0].value : ''
+                        academicYear: academicYears.length > 0 ? academicYears[0].value : '',
+                        profilePhotoUrl: null,
                       });
                       setSelectedProductIds([]);
                       setConcessionAmount('0');

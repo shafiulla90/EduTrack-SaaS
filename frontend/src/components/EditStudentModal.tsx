@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { updateStudent } from '@/lib/api';
+import PhotoUpload from './PhotoUpload';
 
 interface EditStudentModalProps {
   student: {
@@ -14,6 +15,7 @@ interface EditStudentModalProps {
     fatherName: string;
     motherName: string;
     aadharNo: string;
+    profilePhotoUrl?: string | null;
   };
   onClose: () => void;
   onSave: () => void;
@@ -28,6 +30,7 @@ export default function EditStudentModal({ student, onClose, onSave }: EditStude
     fatherName: student.fatherName || '',
     motherName: student.motherName || '',
     aadharNo: student.aadharNo || '',
+    profilePhotoUrl: student.profilePhotoUrl || null,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +44,7 @@ export default function EditStudentModal({ student, onClose, onSave }: EditStude
       fatherName: student.fatherName || '',
       motherName: student.motherName || '',
       aadharNo: student.aadharNo || '',
+      profilePhotoUrl: student.profilePhotoUrl || null,
     });
     setError('');
   }, [student]);
@@ -115,6 +119,15 @@ export default function EditStudentModal({ student, onClose, onSave }: EditStude
                 required
               />
             </div>
+          </div>
+
+          {/* Profile Photo Section */}
+          <div>
+            <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2 mb-4">Profile Photo</h3>
+            <PhotoUpload
+              value={formData.profilePhotoUrl}
+              onChange={(val) => setFormData((prev) => ({ ...prev, profilePhotoUrl: val }))}
+            />
           </div>
 
           {/* Section 2: Personal Details */}

@@ -3,10 +3,14 @@ import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { PaymentStatus, PaymentMethod, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { StorageService } from '../common/storage.service';
 
 @Injectable()
 export class BillingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageService: StorageService,
+  ) {}
 
   private getTenantId(): string {
     const tenantId = TenantContext.getTenantId();
@@ -242,6 +246,11 @@ export class BillingService {
         }
       }
 
+      let profilePhotoUrl: string | null = null;
+      if (studentData.profilePhotoUrl && studentData.profilePhotoUrl.startsWith('data:')) {
+        profilePhotoUrl = await this.storageService.uploadImage(studentData.profilePhotoUrl, tenantId, user.id, `student-${user.id}`);
+      }
+
       // Create student profile
       const profile = await tx.studentProfile.create({
         data: {
@@ -251,6 +260,7 @@ export class BillingService {
           motherName: studentData.motherName || null,
           aadharNo: studentData.aadharNo || null,
           classSectionId,
+          profilePhotoUrl,
           tenantId,
         },
       });
@@ -424,6 +434,7 @@ export class BillingService {
           name: student.user.name,
           rollNo: student.rollNo,
           phone: student.user.phone,
+          profilePhotoUrl: student.profilePhotoUrl,
           class: student.classSection?.class.name || '',
           section: student.classSection?.section.name || '',
           classId: student.classSection?.classId || '',
@@ -500,6 +511,7 @@ export class BillingService {
         name: student.user.name,
         rollNo: student.rollNo,
         phone: student.user.phone,
+        profilePhotoUrl: student.profilePhotoUrl,
         fatherName: student.fatherName,
         motherName: student.motherName,
         aadharNo: student.aadharNo,
