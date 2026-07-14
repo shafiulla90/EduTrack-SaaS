@@ -19,7 +19,7 @@ const StudentCard = React.memo(({ student, status, onToggle }: StudentCardProps)
       className={`p-4 rounded-3xl border transition-all duration-200 cursor-pointer select-none flex justify-between items-center min-h-[72px] active:scale-[0.99] touch-pan-y ${
         isAbsent
           ? 'bg-rose-50/70 border-rose-200 hover:bg-rose-100/50'
-          : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+          : 'bg-emerald-50/60 border-emerald-100 hover:bg-emerald-100/40 hover:border-emerald-200 hover:shadow-xs'
       }`}
     >
       <div>
