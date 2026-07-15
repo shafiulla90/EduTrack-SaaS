@@ -1,5 +1,5 @@
 // src/complaint-box/complaint-box.controller.ts
-import { Controller, Get, Post, Body, Param, Query, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Patch, Delete, UseGuards } from '@nestjs/common';
 import { ComplaintBoxService } from './complaint-box.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateBehaviorDto } from './dto/create-behavior.dto';
@@ -68,4 +68,15 @@ export class ComplaintBoxController {
   getStudentStats(@Param('studentId') studentId: string) {
     return this.complaintBoxService.getStudentStats(studentId);
   }
+
+  @Patch('behavior/:caseId')
+  updateBehavior(@Param('caseId') caseId: string, @Body() dto: CreateBehaviorDto) {
+    return this.complaintBoxService.updateBehavior(caseId, dto);
+  }
+
+  @Delete('behavior/:caseId')
+  deleteBehavior(@Param('caseId') caseId: string) {
+    return this.complaintBoxService.deleteBehavior(caseId);
+  }
 }
+

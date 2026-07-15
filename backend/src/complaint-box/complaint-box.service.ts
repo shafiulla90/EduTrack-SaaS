@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { Request } from 'express';
@@ -39,9 +39,35 @@ export class ComplaintBoxService {
     return profile;
   }
 
-  /** Returns all class sections (classes) for the tenant. */
+  /** Returns class sections (classes) assigned to the teacher, or all class sections for admins. */
   async getStudentClasses() {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true } },
+        },
+      });
+
+      if (!staffProfile) {
+        return [];
+      }
+
+      const advisorClassIds = staffProfile.classSections.map(cs => cs.id);
+      const assignedClassIds = staffProfile.teacherAssignments.map(ta => ta.classSectionId);
+      const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
+      return this.prisma.classSection.findMany({
+        where: { tenantId, id: { in: classSectionIds } },
+        include: { class: true, section: true },
+        orderBy: { class: { name: 'asc' } },
+      });
+    }
+
     return this.prisma.classSection.findMany({
       where: { tenantId },
       include: { class: true, section: true },
@@ -61,9 +87,33 @@ export class ComplaintBoxService {
     });
   }
 
-  /** Returns students belonging to a specific class section. */
+  /** Returns students belonging to a specific class section. Enforces teacher-class assignment. */
   async getStudentsByClass(classSectionId: string) {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true } },
+        },
+      });
+
+      if (!staffProfile) {
+        throw new ForbiddenException('Teacher profile not found.');
+      }
+
+      const advisorClassIds = staffProfile.classSections.map(cs => cs.id);
+      const assignedClassIds = staffProfile.teacherAssignments.map(ta => ta.classSectionId);
+      const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
+      if (!classSectionIds.includes(classSectionId)) {
+        throw new ForbiddenException('You do not have permission to access students in this class section.');
+      }
+    }
+
     return this.prisma.studentProfile.findMany({
       where: {
         user: { tenantId },
@@ -74,30 +124,52 @@ export class ComplaintBoxService {
     });
   }
 
-  /** Searches students across the tenant with optional filters. */
+  /** Searches students across the tenant. Filters to assigned classes for teachers. */
   async searchStudents(searchTerm?: string, classId?: string, sectionId?: string) {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    const filter: any = {
+      user: { tenantId, isActive: true }
+    };
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true } },
+        },
+      });
+
+      if (!staffProfile) {
+        return [];
+      }
+
+      const advisorClassIds = staffProfile.classSections.map(cs => cs.id);
+      const assignedClassIds = staffProfile.teacherAssignments.map(ta => ta.classSectionId);
+      const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
+      filter.classSectionId = { in: classSectionIds };
+    }
+
+    if (classId || sectionId) {
+      filter.classSection = {
+        classId: classId || undefined,
+        sectionId: sectionId || undefined,
+      };
+    }
+
+    if (searchTerm) {
+      filter.OR = [
+        { user: { name: { contains: searchTerm, mode: 'insensitive' } } },
+        { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
+        { user: { phone: { contains: searchTerm, mode: 'insensitive' } } },
+      ];
+    }
+
     return this.prisma.studentProfile.findMany({
-      where: {
-        user: { tenantId, isActive: true },
-        ...(classId || sectionId
-          ? {
-              classSection: {
-                classId: classId || undefined,
-                sectionId: sectionId || undefined,
-              },
-            }
-          : {}),
-        ...(searchTerm
-          ? {
-              OR: [
-                { user: { name: { contains: searchTerm, mode: 'insensitive' } } },
-                { user: { email: { contains: searchTerm, mode: 'insensitive' } } },
-                { user: { phone: { contains: searchTerm, mode: 'insensitive' } } },
-              ],
-            }
-          : {}),
-      },
+      where: filter,
       include: {
         user: { select: { id: true, name: true, email: true, phone: true } },
         classSection: { include: { class: true, section: true } },
@@ -107,18 +179,55 @@ export class ComplaintBoxService {
     });
   }
 
-  /** Submits a new behavior case (complaint or praise). */
+  /** Submits a new behavior case (complaint or praise). Enforces teacher identity and class-student boundaries. */
   async submitStudentBehavior(dto: CreateBehaviorDto) {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
     let teacherId = dto.teacherId;
-    if (!teacherId) {
-      try {
-        const current = await this.getCurrentTeacher();
-        teacherId = (current as any).id;
-      } catch {
-        teacherId = undefined;
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true } },
+        },
+      });
+
+      if (!staffProfile) {
+        throw new ForbiddenException('Teacher profile not found.');
+      }
+
+      // Enforce current teacher identity
+      teacherId = staffProfile.id;
+
+      // Check if student belongs to teacher's class roster
+      const student = await this.prisma.studentProfile.findUnique({
+        where: { id: dto.studentId }
+      });
+      if (!student) {
+        throw new NotFoundException('Student not found');
+      }
+
+      const advisorClassIds = staffProfile.classSections.map(cs => cs.id);
+      const assignedClassIds = staffProfile.teacherAssignments.map(ta => ta.classSectionId);
+      const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
+      if (!student.classSectionId || !classSectionIds.includes(student.classSectionId)) {
+        throw new ForbiddenException('You do not have permission to log behavior for this student.');
+      }
+    } else {
+      // Default fallback for admin if teacherId not specified
+      if (!teacherId) {
+        try {
+          const current = await this.getCurrentTeacher();
+          teacherId = (current as any).id;
+        } catch {
+          teacherId = undefined;
+        }
       }
     }
+
     const priority = dto.behaviorType === 'Complaint' ? 'High' : 'Medium';
     return this.prisma.behaviorCase.create({
       data: {
@@ -141,11 +250,41 @@ export class ComplaintBoxService {
     return this.prisma.academicYear.findMany({ where: { tenantId }, orderBy: { name: 'desc' } });
   }
 
-  /** Returns pending behavior cases (actually returns all cases for management ledger). */
+  /** Returns behavior cases scoped by user permissions. */
   async getPendingCases(academicYear?: string) {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    const filter: any = { tenantId };
+    if (academicYear) {
+      filter.academicYear = academicYear;
+    }
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true } },
+        },
+      });
+
+      if (staffProfile) {
+        const advisorClassIds = staffProfile.classSections.map(cs => cs.id);
+        const assignedClassIds = staffProfile.teacherAssignments.map(ta => ta.classSectionId);
+        const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
+        filter.OR = [
+          { teacherId: staffProfile.id },
+          { student: { classSectionId: { in: classSectionIds } } }
+        ];
+      } else {
+        return [];
+      }
+    }
+
     return this.prisma.behaviorCase.findMany({
-      where: { tenantId, ...(academicYear ? { academicYear } : {}) },
+      where: filter,
       include: {
         student: {
           include: {
@@ -163,31 +302,165 @@ export class ComplaintBoxService {
     });
   }
 
-  /** Returns all cases for a specific student. */
+  /** Returns cases for a specific student, enforcing permissions. */
   async getStudentCases(studentId: string, academicYear?: string) {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    const filter: any = { tenantId, studentId };
+    if (academicYear) {
+      filter.academicYear = academicYear;
+    }
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true } },
+        },
+      });
+
+      if (staffProfile) {
+        const advisorClassIds = staffProfile.classSections.map(cs => cs.id);
+        const assignedClassIds = staffProfile.teacherAssignments.map(ta => ta.classSectionId);
+        const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
+        filter.OR = [
+          { teacherId: staffProfile.id },
+          { student: { classSectionId: { in: classSectionIds } } }
+        ];
+      } else {
+        return [];
+      }
+    }
+
     return this.prisma.behaviorCase.findMany({
-      where: { tenantId, studentId, ...(academicYear ? { academicYear } : {}) },
+      where: filter,
+      include: {
+        student: {
+          include: {
+            user: { select: { name: true } },
+            classSection: { include: { class: true, section: true } },
+          },
+        },
+        teacher: {
+          include: {
+            user: { select: { name: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  /** Updates the status of a case. Only the status field is mutated. */
+  /** Updates the status of a case. Enforces admin-only permission. */
   async updateCaseStatus(caseId: string, dto: UpdateCaseStatusDto) {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    if (user.role === 'TEACHER') {
+      throw new ForbiddenException('Teachers are not authorized to change complaint status. This action is reserved for School Admins.');
+    }
+
     const existing = await this.prisma.behaviorCase.findUnique({ where: { id: caseId } });
     if (!existing || existing.tenantId !== tenantId) {
       throw new NotFoundException('Case not found');
     }
+
     return this.prisma.behaviorCase.update({
       where: { id: caseId },
       data: { status: dto.status },
     });
   }
 
-  /** Returns simple statistics for a student – total cases and pending count. */
+  /** Updates/Edits a behavior case. Enforces creator-ownership for teachers. */
+  async updateBehavior(caseId: string, dto: CreateBehaviorDto) {
+    const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    const existing = await this.prisma.behaviorCase.findUnique({ where: { id: caseId } });
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new NotFoundException('Case not found');
+    }
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id }
+      });
+      if (!staffProfile || existing.teacherId !== staffProfile.id) {
+        throw new ForbiddenException('You do not have permission to edit this complaint.');
+      }
+    }
+
+    const priority = dto.behaviorType === 'Complaint' ? 'High' : 'Medium';
+    return this.prisma.behaviorCase.update({
+      where: { id: caseId },
+      data: {
+        studentId: dto.studentId,
+        behaviorType: dto.behaviorType,
+        category: dto.category,
+        academicYear: dto.academicYear,
+        description: dto.description,
+        teacherId: dto.teacherId,
+        priority,
+      },
+    });
+  }
+
+  /** Deletes a behavior case. Enforces creator-ownership for teachers. */
+  async deleteBehavior(caseId: string) {
+    const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    const existing = await this.prisma.behaviorCase.findUnique({ where: { id: caseId } });
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new NotFoundException('Case not found');
+    }
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id }
+      });
+      if (!staffProfile || existing.teacherId !== staffProfile.id) {
+        throw new ForbiddenException('You do not have permission to delete this complaint.');
+      }
+    }
+
+    return this.prisma.behaviorCase.delete({
+      where: { id: caseId },
+    });
+  }
+
+  /** Returns simple statistics for a student – total cases, complaints, praises, and resolved. */
   async getStudentStats(studentId: string) {
     const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    if (user.role === 'TEACHER') {
+      const staffProfile = await this.prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true } },
+        },
+      });
+
+      if (staffProfile) {
+        const advisorClassIds = staffProfile.classSections.map(cs => cs.id);
+        const assignedClassIds = staffProfile.teacherAssignments.map(ta => ta.classSectionId);
+        const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
+        const student = await this.prisma.studentProfile.findUnique({ where: { id: studentId } });
+        if (!student || !student.classSectionId || !classSectionIds.includes(student.classSectionId)) {
+          // If teacher doesn't teach student, return zero/empty stats or block
+          return { studentId, totalCases: 0, complaintCount: 0, praiseCount: 0, resolvedCount: 0 };
+        }
+      } else {
+        return { studentId, totalCases: 0, complaintCount: 0, praiseCount: 0, resolvedCount: 0 };
+      }
+    }
+
     const total = await this.prisma.behaviorCase.count({ where: { tenantId, studentId } });
     const complaintCount = await this.prisma.behaviorCase.count({
       where: { tenantId, studentId, behaviorType: 'Complaint' },
