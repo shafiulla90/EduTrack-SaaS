@@ -315,6 +315,30 @@ export class TeacherPortalService {
 
   // 3. Classes and Students
   async getAssignedClasses(userId: string, tenantId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return [];
+
+    if (user.role === Role.SCHOOL_ADMIN) {
+      const classSections = await this.prisma.classSection.findMany({
+        where: { tenantId },
+        include: {
+          class: true,
+          section: true,
+          _count: {
+            select: { students: true }
+          }
+        },
+        orderBy: { class: { name: 'asc' } }
+      });
+      return classSections.map(cs => ({
+        classSectionId: cs.id,
+        className: `${cs.class.name} - ${cs.section.name}`,
+        classOnlyName: cs.class.name,
+        sectionOnlyName: cs.section.name,
+        strength: cs._count.students
+      }));
+    }
+
     const staff = await this.getStaffProfile(userId, tenantId);
     const assignments = await this.prisma.teacherAssignment.findMany({
       where: { tenantId, teacherId: staff.id },
@@ -689,6 +713,20 @@ export class TeacherPortalService {
 
   // 8. Announcements CRUD
   async getAnnouncements(userId: string, tenantId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return [];
+
+    if (user.role === Role.SCHOOL_ADMIN) {
+      return this.prisma.announcement.findMany({
+        where: { tenantId },
+        include: {
+          classSection: { include: { class: true, section: true } },
+          teacher: { include: { user: { select: { id: true, name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
     const staff = await this.prisma.staffProfile.findFirst({
       where: { userId, tenantId },
       include: {
@@ -710,8 +748,8 @@ export class TeacherPortalService {
           { teacherId: staff.id },
           // Targeted to classes this teacher teaches
           { classSectionId: { in: classSectionIds } },
-          // Targeted to the whole institution
-          { audienceType: 'INSTITUTION' }
+          // Targeted to the teaching staff, entire school, or target scopes that are not non-teaching staff
+          { audienceType: { in: ['INSTITUTION', 'TEACHERS', 'STUDENTS', 'PARENTS', 'CLASS'] } }
         ]
       },
       include: {
@@ -723,9 +761,27 @@ export class TeacherPortalService {
   }
 
   async createAnnouncement(userId: string, tenantId: string, data: any) {
-    const staff = await this.getStaffProfile(userId, tenantId);
-    if (data.classSectionId) {
-      await this.verifyTeacherAssignment(staff.id, data.classSectionId);
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    let staffId: string | null = null;
+    if (user.role === Role.TEACHER) {
+      const staff = await this.getStaffProfile(userId, tenantId);
+      staffId = staff.id;
+      if (data.classSectionId) {
+        await this.verifyTeacherAssignment(staff.id, data.classSectionId);
+      }
+    } else if (user.role === Role.SCHOOL_ADMIN) {
+      const staff = await this.prisma.staffProfile.findFirst({
+        where: { tenantId }
+      });
+      staffId = staff?.id || null;
+    } else {
+      throw new UnauthorizedException('Insufficient permissions');
+    }
+
+    if (!staffId) {
+      throw new BadRequestException('No staff profiles exist under this school tenant');
     }
 
     const announcement = await this.prisma.announcement.create({
@@ -738,16 +794,19 @@ export class TeacherPortalService {
         pinned: data.pinned || false,
         readStatus: [],
         classSectionId: data.classSectionId || null,
-        teacherId: staff.id,
+        teacherId: staffId,
         tenantId,
       },
     });
 
     // Create notifications for all students in classSection or entire school (Institution)
     let recipientUserIds: string[] = [];
-    if (data.audienceType === 'INSTITUTION') {
+    if (data.audienceType === 'INSTITUTION' || data.audienceType === 'STUDENTS' || data.audienceType === 'PARENTS') {
+      const roles = data.audienceType === 'STUDENTS' ? [Role.STUDENT] :
+                    data.audienceType === 'PARENTS' ? [Role.PARENT] :
+                    [Role.STUDENT, Role.PARENT];
       const allUsers = await this.prisma.user.findMany({
-        where: { tenantId, role: { in: [Role.STUDENT, Role.PARENT] } },
+        where: { tenantId, role: { in: roles } },
         select: { id: true },
       });
       recipientUserIds = allUsers.map(u => u.id);
@@ -775,6 +834,21 @@ export class TeacherPortalService {
   }
 
   async deleteAnnouncement(userId: string, tenantId: string, id: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    if (user.role === Role.SCHOOL_ADMIN) {
+      const existing = await this.prisma.announcement.findFirst({
+        where: { id, tenantId }
+      });
+      if (!existing) {
+        throw new NotFoundException('Announcement not found.');
+      }
+      await this.prisma.announcement.delete({ where: { id } });
+      await this.logAction(userId, tenantId, 'RECORD_DELETE', 'Announcement', id);
+      return { success: true };
+    }
+
     const staff = await this.getStaffProfile(userId, tenantId);
     const existing = await this.prisma.announcement.findFirst({
       where: { id, tenantId, teacherId: staff.id },
@@ -809,11 +883,59 @@ export class TeacherPortalService {
 
   // 9. Leave Management CRUD
   async getLeaveRequests(userId: string, tenantId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return [];
+
+    if (user.role === Role.SCHOOL_ADMIN) {
+      return this.prisma.leaveRequest.findMany({
+        where: { tenantId },
+        include: {
+          teacher: {
+            include: {
+              user: { select: { id: true, name: true, email: true } }
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
     const staff = await this.getStaffProfile(userId, tenantId);
     return this.prisma.leaveRequest.findMany({
       where: { tenantId, teacherId: staff.id },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async updateLeaveStatus(userId: string, tenantId: string, id: string, data: any) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== Role.SCHOOL_ADMIN) {
+      throw new UnauthorizedException('Only administrators can approve/reject leaves.');
+    }
+
+    const leave = await this.prisma.leaveRequest.findFirst({
+      where: { id, tenantId }
+    });
+    if (!leave) {
+      throw new NotFoundException('Leave request not found.');
+    }
+
+    const updatedStatus = data.status; // e.g. 'Approved', 'Rejected'
+    const statusUpper = updatedStatus.toUpperCase();
+
+    const updated = await this.prisma.leaveRequest.update({
+      where: { id },
+      data: {
+        status: updatedStatus,
+        comments: data.comments || null,
+        approver: user.name,
+        approvedDate: statusUpper === 'APPROVED' ? new Date() : null,
+        rejectedDate: statusUpper === 'REJECTED' ? new Date() : null,
+      }
+    });
+
+    await this.logAction(userId, tenantId, 'RECORD_UPDATE', 'LeaveRequest', id, data);
+    return updated;
   }
 
   async applyLeave(userId: string, tenantId: string, data: any) {

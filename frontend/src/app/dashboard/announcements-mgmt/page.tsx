@@ -215,7 +215,7 @@ export default function AnnouncementsMgmtPage() {
                         </button>
                       )}
                       
-                      {!isExamSchedule && ann.teacher?.user?.id === currentUser?.id && (
+                      {!isExamSchedule && (currentUser?.role === 'ADMIN' || ann.teacher?.user?.id === currentUser?.id) && (
                         <button onClick={() => handleDelete(ann.id)} className="text-slate-400 hover:text-red-600 transition-colors p-1 cursor-pointer">
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -262,7 +262,7 @@ export default function AnnouncementsMgmtPage() {
                           </div>
                           
                           {details.instructions && (
-                            <div className="text-[10px] text-slate-650 bg-indigo-50/30 p-2.5 rounded-lg border border-indigo-100/20 leading-normal">
+                            <div className="text-[10px] text-slate-655 bg-indigo-50/30 p-2.5 rounded-lg border border-indigo-100/20 leading-normal">
                               <span className="font-bold text-indigo-800">Special Instructions:</span>{' '}
                               {details.instructions}
                             </div>
@@ -278,7 +278,13 @@ export default function AnnouncementsMgmtPage() {
                 <div className="border-t border-slate-100 pt-2.5 flex flex-wrap gap-y-2 justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                   <span className="flex items-center gap-1">
                     <Users className="w-3 h-3 text-slate-400" />
-                    Target: {ann.audienceType === 'INSTITUTION' ? 'Entire School' : `${ann.classSection?.class.name} - ${ann.classSection?.section.name}`}
+                    Target:{' '}
+                    {ann.audienceType === 'INSTITUTION' ? 'Entire School' :
+                     ann.audienceType === 'TEACHERS' ? 'Teaching Staff' :
+                     ann.audienceType === 'STAFF' ? 'Non-Teaching Staff' :
+                     ann.audienceType === 'PARENTS' ? 'Parents' :
+                     ann.audienceType === 'STUDENTS' ? 'Students' :
+                     ann.classSection ? `${ann.classSection.class.name} - ${ann.classSection.section.name}` : 'Class Section'}
                   </span>
                   {ann.expiryDate && (
                     <span className="flex items-center gap-1">
@@ -342,6 +348,10 @@ export default function AnnouncementsMgmtPage() {
                   >
                     <option value="CLASS">Specific Class Section</option>
                     <option value="INSTITUTION">Entire Institution</option>
+                    <option value="TEACHERS">Teaching Staff (Teachers)</option>
+                    <option value="STAFF">Non-Teaching Staff (Staff)</option>
+                    <option value="PARENTS">Parents</option>
+                    <option value="STUDENTS">Students</option>
                   </select>
                 </div>
                 <div>
