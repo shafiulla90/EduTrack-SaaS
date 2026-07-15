@@ -112,6 +112,7 @@ export default function CalendarPage() {
                 const dateEvents = getEventsForDate(date);
                 const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
                 const isToday = date.toDateString() === new Date().toDateString();
+                const isSunday = date.getDay() === 0;
 
                 return (
                   <button
@@ -120,13 +121,16 @@ export default function CalendarPage() {
                     className={`h-10 w-10 mx-auto rounded-full flex flex-col items-center justify-center relative transition-all cursor-pointer ${
                       isSelected ? 'bg-slate-900 text-white font-bold' :
                       isToday ? 'bg-blue-50 text-[#2E5BFF] font-bold border border-blue-200' :
+                      isSunday ? 'text-rose-600 font-semibold hover:bg-rose-50' :
                       'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
                     <span className="text-xs">{date.getDate()}</span>
                     {dateEvents.length > 0 && (
                       <span className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
-                        isSelected ? 'bg-white' : 'bg-[#2E5BFF]'
+                        isSelected ? 'bg-white' :
+                        dateEvents.some(e => e.type === 'HOLIDAY') ? 'bg-emerald-500' :
+                        'bg-[#2E5BFF]'
                       }`} />
                     )}
                   </button>
@@ -158,6 +162,7 @@ export default function CalendarPage() {
                       ev.type === 'EXAM' ? 'bg-rose-50 text-rose-600 border-rose-100' :
                       ev.type === 'LEAVE' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                       ev.type === 'HOMEWORK' ? 'bg-blue-50 text-[#2E5BFF] border-blue-100' :
+                      ev.type === 'HOLIDAY' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                       'bg-purple-50 text-purple-600 border-purple-100'
                     }`}>
                       {ev.type}

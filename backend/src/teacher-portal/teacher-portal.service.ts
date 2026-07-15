@@ -1137,6 +1137,27 @@ export class TeacherPortalService {
     });
 
     const items = [];
+
+    // Add Sunday holidays
+    for (let day = 1; day <= end.getDate(); day++) {
+      const d = new Date(year, month - 1, day);
+      if (d.getDay() === 0) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        
+        items.push({
+          id: `sunday-holiday-${dateStr}`,
+          type: 'HOLIDAY',
+          title: 'Sunday Holiday',
+          date: dateStr,
+          description: 'Weekly Holiday / Weekly Off',
+          color: 'emerald',
+        });
+      }
+    }
+
     homeworks.forEach(hw => {
       items.push({
         id: hw.id,
