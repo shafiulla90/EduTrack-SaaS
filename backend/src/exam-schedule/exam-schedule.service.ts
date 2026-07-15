@@ -149,67 +149,47 @@ export class ExamScheduleService {
     // Include the tag marker for identification/correlation
     content += `\n\n<!-- examScheduleId: ${schedule.id} -->`;
 
-    // Find affected teachers (assignments & class advisor)
-    const assignments = await this.prisma.teacherAssignment.findMany({
+    // Find existing institutional announcement for this exam schedule
+    const existing = await this.prisma.announcement.findFirst({
       where: {
         tenantId,
-        classSectionId: schedule.classSectionId
-      },
-      include: { teacher: true }
-    });
-
-    const advisors = await this.prisma.staffProfile.findMany({
-      where: {
-        tenantId,
-        classSections: { some: { id: schedule.classSectionId } }
+        audienceType: 'INSTITUTION',
+        content: { contains: `<!-- examScheduleId: ${schedule.id} -->` }
       }
     });
 
-    const affectedStaffIds = new Set<string>();
-    assignments.forEach(a => {
-      if (a.teacherId) affectedStaffIds.add(a.teacherId);
+    // Find a staff profile under this tenant to use as the required creator relation
+    const staff = await this.prisma.staffProfile.findFirst({
+      where: { tenantId }
     });
-    advisors.forEach(adv => {
-      affectedStaffIds.add(adv.id);
-    });
+    if (!staff) return;
 
-    for (const staffId of affectedStaffIds) {
-      // Find existing announcement for this staff & this exam schedule
-      const existing = await this.prisma.announcement.findFirst({
-        where: {
-          tenantId,
-          teacherId: staffId,
-          content: { contains: `<!-- examScheduleId: ${schedule.id} -->` }
+    if (existing) {
+      // Update existing announcement
+      await this.prisma.announcement.update({
+        where: { id: existing.id },
+        data: {
+          title,
+          content,
+          priority: (actionName === 'cancelled' || schedule.status === 'Cancelled') ? 'High' : 'Medium',
+          readStatus: [] as any,
+          classSection: schedule.classSectionId ? { connect: { id: schedule.classSectionId } } : { disconnect: true }
         }
       });
-
-      if (existing) {
-        // Update existing announcement
-        await this.prisma.announcement.update({
-          where: { id: existing.id },
-          data: {
-            title,
-            content,
-            priority: actionName === 'cancelled' ? 'High' : 'Medium',
-            readStatus: [], // Reset read status so it shows as unread for the teacher
-            classSectionId: schedule.classSectionId
-          }
-        });
-      } else {
-        // Create new announcement
-        await this.prisma.announcement.create({
-          data: {
-            title,
-            content,
-            audienceType: 'CLASS',
-            priority: actionName === 'cancelled' ? 'High' : 'Medium',
-            readStatus: [],
-            classSectionId: schedule.classSectionId,
-            teacherId: staffId,
-            tenantId
-          }
-        });
-      }
+    } else {
+      // Create new institutional announcement
+      await this.prisma.announcement.create({
+        data: {
+          title,
+          content,
+          audienceType: 'INSTITUTION',
+          priority: (actionName === 'cancelled' || schedule.status === 'Cancelled') ? 'High' : 'Medium',
+          readStatus: [] as any,
+          classSection: schedule.classSectionId ? { connect: { id: schedule.classSectionId } } : undefined,
+          tenant: { connect: { id: tenantId } },
+          teacher: { connect: { id: staff.id } }
+        }
+      });
     }
   }
 
@@ -242,9 +222,7 @@ export class ExamScheduleService {
       }
     });
 
-    if (schedule.status === 'Published') {
-      await this.notifyTeachers(schedule, 'scheduled');
-    }
+    await this.notifyTeachers(schedule, 'scheduled');
 
     return schedule;
   }
@@ -286,9 +264,7 @@ export class ExamScheduleService {
     });
 
     for (const schedule of createdSchedules) {
-      if (schedule.status === 'Published') {
-        await this.notifyTeachers(schedule, 'scheduled');
-      }
+      await this.notifyTeachers(schedule, 'scheduled');
     }
 
     return createdSchedules;
@@ -339,13 +315,10 @@ export class ExamScheduleService {
       }
     });
 
-    // Handle status transition notifications
-    if (existing.status !== 'Published' && updated.status === 'Published') {
-      await this.notifyTeachers(updated, 'scheduled');
-    } else if (updated.status === 'Published') {
-      await this.notifyTeachers(updated, 'updated');
-    } else if (existing.status === 'Published' && updated.status === 'Cancelled') {
+    if (updated.status === 'Cancelled') {
       await this.notifyTeachers(updated, 'cancelled');
+    } else {
+      await this.notifyTeachers(updated, 'updated');
     }
 
     return updated;
@@ -365,10 +338,10 @@ export class ExamScheduleService {
       });
       updated.push(schedule);
 
-      if (existing.status !== 'Published' && schedule.status === 'Published') {
-        await this.notifyTeachers(schedule, 'scheduled');
-      } else if (existing.status === 'Published' && schedule.status === 'Cancelled') {
+      if (schedule.status === 'Cancelled') {
         await this.notifyTeachers(schedule, 'cancelled');
+      } else {
+        await this.notifyTeachers(schedule, 'updated');
       }
     }
 
@@ -384,9 +357,7 @@ export class ExamScheduleService {
 
     await this.prisma.examSchedule.delete({ where: { id } });
 
-    if (existing.status === 'Published') {
-      await this.notifyTeachers(existing, 'cancelled');
-    }
+    await this.notifyTeachers(existing, 'cancelled');
 
     return { success: true };
   }
@@ -400,9 +371,7 @@ export class ExamScheduleService {
 
       await this.prisma.examSchedule.delete({ where: { id } });
 
-      if (existing.status === 'Published') {
-        await this.notifyTeachers(existing, 'cancelled');
-      }
+      await this.notifyTeachers(existing, 'cancelled');
     }
 
     return { success: true };
