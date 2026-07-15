@@ -430,6 +430,18 @@ export default function FeesBillingPage() {
                 })}
               </div>
 
+              {/* ── Total Summary Banner ── */}
+              <div className="flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl px-4 py-3.5 shadow-md shadow-blue-500/20">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200 block">Total Settlement</span>
+                  <span className="text-2xl font-black font-mono">₹{billingTotal.toLocaleString()}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-semibold text-blue-200 block">{feeItems.filter(f => f.isSelected).length} fee(s) selected</span>
+                  <span className="text-xs font-bold text-blue-100">Ready to collect</span>
+                </div>
+              </div>
+
               {/* Payment Method selector */}
               <div className="space-y-3 pt-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Choose Collection Channel</label>
@@ -524,26 +536,20 @@ export default function FeesBillingPage() {
                 </div>
               )}
 
-              {/* Footer total info & action buttons */}
-              <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Settlement:</span>
-                  <span className="text-2xl font-black text-slate-800 font-mono">₹{billingTotal.toLocaleString()}</span>
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={() => setSelectedStudent(null)}
-                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs bg-white hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleFinalizePayment}
-                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-500/10"
-                  >
-                    ✓ Finalize Payment
-                  </button>
-                </div>
+              {/* Footer action buttons */}
+              <div className="border-t border-slate-100 pt-4 flex gap-2">
+                <button
+                  onClick={() => setSelectedStudent(null)}
+                  className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm bg-white hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFinalizePayment}
+                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/10"
+                >
+                  ✓ Finalize Payment
+                </button>
               </div>
             </>
           )}
