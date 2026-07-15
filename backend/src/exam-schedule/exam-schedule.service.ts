@@ -1,0 +1,466 @@
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Inject } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { PrismaService } from '../prisma.service';
+import { TenantContext } from '../tenants/tenant.context';
+import { CommunicationsService } from '../communications/communications.service';
+import { CreateExamScheduleDto, UpdateExamScheduleDto, BulkCreateDto, BulkStatusDto, BulkDeleteDto } from './dto/exam-schedule.dto';
+
+@Injectable()
+export class ExamScheduleService {
+  constructor(
+    private prisma: PrismaService,
+    private communicationsService: CommunicationsService,
+    @Inject(REQUEST) private request: any
+  ) {}
+
+  private getTenantId(): string {
+    const tenantId = TenantContext.getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException('No active school tenant context found');
+    }
+    return tenantId;
+  }
+
+  private parseTimeToMinutes(timeStr: string): number {
+    const trimmed = timeStr.trim();
+    // Support "10:30 AM", "13:30", "1:30 PM", "09:00", etc.
+    const matches = trimmed.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+    if (!matches) {
+      throw new BadRequestException(`Invalid time format: ${timeStr}. Expected HH:MM or HH:MM AM/PM`);
+    }
+    let hours = parseInt(matches[1], 10);
+    const minutes = parseInt(matches[2], 10);
+    const ampm = matches[3];
+    
+    if (ampm) {
+      const up = ampm.toUpperCase();
+      if (up === 'PM' && hours < 12) hours += 12;
+      if (up === 'AM' && hours === 12) hours = 0;
+    }
+    
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      throw new BadRequestException(`Invalid time value: ${timeStr}`);
+    }
+    
+    return hours * 60 + minutes;
+  }
+
+  private async validateSchedule(dto: CreateExamScheduleDto, excludeId?: string) {
+    const tenantId = this.getTenantId();
+    const startMin = this.parseTimeToMinutes(dto.startTime);
+    const endMin = this.parseTimeToMinutes(dto.endTime);
+    
+    if (endMin <= startMin) {
+      throw new BadRequestException(`End time (${dto.endTime}) must be after start time (${dto.startTime}).`);
+    }
+
+    const examDate = new Date(dto.examDate);
+
+    // 1. Validate Academic Year bounds
+    const ay = await this.prisma.academicYear.findUnique({
+      where: { id: dto.academicYearId }
+    });
+    if (!ay || ay.tenantId !== tenantId) {
+      throw new NotFoundException('Academic year not found');
+    }
+    if (examDate < new Date(ay.startDate) || examDate > new Date(ay.endDate)) {
+      throw new BadRequestException(`Exam date must fall within the Academic Year bounds: ${new Date(ay.startDate).toLocaleDateString()} to ${new Date(ay.endDate).toLocaleDateString()}`);
+    }
+
+    // 2. Duplicate Subject Exam on the same day for that class
+    const dupSubject = await this.prisma.examSchedule.findFirst({
+      where: {
+        tenantId,
+        academicYearId: dto.academicYearId,
+        classSectionId: dto.classSectionId,
+        subjectId: dto.subjectId,
+        examDate: examDate,
+        id: excludeId ? { not: excludeId } : undefined
+      }
+    });
+    if (dupSubject) {
+      throw new BadRequestException(`An exam for subject is already scheduled for this class on this day.`);
+    }
+
+    // 3. Class Time Overlaps
+    const classExams = await this.prisma.examSchedule.findMany({
+      where: {
+        tenantId,
+        classSectionId: dto.classSectionId,
+        examDate: examDate,
+        id: excludeId ? { not: excludeId } : undefined
+      }
+    });
+    for (const ex of classExams) {
+      const existingStart = this.parseTimeToMinutes(ex.startTime);
+      const existingEnd = this.parseTimeToMinutes(ex.endTime);
+      if (startMin < existingEnd && existingStart < endMin) {
+        throw new BadRequestException(`Time conflict: Class section already has an exam "${ex.examName}" from ${ex.startTime} to ${ex.endTime}.`);
+      }
+    }
+
+    // 4. Hall conflicts
+    if (dto.examHall && dto.examHall.trim()) {
+      const hallExams = await this.prisma.examSchedule.findMany({
+        where: {
+          tenantId,
+          examHall: dto.examHall.trim(),
+          examDate: examDate,
+          id: excludeId ? { not: excludeId } : undefined
+        }
+      });
+      for (const ex of hallExams) {
+        const existingStart = this.parseTimeToMinutes(ex.startTime);
+        const existingEnd = this.parseTimeToMinutes(ex.endTime);
+        if (startMin < existingEnd && existingStart < endMin) {
+          throw new BadRequestException(`Hall conflict: Exam hall "${dto.examHall}" is booked for exam "${ex.examName}" from ${ex.startTime} to ${ex.endTime}.`);
+        }
+      }
+    }
+  }
+
+  private async notifyTeachers(schedule: any, actionName: 'scheduled' | 'updated' | 'cancelled') {
+    const tenantId = this.getTenantId();
+    
+    const cs = await this.prisma.classSection.findUnique({
+      where: { id: schedule.classSectionId },
+      include: { class: true, section: true }
+    });
+    const subject = await this.prisma.subject.findUnique({
+      where: { id: schedule.subjectId }
+    });
+
+    const className = cs ? `${cs.class.name}-${cs.section.name}` : 'Unknown Class';
+    const subjName = subject ? subject.name : 'Unknown Subject';
+    const dateStr = new Date(schedule.examDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    
+    let message = '';
+    if (actionName === 'scheduled') {
+      message = `${schedule.examName} (${subjName}) has been scheduled for Class ${className} on ${dateStr} at ${schedule.startTime}.`;
+    } else if (actionName === 'updated') {
+      message = `Exam Update: ${schedule.examName} (${subjName}) for Class ${className} has been updated to ${dateStr} at ${schedule.startTime}.`;
+    } else if (actionName === 'cancelled') {
+      message = `Exam Cancelled: ${schedule.examName} (${subjName}) scheduled for Class ${className} on ${dateStr} has been cancelled.`;
+    }
+
+    const title = `${schedule.examName} Notification`;
+
+    const assignments = await this.prisma.teacherAssignment.findMany({
+      where: {
+        tenantId,
+        classSectionId: schedule.classSectionId,
+        subjectId: schedule.subjectId
+      },
+      include: { teacher: true }
+    });
+
+    const advisors = await this.prisma.staffProfile.findMany({
+      where: {
+        tenantId,
+        classSections: { some: { id: schedule.classSectionId } }
+      }
+    });
+
+    const teacherUserIds = new Set<string>();
+    assignments.forEach(a => {
+      if (a.teacher?.userId) teacherUserIds.add(a.teacher.userId);
+    });
+    advisors.forEach(adv => {
+      if (adv.userId) teacherUserIds.add(adv.userId);
+    });
+
+    for (const userId of teacherUserIds) {
+      await this.communicationsService.sendNotification({
+        recipientId: userId,
+        title,
+        message,
+        type: 'IN_APP'
+      }).catch(err => {
+        console.error(`Failed to send notification to teacher user ${userId}:`, err);
+      });
+    }
+  }
+
+  // --- CRUD Core APIs ---
+
+  async create(dto: CreateExamScheduleDto) {
+    const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+    
+    await this.validateSchedule(dto);
+
+    const startMin = this.parseTimeToMinutes(dto.startTime);
+    const endMin = this.parseTimeToMinutes(dto.endTime);
+    const duration = endMin - startMin;
+
+    const schedule = await this.prisma.examSchedule.create({
+      data: {
+        tenantId,
+        academicYearId: dto.academicYearId,
+        examName: dto.examName,
+        classSectionId: dto.classSectionId,
+        subjectId: dto.subjectId,
+        examDate: new Date(dto.examDate),
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        duration,
+        examHall: dto.examHall || null,
+        instructions: dto.instructions || null,
+        status: dto.status || 'Draft',
+        createdBy: user.id
+      }
+    });
+
+    if (schedule.status === 'Published') {
+      await this.notifyTeachers(schedule, 'scheduled');
+    }
+
+    return schedule;
+  }
+
+  async createBulk(dto: BulkCreateDto) {
+    const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    // Validate all records before saving to DB
+    for (const item of dto.schedules) {
+      await this.validateSchedule(item);
+    }
+
+    const createdSchedules = [];
+    await this.prisma.$transaction(async (tx) => {
+      for (const item of dto.schedules) {
+        const startMin = this.parseTimeToMinutes(item.startTime);
+        const endMin = this.parseTimeToMinutes(item.endTime);
+        const duration = endMin - startMin;
+
+        const schedule = await tx.examSchedule.create({
+          data: {
+            tenantId,
+            academicYearId: item.academicYearId,
+            examName: item.examName,
+            classSectionId: item.classSectionId,
+            subjectId: item.subjectId,
+            examDate: new Date(item.examDate),
+            startTime: item.startTime,
+            endTime: item.endTime,
+            duration,
+            examHall: item.examHall || null,
+            instructions: item.instructions || null,
+            status: item.status || 'Draft',
+            createdBy: user.id
+          }
+        });
+        createdSchedules.push(schedule);
+      }
+    });
+
+    for (const schedule of createdSchedules) {
+      if (schedule.status === 'Published') {
+        await this.notifyTeachers(schedule, 'scheduled');
+      }
+    }
+
+    return createdSchedules;
+  }
+
+  async update(id: string, dto: UpdateExamScheduleDto) {
+    const tenantId = this.getTenantId();
+    
+    const existing = await this.prisma.examSchedule.findUnique({ where: { id } });
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new NotFoundException('Exam schedule not found');
+    }
+
+    // Merge parameters for validation check
+    const checkDto: CreateExamScheduleDto = {
+      examName: dto.examName !== undefined ? dto.examName : existing.examName,
+      academicYearId: dto.academicYearId !== undefined ? dto.academicYearId : existing.academicYearId,
+      classSectionId: dto.classSectionId !== undefined ? dto.classSectionId : existing.classSectionId,
+      subjectId: dto.subjectId !== undefined ? dto.subjectId : existing.subjectId,
+      examDate: dto.examDate !== undefined ? dto.examDate : existing.examDate.toISOString().split('T')[0],
+      startTime: dto.startTime !== undefined ? dto.startTime : existing.startTime,
+      endTime: dto.endTime !== undefined ? dto.endTime : existing.endTime,
+      examHall: dto.examHall !== undefined ? dto.examHall : (existing.examHall || undefined),
+      instructions: dto.instructions !== undefined ? dto.instructions : (existing.instructions || undefined),
+      status: dto.status !== undefined ? dto.status : existing.status,
+    };
+
+    await this.validateSchedule(checkDto, id);
+
+    const startMin = this.parseTimeToMinutes(checkDto.startTime);
+    const endMin = this.parseTimeToMinutes(checkDto.endTime);
+    const duration = endMin - startMin;
+
+    const updated = await this.prisma.examSchedule.update({
+      where: { id },
+      data: {
+        examName: checkDto.examName,
+        academicYearId: checkDto.academicYearId,
+        classSectionId: checkDto.classSectionId,
+        subjectId: checkDto.subjectId,
+        examDate: new Date(checkDto.examDate),
+        startTime: checkDto.startTime,
+        endTime: checkDto.endTime,
+        duration,
+        examHall: checkDto.examHall || null,
+        instructions: checkDto.instructions || null,
+        status: checkDto.status,
+      }
+    });
+
+    // Handle status transition notifications
+    if (existing.status !== 'Published' && updated.status === 'Published') {
+      await this.notifyTeachers(updated, 'scheduled');
+    } else if (updated.status === 'Published') {
+      await this.notifyTeachers(updated, 'updated');
+    } else if (existing.status === 'Published' && updated.status === 'Cancelled') {
+      await this.notifyTeachers(updated, 'cancelled');
+    }
+
+    return updated;
+  }
+
+  async updateBulk(dto: BulkStatusDto) {
+    const tenantId = this.getTenantId();
+    const updated = [];
+
+    for (const id of dto.ids) {
+      const existing = await this.prisma.examSchedule.findUnique({ where: { id } });
+      if (!existing || existing.tenantId !== tenantId) continue;
+
+      const schedule = await this.prisma.examSchedule.update({
+        where: { id },
+        data: { status: dto.status }
+      });
+      updated.push(schedule);
+
+      if (existing.status !== 'Published' && schedule.status === 'Published') {
+        await this.notifyTeachers(schedule, 'scheduled');
+      } else if (existing.status === 'Published' && schedule.status === 'Cancelled') {
+        await this.notifyTeachers(schedule, 'cancelled');
+      }
+    }
+
+    return updated;
+  }
+
+  async delete(id: string) {
+    const tenantId = this.getTenantId();
+    const existing = await this.prisma.examSchedule.findUnique({ where: { id } });
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new NotFoundException('Exam schedule not found');
+    }
+
+    await this.prisma.examSchedule.delete({ where: { id } });
+
+    if (existing.status === 'Published') {
+      await this.notifyTeachers(existing, 'cancelled');
+    }
+
+    return { success: true };
+  }
+
+  async deleteBulk(dto: BulkDeleteDto) {
+    const tenantId = this.getTenantId();
+    
+    for (const id of dto.ids) {
+      const existing = await this.prisma.examSchedule.findUnique({ where: { id } });
+      if (!existing || existing.tenantId !== tenantId) continue;
+
+      await this.prisma.examSchedule.delete({ where: { id } });
+
+      if (existing.status === 'Published') {
+        await this.notifyTeachers(existing, 'cancelled');
+      }
+    }
+
+    return { success: true };
+  }
+
+  async findOne(id: string) {
+    const tenantId = this.getTenantId();
+    const schedule = await this.prisma.examSchedule.findUnique({
+      where: { id },
+      include: {
+        classSection: {
+          include: { class: true, section: true }
+        },
+        subject: true,
+        academicYear: true
+      }
+    });
+
+    if (!schedule || schedule.tenantId !== tenantId) {
+      throw new NotFoundException('Exam schedule not found');
+    }
+
+    return schedule;
+  }
+
+  async findAll(query: any) {
+    const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+    
+    const whereClause: any = { tenantId };
+    
+    if (query.academicYearId) {
+      whereClause.academicYearId = query.academicYearId;
+    }
+    if (query.classSectionId) {
+      whereClause.classSectionId = query.classSectionId;
+    }
+    if (query.subjectId) {
+      whereClause.subjectId = query.subjectId;
+    }
+    if (query.status) {
+      whereClause.status = query.status;
+    }
+    if (query.search) {
+      whereClause.examName = { contains: query.search, mode: 'insensitive' };
+    }
+    if (query.upcoming === 'true') {
+      whereClause.examDate = { gte: new Date() };
+      whereClause.status = { in: ['Published', 'Completed'] };
+    }
+    
+    if (user.role === 'TEACHER') {
+      // Teachers only see schedules that are Published, Completed, or Cancelled
+      if (!query.status) {
+        whereClause.status = { in: ['Published', 'Completed', 'Cancelled'] };
+      }
+      
+      const staff = await this.prisma.staffProfile.findFirst({
+        where: { userId: user.id, tenantId },
+        include: {
+          classSections: { select: { id: true } },
+          teacherAssignments: { select: { classSectionId: true, subjectId: true } }
+        }
+      });
+      
+      if (!staff) {
+        return [];
+      }
+      
+      const advisorClassIds = staff.classSections.map(cs => cs.id);
+      const assignedClassIds = staff.teacherAssignments.map(ta => ta.classSectionId);
+      const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+      const subjectIds = Array.from(new Set(staff.teacherAssignments.map(ta => ta.subjectId)));
+      
+      whereClause.classSectionId = { in: classSectionIds };
+      whereClause.subjectId = { in: subjectIds };
+    }
+    
+    return this.prisma.examSchedule.findMany({
+      where: whereClause,
+      include: {
+        classSection: {
+          include: { class: true, section: true }
+        },
+        subject: true,
+        academicYear: true
+      },
+      orderBy: { examDate: 'asc' }
+    });
+  }
+}

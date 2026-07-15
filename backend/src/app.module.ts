@@ -18,6 +18,7 @@ import { ComplaintBoxModule } from './complaint-box/complaint-box.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TeacherPortalModule } from './teacher-portal/teacher-portal.module';
 import { HomeworkModule } from './homework/homework.module';
+import { ExamScheduleModule } from './exam-schedule/exam-schedule.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { HomeworkModule } from './homework/homework.module';
     DashboardModule,
     TeacherPortalModule,
     HomeworkModule,
+    ExamScheduleModule,
   ],
   controllers: [],
   providers: [],

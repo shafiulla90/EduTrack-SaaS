@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTenant } from '../providers/TenantContext';
 import ToastProvider from '@/components/Toast';
-import { clearStoredAuth } from '@/lib/api';
+import { clearStoredAuth, api } from '@/lib/api';
 
 export default function DashboardLayout({
   children,
@@ -188,6 +188,18 @@ export default function DashboardLayout({
           ),
         },
         {
+          name: 'Exam Schedule',
+          href: '/dashboard/exams/schedule',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          ),
+        },
+        {
           name: 'Complaint Box',
           href: '/complaint-box',
           svg: (
@@ -322,6 +334,18 @@ export default function DashboardLayout({
             <svg className="icon-svg" viewBox="0 0 24 24">
               <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
               <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+            </svg>
+          ),
+        },
+        {
+          name: 'Exam Schedule',
+          href: '/dashboard/exams/schedule',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
           ),
         },
@@ -486,6 +510,8 @@ export default function DashboardLayout({
 
           {/* User Profile widget */}
           <div className="flex items-center gap-4">
+            {/* Notification Bell Dropdown */}
+            <NotificationBell />
             <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-slate-50 cursor-pointer min-h-[44px]">
               <div className="text-right hidden sm:block">
                 <p className="text-[13px] font-semibold text-slate-800 leading-none">{currentUser?.name || adminName}</p>
@@ -656,5 +682,123 @@ export default function DashboardLayout({
       )}
     </div>
     </ToastProvider>
+  );
+}
+
+function NotificationBell() {
+  const { currentUser } = useTenant();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const fetchNotifications = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const res = await api.get(`/communications/user/${currentUser.id}`);
+      setNotifications(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await api.post(`/communications/${id}/read`);
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+      );
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative p-2.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center border border-slate-200"
+        title="View Notifications"
+      >
+        <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+        </svg>
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-[9px] font-extrabold leading-none text-white transform translate-x-1/3 -translate-y-1/3 bg-rose-600 rounded-full shadow-xs">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden text-slate-800 animate-in fade-in slide-in-from-top-1">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-150 flex justify-between items-center">
+            <span className="font-extrabold text-xs text-slate-700 uppercase tracking-wide">Notifications</span>
+            {unreadCount > 0 && (
+              <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded">
+                {unreadCount} Unread
+              </span>
+            )}
+          </div>
+          
+          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+            {notifications.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-slate-400 font-medium">
+                No notifications yet.
+              </div>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={async () => {
+                    if (!n.isRead) {
+                      await handleMarkAsRead(n.id);
+                    }
+                    setIsOpen(false);
+                    window.location.href = '/dashboard/exams/schedule';
+                  }}
+                  className={`p-3.5 hover:bg-slate-50 cursor-pointer text-xs transition-colors flex flex-col gap-1 ${
+                    !n.isRead ? 'bg-blue-50/20 font-semibold' : ''
+                  }`}
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <span className={`text-slate-800 font-bold ${!n.isRead ? 'text-blue-700' : ''}`}>
+                      {n.title}
+                    </span>
+                    {!n.isRead && (
+                      <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1" />
+                    )}
+                  </div>
+                  <p className="text-slate-500 font-normal leading-relaxed">
+                    {n.message}
+                  </p>
+                  <span className="text-[9px] text-slate-400 mt-1 font-mono">
+                    {new Date(n.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
