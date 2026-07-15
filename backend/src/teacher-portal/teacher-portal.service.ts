@@ -914,7 +914,12 @@ export class TeacherPortalService {
     }
 
     const leave = await this.prisma.leaveRequest.findFirst({
-      where: { id, tenantId }
+      where: { id, tenantId },
+      include: {
+        teacher: {
+          include: { user: true }
+        }
+      }
     });
     if (!leave) {
       throw new NotFoundException('Leave request not found.');
@@ -931,6 +936,27 @@ export class TeacherPortalService {
         approver: user.name,
         approvedDate: statusUpper === 'APPROVED' ? new Date() : null,
         rejectedDate: statusUpper === 'REJECTED' ? new Date() : null,
+      }
+    });
+
+    // Notify the teacher about their leave request status update
+    await this.prisma.notification.create({
+      data: {
+        title: `Leave Request ${updatedStatus}`,
+        message: `Your ${leave.leaveType} leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${updatedStatus.toLowerCase()}.${data.comments ? ' Remarks: ' + data.comments : ''}`,
+        type: 'IN_APP',
+        recipientId: leave.teacher.userId,
+      }
+    });
+
+    // Mark all leave approval notifications for this leave request as completed (read)
+    await this.prisma.notification.updateMany({
+      where: {
+        type: 'LEAVE_APPROVAL',
+        message: { contains: `LeaveRequestId: ${id}` }
+      },
+      data: {
+        isRead: true
       }
     });
 
@@ -953,6 +979,22 @@ export class TeacherPortalService {
         tenantId,
       },
     });
+
+    // Notify all administrators under this school tenant about the new leave request
+    const admins = await this.prisma.user.findMany({
+      where: { tenantId, role: Role.SCHOOL_ADMIN },
+    });
+
+    if (admins.length > 0) {
+      await this.prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          title: `Leave Application: ${staff.user.name}`,
+          message: `Type: ${data.leaveType}\nFrom: ${data.startDate}\nTo: ${data.endDate}\nReason: ${data.reason}\nLeaveRequestId: ${leave.id}`,
+          type: 'LEAVE_APPROVAL',
+          recipientId: admin.id,
+        })),
+      });
+    }
 
     await this.logAction(userId, tenantId, 'RECORD_CREATE', 'LeaveRequest', leave.id, data);
     return leave;

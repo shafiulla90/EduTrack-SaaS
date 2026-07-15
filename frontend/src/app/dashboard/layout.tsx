@@ -115,18 +115,6 @@ export default function DashboardLayout({
             </svg>
           ),
         },
-        {
-          name: 'Leave Requests',
-          href: '/dashboard/leave-mgmt',
-          svg: (
-            <svg className="icon-svg" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-          ),
-        },
       ],
     },
     {
@@ -733,6 +721,25 @@ export default function DashboardLayout({
   );
 }
 
+function parseLeaveRequestMessage(message: string) {
+  const lines = message.split('\n');
+  let leaveType = '';
+  let fromDate = '';
+  let toDate = '';
+  let reason = '';
+  let leaveRequestId = '';
+
+  lines.forEach(line => {
+    if (line.startsWith('Type:')) leaveType = line.replace('Type:', '').trim();
+    else if (line.startsWith('From:')) fromDate = line.replace('From:', '').trim().split('T')[0];
+    else if (line.startsWith('To:')) toDate = line.replace('To:', '').trim().split('T')[0];
+    else if (line.startsWith('Reason:')) reason = line.replace('Reason:', '').trim();
+    else if (line.startsWith('LeaveRequestId:')) leaveRequestId = line.replace('LeaveRequestId:', '').trim();
+  });
+
+  return { leaveType, fromDate, toDate, reason, leaveRequestId };
+}
+
 function NotificationBell() {
   const { currentUser } = useTenant();
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -797,7 +804,7 @@ function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden text-slate-800 animate-in fade-in slide-in-from-top-1">
+        <div className="absolute right-0 mt-2 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden text-slate-800 animate-in fade-in slide-in-from-top-1">
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-150 flex justify-between items-center">
             <span className="font-extrabold text-xs text-slate-700 uppercase tracking-wide">Notifications</span>
             {unreadCount > 0 && (
@@ -807,42 +814,118 @@ function NotificationBell() {
             )}
           </div>
           
-          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
             {notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-slate-400 font-medium">
                 No notifications yet.
               </div>
             ) : (
-              notifications.map(n => (
-                <div
-                  key={n.id}
-                  onClick={async () => {
-                    if (!n.isRead) {
-                      await handleMarkAsRead(n.id);
-                    }
-                    setIsOpen(false);
-                    window.location.href = '/dashboard/exams/schedule';
-                  }}
-                  className={`p-3.5 hover:bg-slate-50 cursor-pointer text-xs transition-colors flex flex-col gap-1 ${
-                    !n.isRead ? 'bg-blue-50/20 font-semibold' : ''
-                  }`}
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <span className={`text-slate-800 font-bold ${!n.isRead ? 'text-blue-700' : ''}`}>
-                      {n.title}
+              notifications.map(n => {
+                if (n.type === 'LEAVE_APPROVAL') {
+                  const details = parseLeaveRequestMessage(n.message);
+                  return (
+                    <div
+                      key={n.id}
+                      className={`p-4 hover:bg-slate-50 transition-colors flex flex-col gap-2 ${
+                        !n.isRead ? 'bg-blue-50/20 font-semibold' : ''
+                      }`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-slate-800 font-extrabold text-xs">
+                          {n.title}
+                        </span>
+                        {!n.isRead && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-650 shrink-0 mt-1" />
+                        )}
+                      </div>
+
+                      <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1 text-[11px] font-medium text-slate-600">
+                        <div><strong className="text-slate-500 font-bold">Leave Type:</strong> {details.leaveType}</div>
+                        <div><strong className="text-slate-500 font-bold">Dates:</strong> {details.fromDate} to {details.toDate}</div>
+                        <div className="whitespace-pre-wrap"><strong className="text-slate-500 font-bold">Reason:</strong> {details.reason}</div>
+                      </div>
+
+                      {!n.isRead ? (
+                        <div className="flex gap-2 mt-1">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await api.patch(`/teacher-portal/leave/${details.leaveRequestId}/status`, {
+                                  status: 'Approved',
+                                  comments: 'Approved via Notification Center'
+                                });
+                                await fetchNotifications();
+                              } catch (err) {
+                                console.error('Approval failed:', err);
+                              }
+                            }}
+                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await api.patch(`/teacher-portal/leave/${details.leaveRequestId}/status`, {
+                                  status: 'Rejected',
+                                  comments: 'Rejected via Notification Center'
+                                });
+                                await fetchNotifications();
+                              } catch (err) {
+                                console.error('Rejection failed:', err);
+                              }
+                            }}
+                            className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                          Processed & Archived
+                        </div>
+                      )}
+                      <span className="text-[9px] text-slate-400 font-mono mt-0.5">
+                        {new Date(n.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={n.id}
+                    onClick={async () => {
+                      if (!n.isRead) {
+                        await handleMarkAsRead(n.id);
+                      }
+                      setIsOpen(false);
+                      window.location.href = '/dashboard/exams/schedule';
+                    }}
+                    className={`p-3.5 hover:bg-slate-50 cursor-pointer text-xs transition-colors flex flex-col gap-1 ${
+                      !n.isRead ? 'bg-blue-50/20 font-semibold' : ''
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <span className={`text-slate-800 font-bold ${!n.isRead ? 'text-blue-700' : ''}`}>
+                        {n.title}
+                      </span>
+                      {!n.isRead && (
+                        <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1" />
+                      )}
+                    </div>
+                    <p className="text-slate-500 font-normal leading-relaxed">
+                      {n.message}
+                    </p>
+                    <span className="text-[9px] text-slate-400 mt-1 font-mono">
+                      {new Date(n.createdAt).toLocaleDateString()}
                     </span>
-                    {!n.isRead && (
-                      <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1" />
-                    )}
                   </div>
-                  <p className="text-slate-500 font-normal leading-relaxed">
-                    {n.message}
-                  </p>
-                  <span className="text-[9px] text-slate-400 mt-1 font-mono">
-                    {new Date(n.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

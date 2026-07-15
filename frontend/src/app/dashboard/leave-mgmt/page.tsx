@@ -11,10 +11,6 @@ export default function LeaveMgmtPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Filter state for Admin
-  const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
-  const [adminComments, setAdminComments] = useState<Record<string, string>>({});
-
   // Form modal (Teacher)
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -23,8 +19,6 @@ export default function LeaveMgmtPage() {
   const [endDate, setEndDate] = useState('');
   const [leaveType, setLeaveType] = useState('Casual'); // Casual, Medical, Emergency, HalfDay
   const [reason, setReason] = useState('');
-
-  const isAdmin = currentUser?.role === 'ADMIN';
 
   async function loadLeaves() {
     try {
@@ -39,6 +33,8 @@ export default function LeaveMgmtPage() {
 
   useEffect(() => {
     loadLeaves();
+    const interval = setInterval(loadLeaves, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const openCreateModal = () => {
@@ -82,26 +78,6 @@ export default function LeaveMgmtPage() {
     }
   };
 
-  // Admin status update handler (Approve / Reject)
-  const handleUpdateStatus = async (id: string, newStatus: 'Approved' | 'Rejected') => {
-    try {
-      const comments = adminComments[id] || '';
-      await api.patch(`/teacher-portal/leave/${id}/status`, {
-        status: newStatus,
-        comments
-      });
-      await loadLeaves();
-    } catch (err) {
-      console.error('Failed to update leave status:', err);
-      alert('Failed to update leave status.');
-    }
-  };
-
-  const getFilteredLeaves = () => {
-    if (filterStatus === 'ALL') return leaves;
-    return leaves.filter(lv => lv.status?.toUpperCase() === filterStatus);
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -110,132 +86,6 @@ export default function LeaveMgmtPage() {
       </div>
     );
   }
-
-  // --- ADMIN VIEW PANEL ---
-  if (isAdmin) {
-    const filteredLeaves = getFilteredLeaves();
-    return (
-      <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 pb-20 font-sans text-slate-800">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-5">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <CalendarDays className="w-6 h-6 text-indigo-650" />
-              Staff Leave Requests Console
-            </h2>
-            <p className="text-xs text-slate-500 mt-1 font-medium">Review, comment on, and approve or reject staff leave applications.</p>
-          </div>
-
-          {/* Filter tabs */}
-          <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
-            {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map(status => (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  filterStatus === status
-                    ? 'bg-white text-slate-800 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {status.charAt(0) + status.slice(1).toLowerCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {filteredLeaves.length === 0 ? (
-          <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 shadow-xs text-slate-400 italic text-xs">
-            No leave requests found under the selected filter.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredLeaves.map((lv) => {
-              const teacherName = lv.teacher?.user?.name || 'Unknown Staff';
-              const teacherEmail = lv.teacher?.user?.email || 'No email';
-              const statusUpper = lv.status?.toUpperCase() || 'PENDING';
-              
-              return (
-                <div key={lv.id} className="bg-white p-4.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-650 text-xs">
-                          {teacherName.charAt(0)}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-extrabold text-slate-800">{teacherName}</h4>
-                          <span className="text-[10px] text-slate-400 font-semibold">{teacherEmail}</span>
-                        </div>
-                      </div>
-                      <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded border uppercase ${
-                        statusUpper === 'APPROVED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                        statusUpper === 'REJECTED' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                        'bg-amber-50 text-amber-600 border-amber-100'
-                      }`}>
-                        {lv.status}
-                      </span>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-2.5 flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                      <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>{lv.leaveType} Leave</span>
-                      <span className="text-slate-300 font-light">•</span>
-                      <span className="text-[11px] text-slate-500 font-medium">{lv.startDate.split('T')[0]} to {lv.endDate.split('T')[0]}</span>
-                    </div>
-
-                    <p className="text-xs text-slate-500 leading-relaxed bg-slate-50/50 p-2.5 rounded-lg border border-slate-100/50 whitespace-pre-wrap">{lv.reason}</p>
-                  </div>
-
-                  {statusUpper === 'PENDING' ? (
-                    <div className="border-t border-slate-100 pt-3 space-y-3">
-                      <div>
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Approver Comments</label>
-                        <input
-                          type="text"
-                          placeholder="Add approval notes or rejection reason..."
-                          value={adminComments[lv.id] || ''}
-                          onChange={(e) => setAdminComments({ ...adminComments, [lv.id]: e.target.value })}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-semibold outline-none focus:border-blue-500 focus:bg-white placeholder-slate-400"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleUpdateStatus(lv.id, 'Approved')}
-                          className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Check className="w-3.5 h-3.5 stroke-[3]" /> Approve Leave
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(lv.id, 'Rejected')}
-                          className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5 stroke-[3]" /> Reject Leave
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border-t border-slate-100 pt-2.5 space-y-1.5 text-[10px] font-semibold text-slate-500">
-                      <div className="flex justify-between">
-                        <span>Reviewed By: <strong className="text-slate-700">{lv.approver || 'System Admin'}</strong></span>
-                        <span>Date: {lv.approvedDate?.split('T')[0] || lv.rejectedDate?.split('T')[0] || 'N/A'}</span>
-                      </div>
-                      {lv.comments && (
-                        <div className="bg-indigo-50/20 p-2.5 rounded-lg border border-indigo-100/10 text-indigo-900 leading-normal font-medium">
-                          <strong>Admin Note:</strong> {lv.comments}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // --- TEACHER VIEW PANEL (EXISTING) ---
   return (
     <div className="space-y-6 max-w-md mx-auto sm:max-w-none pb-20 font-sans text-slate-800">
       <div className="flex justify-between items-center pb-4 border-b border-slate-200">
