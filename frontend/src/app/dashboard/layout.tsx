@@ -841,7 +841,7 @@ function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden text-slate-800 animate-in fade-in slide-in-from-top-1">
+        <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-20 sm:top-auto sm:mt-2 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden text-slate-800 animate-in fade-in slide-in-from-top-1 max-h-[calc(100vh-90px)] sm:max-h-[80vh]">
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-150 flex justify-between items-center">
             <span className="font-extrabold text-xs text-slate-700 uppercase tracking-wide">Notifications</span>
             {unreadCount > 0 && (
@@ -851,7 +851,7 @@ function NotificationBell() {
             )}
           </div>
           
-          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+          <div className="overflow-y-auto divide-y divide-slate-100 max-h-[calc(100vh-160px)] sm:max-h-80">
             {notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-slate-400 font-medium">
                 No notifications yet.
