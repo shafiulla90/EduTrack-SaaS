@@ -689,11 +689,34 @@ export class TeacherPortalService {
 
   // 8. Announcements CRUD
   async getAnnouncements(userId: string, tenantId: string) {
-    const staff = await this.getStaffProfile(userId, tenantId);
+    const staff = await this.prisma.staffProfile.findFirst({
+      where: { userId, tenantId },
+      include: {
+        classSections: { select: { id: true } },
+        teacherAssignments: { select: { classSectionId: true } }
+      }
+    });
+    if (!staff) return [];
+
+    const advisorClassIds = staff.classSections.map(cs => cs.id);
+    const assignedClassIds = staff.teacherAssignments.map(ta => ta.classSectionId);
+    const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+
     return this.prisma.announcement.findMany({
-      where: { tenantId, teacherId: staff.id },
+      where: {
+        tenantId,
+        OR: [
+          // Created by/for this teacher
+          { teacherId: staff.id },
+          // Targeted to classes this teacher teaches
+          { classSectionId: { in: classSectionIds } },
+          // Targeted to the whole institution
+          { audienceType: 'INSTITUTION' }
+        ]
+      },
       include: {
         classSection: { include: { class: true, section: true } },
+        teacher: { include: { user: { select: { id: true, name: true } } } }
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -762,6 +785,25 @@ export class TeacherPortalService {
 
     await this.prisma.announcement.delete({ where: { id } });
     await this.logAction(userId, tenantId, 'RECORD_DELETE', 'Announcement', id);
+    return { success: true };
+  }
+
+  async markAnnouncementAsRead(userId: string, tenantId: string, id: string) {
+    const existing = await this.prisma.announcement.findUnique({
+      where: { id },
+    });
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new NotFoundException('Announcement not found');
+    }
+
+    const readStatus = Array.isArray(existing.readStatus) ? (existing.readStatus as string[]) : [];
+    if (!readStatus.includes(userId)) {
+      readStatus.push(userId);
+      await this.prisma.announcement.update({
+        where: { id },
+        data: { readStatus },
+      });
+    }
     return { success: true };
   }
 

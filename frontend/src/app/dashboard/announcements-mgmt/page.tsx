@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Megaphone, Plus, Trash2, X, AlertTriangle, Pin, Calendar, Users, Eye } from 'lucide-react';
+import { Megaphone, Plus, Trash2, X, AlertTriangle, Pin, Calendar, Users, Eye, Check } from 'lucide-react';
+import { useTenant } from '@/app/providers/TenantContext';
 
 export default function AnnouncementsMgmtPage() {
+  const { currentUser } = useTenant();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +90,25 @@ export default function AnnouncementsMgmtPage() {
     }
   };
 
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await api.post(`/teacher-portal/announcements/${id}/read`);
+      setAnnouncements(prev => prev.map(ann => {
+        if (ann.id === id) {
+          const readStatus = Array.isArray(ann.readStatus) ? [...ann.readStatus] : [];
+          if (currentUser?.id && !readStatus.includes(currentUser.id)) {
+            readStatus.push(currentUser.id);
+          }
+          return { ...ann, readStatus };
+        }
+        return ann;
+      }));
+      window.dispatchEvent(new Event('announcementRead'));
+    } catch (err) {
+      console.error('Failed to mark announcement as read:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -135,11 +156,28 @@ export default function AnnouncementsMgmtPage() {
                         <Pin className="w-3.5 h-3.5 fill-blue-600/20" /> Pinned
                       </span>
                     )}
+                    {(!Array.isArray(ann.readStatus) || !ann.readStatus.includes(currentUser?.id)) && (
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-650 animate-pulse" title="Unread Notice" />
+                    )}
                   </div>
                   
-                  <button onClick={() => handleDelete(ann.id)} className="text-slate-400 hover:text-red-600 transition-colors p-1 cursor-pointer">
-                    <Trash2 className="w-4.5 h-4.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {(!Array.isArray(ann.readStatus) || !ann.readStatus.includes(currentUser?.id)) && (
+                      <button
+                        onClick={() => handleMarkAsRead(ann.id)}
+                        className="flex items-center gap-0.5 px-2 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-[10px] font-bold cursor-pointer transition-colors mr-2"
+                        title="Mark as Read"
+                      >
+                        <Check className="w-3 h-3 stroke-[3]" /> Read
+                      </button>
+                    )}
+                    
+                    {!ann.content?.includes('<!-- examScheduleId:') && ann.teacher?.user?.id === currentUser?.id && (
+                      <button onClick={() => handleDelete(ann.id)} className="text-slate-400 hover:text-red-600 transition-colors p-1 cursor-pointer">
+                        <Trash2 className="w-4.5 h-4.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="font-bold text-slate-800 text-[15px]">{ann.title}</h3>

@@ -607,18 +607,13 @@ function AdminDashboardOverview() {
 
 function TeacherDashboardView() {
   const [data, setData] = useState<any>(null);
-  const [upcomingExams, setUpcomingExams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadStats() {
       try {
-        const [statsRes, examsRes] = await Promise.all([
-          api.get('/teacher-portal/dashboard'),
-          api.get('/exam-schedule', { params: { upcoming: 'true' } }).catch(() => ({ data: [] }))
-        ]);
-        setData(statsRes.data);
-        setUpcomingExams(examsRes.data || []);
+        const res = await api.get('/teacher-portal/dashboard');
+        setData(res.data);
       } catch (err) {
         console.error('Failed to load teacher stats:', err);
       } finally {
@@ -763,38 +758,6 @@ function TeacherDashboardView() {
                 <h4 className="text-sm font-bold text-slate-800">{ev.title}</h4>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">{ev.content}</p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Upcoming Scheduled Exams */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-[15px] font-bold text-slate-800">Upcoming Scheduled Exams</h3>
-          <span className="text-xs text-purple-600 font-semibold bg-purple-50 px-2 py-0.5 rounded-md">Exams</span>
-        </div>
-        {upcomingExams.length === 0 ? (
-          <div className="py-8 text-center text-slate-400 text-xs italic">No upcoming exams scheduled.</div>
-        ) : (
-          <div className="space-y-3">
-            {upcomingExams.slice(0, 5).map((ex: any) => (
-              <Link
-                key={ex.id}
-                href="/dashboard/exams/schedule"
-                className="bg-slate-50 border border-slate-100 hover:border-purple-300 rounded-2xl p-4 flex justify-between items-center hover:bg-slate-50/80 transition-all cursor-pointer block"
-              >
-                <div>
-                  <h4 className="font-bold text-sm text-slate-800">{ex.examName}</h4>
-                  <p className="text-xs text-slate-500 font-medium mt-0.5">{ex.subject?.name} • Class {ex.classSection?.class.name}-{ex.classSection?.section.name}</p>
-                  <p className="text-[11px] text-slate-400 font-mono mt-1">
-                    {new Date(ex.examDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} • {ex.startTime} - {ex.endTime}
-                  </p>
-                </div>
-                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-100 uppercase">
-                  {ex.status}
-                </span>
-              </Link>
             ))}
           </div>
         )}

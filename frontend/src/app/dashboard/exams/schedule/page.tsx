@@ -59,6 +59,19 @@ export default function ExamSchedulePage() {
   const { currentUser } = useTenant();
   const isAdmin = currentUser?.role === 'SCHOOL_ADMIN' || currentUser?.role === 'SUPER_ADMIN';
 
+  if (currentUser && !isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center max-w-md mx-auto">
+        <AlertCircle className="w-12 h-12 text-rose-600" />
+        <h2 className="text-xl font-bold text-slate-800">Access Denied</h2>
+        <p className="text-xs text-slate-550 leading-relaxed">
+          Only School Administrators are authorized to view or manage exam schedules directly. 
+          Teachers can access published schedules via the Announcements module.
+        </p>
+      </div>
+    );
+  }
+
   // Component states
   const [schedules, setSchedules] = useState<ExamSchedule[]>([]);
   const [classes, setClasses] = useState<ClassSectionOption[]>([]);

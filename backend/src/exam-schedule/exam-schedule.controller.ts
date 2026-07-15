@@ -8,47 +8,41 @@ import { CreateExamScheduleDto, UpdateExamScheduleDto, BulkCreateDto, BulkStatus
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('exam-schedule')
+@Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
 export class ExamScheduleController {
   constructor(private readonly examScheduleService: ExamScheduleService) {}
 
   @Post('bulk')
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   createBulk(@Body() dto: BulkCreateDto) {
     return this.examScheduleService.createBulk(dto);
   }
 
   @Patch('bulk')
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   updateBulk(@Body() dto: BulkStatusDto) {
     return this.examScheduleService.updateBulk(dto);
   }
 
   @Post('bulk-delete')
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   deleteBulk(@Body() dto: BulkDeleteDto) {
     return this.examScheduleService.deleteBulk(dto);
   }
 
   @Get()
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
   findAll(@Query() query: any) {
     return this.examScheduleService.findAll(query);
   }
 
   @Get(':id')
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
   findOne(@Param('id') id: string) {
     return this.examScheduleService.findOne(id);
   }
 
   @Patch(':id')
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   update(@Param('id') id: string, @Body() dto: UpdateExamScheduleDto) {
     return this.examScheduleService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   delete(@Param('id') id: string) {
     return this.examScheduleService.delete(id);
   }

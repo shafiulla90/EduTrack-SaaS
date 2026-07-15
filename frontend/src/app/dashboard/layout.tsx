@@ -17,6 +17,34 @@ export default function DashboardLayout({
   const [searchTerm, setSearchTerm] = useState('');
   const { schoolName, schoolType, adminName, logoUrl, currentUser, loading } = useTenant();
 
+  const [unreadAnnCount, setUnreadAnnCount] = useState(0);
+
+  const fetchUnreadAnnouncements = async () => {
+    if (currentUser?.role !== 'TEACHER') return;
+    try {
+      const res = await api.get('/teacher-portal/announcements');
+      const list = res.data || [];
+      const unread = list.filter((ann: any) => {
+        const readStatus = Array.isArray(ann.readStatus) ? ann.readStatus : [];
+        return !readStatus.includes(currentUser.id);
+      }).length;
+      setUnreadAnnCount(unread);
+    } catch (err) {
+      console.error('Failed to fetch announcements:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadAnnouncements();
+    const interval = setInterval(fetchUnreadAnnouncements, 15000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    window.addEventListener('announcementRead', fetchUnreadAnnouncements);
+    return () => window.removeEventListener('announcementRead', fetchUnreadAnnouncements);
+  }, [currentUser?.id]);
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-white z-[99999]">
@@ -338,18 +366,6 @@ export default function DashboardLayout({
           ),
         },
         {
-          name: 'Exam Schedule',
-          href: '/dashboard/exams/schedule',
-          svg: (
-            <svg className="icon-svg" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-          ),
-        },
-        {
           name: 'Messages',
           href: '/dashboard/communication',
           svg: (
@@ -425,6 +441,11 @@ export default function DashboardLayout({
                         {item.svg}
                       </span>
                       <span className="truncate">{item.name}</span>
+                      {item.name === 'Announcements' && currentUser?.role === 'TEACHER' && unreadAnnCount > 0 && (
+                        <span className="ml-auto bg-rose-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full">
+                          {unreadAnnCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -608,6 +629,11 @@ export default function DashboardLayout({
                             {item.svg}
                           </span>
                           <span className="truncate">{item.name}</span>
+                          {item.name === 'Announcements' && currentUser?.role === 'TEACHER' && unreadAnnCount > 0 && (
+                            <span className="ml-auto bg-rose-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full">
+                              {unreadAnnCount}
+                            </span>
+                          )}
                         </Link>
                       );
                     })}

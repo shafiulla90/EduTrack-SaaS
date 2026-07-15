@@ -130,6 +130,11 @@ export class TeacherPortalController {
     return this.portalService.deleteAnnouncement(req.user.sub, req.user.tenantId, id);
   }
 
+  @Post('announcements/:id/read')
+  async markAsRead(@Req() req: any, @Param('id') id: string) {
+    return this.portalService.markAnnouncementAsRead(req.user.sub, req.user.tenantId, id);
+  }
+
   @Get('leave')
   async getLeaves(@Req() req: any) {
     return this.portalService.getLeaveRequests(req.user.sub, req.user.tenantId);

@@ -130,26 +130,29 @@ export class ExamScheduleService {
       where: { id: schedule.subjectId }
     });
 
-    const className = cs ? `${cs.class.name}-${cs.section.name}` : 'Unknown Class';
+    const className = cs ? `${cs.class.name} - ${cs.section.name}` : 'Unknown Class';
     const subjName = subject ? subject.name : 'Unknown Subject';
-    const dateStr = new Date(schedule.examDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const dateStr = new Date(schedule.examDate).toLocaleDateString('en-US', { day: '2-digit', month: 'long', year: 'numeric' });
     
-    let message = '';
-    if (actionName === 'scheduled') {
-      message = `${schedule.examName} (${subjName}) has been scheduled for Class ${className} on ${dateStr} at ${schedule.startTime}.`;
+    let title = `📢 ${schedule.examName} Schedule`;
+    let content = `Class: ${className}\nSubject: ${subjName}\nDate: ${dateStr}\nTime: ${schedule.startTime} - ${schedule.endTime}\nInstructions:\n${schedule.instructions || 'Please complete the syllabus before the examination.'}`;
+    
+    if (actionName === 'cancelled' || schedule.status === 'Cancelled') {
+      title = `❌ CANCELLED: ${schedule.examName}`;
+      content = `The scheduled exam for Class: ${className}, Subject: ${subjName} on ${dateStr} has been cancelled.`;
     } else if (actionName === 'updated') {
-      message = `Exam Update: ${schedule.examName} (${subjName}) for Class ${className} has been updated to ${dateStr} at ${schedule.startTime}.`;
-    } else if (actionName === 'cancelled') {
-      message = `Exam Cancelled: ${schedule.examName} (${subjName}) scheduled for Class ${className} on ${dateStr} has been cancelled.`;
+      title = `📢 UPDATED: ${schedule.examName} Schedule`;
+      content = `Class: ${className}\nSubject: ${subjName}\nDate: ${dateStr}\nTime: ${schedule.startTime} - ${schedule.endTime}\nInstructions:\n${schedule.instructions || 'Please complete the syllabus before the examination.'}\n\nNote: The schedule was recently updated. Please take note of the new timings.`;
     }
 
-    const title = `${schedule.examName} Notification`;
+    // Include the tag marker for identification/correlation
+    content += `\n\n<!-- examScheduleId: ${schedule.id} -->`;
 
+    // Find affected teachers (assignments & class advisor)
     const assignments = await this.prisma.teacherAssignment.findMany({
       where: {
         tenantId,
-        classSectionId: schedule.classSectionId,
-        subjectId: schedule.subjectId
+        classSectionId: schedule.classSectionId
       },
       include: { teacher: true }
     });
@@ -161,23 +164,51 @@ export class ExamScheduleService {
       }
     });
 
-    const teacherUserIds = new Set<string>();
+    const affectedStaffIds = new Set<string>();
     assignments.forEach(a => {
-      if (a.teacher?.userId) teacherUserIds.add(a.teacher.userId);
+      if (a.teacherId) affectedStaffIds.add(a.teacherId);
     });
     advisors.forEach(adv => {
-      if (adv.userId) teacherUserIds.add(adv.userId);
+      affectedStaffIds.add(adv.id);
     });
 
-    for (const userId of teacherUserIds) {
-      await this.communicationsService.sendNotification({
-        recipientId: userId,
-        title,
-        message,
-        type: 'IN_APP'
-      }).catch(err => {
-        console.error(`Failed to send notification to teacher user ${userId}:`, err);
+    for (const staffId of affectedStaffIds) {
+      // Find existing announcement for this staff & this exam schedule
+      const existing = await this.prisma.announcement.findFirst({
+        where: {
+          tenantId,
+          teacherId: staffId,
+          content: { contains: `<!-- examScheduleId: ${schedule.id} -->` }
+        }
       });
+
+      if (existing) {
+        // Update existing announcement
+        await this.prisma.announcement.update({
+          where: { id: existing.id },
+          data: {
+            title,
+            content,
+            priority: actionName === 'cancelled' ? 'High' : 'Medium',
+            readStatus: [], // Reset read status so it shows as unread for the teacher
+            classSectionId: schedule.classSectionId
+          }
+        });
+      } else {
+        // Create new announcement
+        await this.prisma.announcement.create({
+          data: {
+            title,
+            content,
+            audienceType: 'CLASS',
+            priority: actionName === 'cancelled' ? 'High' : 'Medium',
+            readStatus: [],
+            classSectionId: schedule.classSectionId,
+            teacherId: staffId,
+            tenantId
+          }
+        });
+      }
     }
   }
 
