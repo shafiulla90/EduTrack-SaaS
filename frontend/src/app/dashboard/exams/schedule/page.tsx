@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useTenant } from '@/app/providers/TenantContext';
+import { useToast } from '@/components/Toast';
 
 interface ClassSectionOption {
   value: string; // classSectionId
@@ -117,7 +118,7 @@ export default function ExamSchedulePage() {
 
   // Feedback notifications
   const [isLoading, setIsLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     fetchMetadata();
@@ -174,8 +175,7 @@ export default function ExamSchedulePage() {
   };
 
   const showToastMessage = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    showToast(message, type);
   };
 
   // Bulk input row modifiers
@@ -427,16 +427,6 @@ export default function ExamSchedulePage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 print:p-0 font-sans text-slate-800">
       
-      {/* Toast Banner */}
-      {toast && (
-        <div className={`fixed top-4 right-4 z-[9999] p-4 rounded-xl shadow-xl border flex items-center gap-3 text-sm animate-bounce ${
-          toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
-        }`}>
-          {toast.type === 'success' ? <CheckCircle className="w-5 h-5 text-emerald-600" /> : <AlertCircle className="w-5 h-5 text-rose-600" />}
-          <span className="font-semibold">{toast.message}</span>
-        </div>
-      )}
-
       {/* Header Panel */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-5 print:hidden">
         <div>

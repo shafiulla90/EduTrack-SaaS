@@ -1,5 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Inject } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { CommunicationsService } from '../communications/communications.service';
@@ -10,7 +9,6 @@ export class ExamScheduleService {
   constructor(
     private prisma: PrismaService,
     private communicationsService: CommunicationsService,
-    @Inject(REQUEST) private request: any
   ) {}
 
   private getTenantId(): string {
@@ -55,6 +53,9 @@ export class ExamScheduleService {
     }
 
     const examDate = new Date(dto.examDate);
+    if (isNaN(examDate.getTime())) {
+      throw new BadRequestException(`Invalid exam date format: ${dto.examDate}. Please use YYYY-MM-DD format.`);
+    }
 
     // 1. Validate Academic Year bounds
     const ay = await this.prisma.academicYear.findUnique({
@@ -214,9 +215,8 @@ export class ExamScheduleService {
 
   // --- CRUD Core APIs ---
 
-  async create(dto: CreateExamScheduleDto) {
+  async create(dto: CreateExamScheduleDto, userId: string) {
     const tenantId = this.getTenantId();
-    const user = (this.request as any).user;
     
     await this.validateSchedule(dto);
 
@@ -238,7 +238,7 @@ export class ExamScheduleService {
         examHall: dto.examHall || null,
         instructions: dto.instructions || null,
         status: dto.status || 'Draft',
-        createdBy: user.id
+        createdBy: userId
       }
     });
 
@@ -249,9 +249,8 @@ export class ExamScheduleService {
     return schedule;
   }
 
-  async createBulk(dto: BulkCreateDto) {
+  async createBulk(dto: BulkCreateDto, userId: string) {
     const tenantId = this.getTenantId();
-    const user = (this.request as any).user;
 
     // Validate all records before saving to DB
     for (const item of dto.schedules) {
@@ -279,7 +278,7 @@ export class ExamScheduleService {
             examHall: item.examHall || null,
             instructions: item.instructions || null,
             status: item.status || 'Draft',
-            createdBy: user.id
+            createdBy: userId
           }
         });
         createdSchedules.push(schedule);
@@ -429,9 +428,8 @@ export class ExamScheduleService {
     return schedule;
   }
 
-  async findAll(query: any) {
+  async findAll(query: any, user: any) {
     const tenantId = this.getTenantId();
-    const user = (this.request as any).user;
     
     const whereClause: any = { tenantId };
     

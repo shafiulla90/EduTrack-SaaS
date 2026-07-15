@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, Patch, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Patch, Delete, UseGuards, Req } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -13,8 +13,9 @@ export class ExamScheduleController {
   constructor(private readonly examScheduleService: ExamScheduleService) {}
 
   @Post('bulk')
-  createBulk(@Body() dto: BulkCreateDto) {
-    return this.examScheduleService.createBulk(dto);
+  createBulk(@Body() dto: BulkCreateDto, @Req() req: any) {
+    const userId = req.user.id || req.user.sub;
+    return this.examScheduleService.createBulk(dto, userId);
   }
 
   @Patch('bulk')
@@ -28,8 +29,8 @@ export class ExamScheduleController {
   }
 
   @Get()
-  findAll(@Query() query: any) {
-    return this.examScheduleService.findAll(query);
+  findAll(@Query() query: any, @Req() req: any) {
+    return this.examScheduleService.findAll(query, req.user);
   }
 
   @Get(':id')
