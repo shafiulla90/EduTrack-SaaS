@@ -570,7 +570,9 @@ export default function DashboardLayout({
         </header>
 
         {/* Page content panel viewport */}
-        <main className={`p-4 sm:p-8 print:p-0 print:max-w-none print:m-0 flex-1 max-w-7xl w-full mx-auto min-w-0 ${currentUser?.role === 'TEACHER' ? 'pb-24 lg:pb-8' : ''}`}>
+        <main className={`p-4 sm:p-8 print:p-0 print:max-w-none print:m-0 flex-1 max-w-7xl w-full mx-auto min-w-0 ${
+          currentUser?.role === 'TEACHER' || currentUser?.role === 'SCHOOL_ADMIN' ? 'pb-24 lg:pb-8' : ''
+        }`}>
           {children}
         </main>
       </div>
@@ -692,7 +694,7 @@ export default function DashboardLayout({
             <span>Marks</span>
           </Link>
           <Link href="/dashboard/my-timetable" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/my-timetable') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
-            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 25">
               <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
               <path d="M9 22v-4h6v4"></path>
             </svg>
@@ -705,6 +707,50 @@ export default function DashboardLayout({
             </svg>
             <span>Profile</span>
           </Link>
+        </div>
+      )}
+
+      {/* Sticky Bottom Navigation Bar for School Admins on Mobile/Tablet */}
+      {currentUser?.role === 'SCHOOL_ADMIN' && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 h-16 flex items-center justify-around z-50 px-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] print:hidden">
+          <Link href="/dashboard" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname === '/dashboard' ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Home</span>
+          </Link>
+          <Link href="/dashboard/students" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/students') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeWidth="2"></path>
+              <circle cx="9" cy="7" r="4" strokeWidth="2"></circle>
+            </svg>
+            <span>Students</span>
+          </Link>
+          <Link href="/dashboard/billing" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/billing') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" strokeWidth="2"></rect>
+              <line x1="1" y1="10" x2="23" y2="10" strokeWidth="2"></line>
+            </svg>
+            <span>Fees</span>
+          </Link>
+          <Link href="/dashboard/staff" className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${pathname.startsWith('/dashboard/staff') ? 'text-[#2E5BFF] font-semibold' : 'text-slate-500'}`}>
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeWidth="2"></path>
+              <circle cx="8.5" cy="7" r="4" strokeWidth="2"></circle>
+            </svg>
+            <span>Staff</span>
+          </Link>
+          <button onClick={() => setMobileOpen(true)} className="flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors text-slate-500 cursor-pointer">
+            <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
+              <line x1="3" y1="12" x2="21" y2="12" strokeWidth="2" strokeLinecap="round" />
+              <line x1="3" y1="6" x2="21" y2="6" strokeWidth="2" strokeLinecap="round" />
+              <line x1="3" y1="18" x2="21" y2="18" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span>Menu</span>
+          </button>
         </div>
       )}
     </div>

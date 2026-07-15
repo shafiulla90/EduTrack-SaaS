@@ -82,10 +82,10 @@ function AdminDashboardOverview() {
             ✨ New Features
           </span>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 w-full sm:w-auto">
           <Link
             href="/dashboard/billing/setup"
-            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs"
+            className="flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs"
           >
             <svg className="w-4 h-4 stroke-slate-500 fill-none" viewBox="0 0 24 24">
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
@@ -94,7 +94,7 @@ function AdminDashboardOverview() {
           </Link>
           <Link
             href="/dashboard/admissions"
-            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs"
+            className="flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs"
           >
             <svg className="w-4 h-4 stroke-slate-500 fill-none" viewBox="0 0 24 24">
               <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -104,7 +104,7 @@ function AdminDashboardOverview() {
           </Link>
           <button
             onClick={() => setIsImportOpen(true)}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+            className="w-full sm:w-auto justify-center px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs cursor-pointer"
           >
             <svg className="w-4 h-4 stroke-slate-500 fill-none" viewBox="0 0 24 24">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -247,19 +247,19 @@ function AdminDashboardOverview() {
       )}
 
       {/* DYNAMIC KPI STATS GRID - 8 Harmonious Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {/* Total Students */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between h-40">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-36 sm:h-40">
           <div className="flex justify-between items-center">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <svg className="w-6 h-6 stroke-current fill-none" viewBox="0 0 24 24">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 stroke-current fill-none" viewBox="0 0 24 24">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" strokeWidth="2"></path>
                 <circle cx="9" cy="7" r="4" strokeWidth="2"></circle>
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87" strokeWidth="2"></path>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" strokeWidth="2"></path>
               </svg>
             </div>
-            <div className={`flex items-center gap-1 text-[12px] font-bold px-2 py-0.5 rounded-md ${stats.trends.students.isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+            <div className={`flex items-center gap-1 text-[10px] sm:text-[12px] font-bold px-2 py-0.5 rounded-md ${stats.trends.students.isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
               <svg className="w-3 h-3 stroke-current fill-none" viewBox="0 0 24 24">
                 <polyline points={stats.trends.students.isUp ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} strokeWidth="3"></polyline>
               </svg>
@@ -267,65 +267,65 @@ function AdminDashboardOverview() {
             </div>
           </div>
           <div>
-            <div className="text-[32px] font-extrabold text-slate-800 leading-none">{stats.studentsCount}</div>
-            <div className="text-[14px] text-slate-500 font-semibold mt-1">Total Students</div>
+            <div className="text-2xl sm:text-[32px] font-extrabold text-slate-800 leading-none">{stats.studentsCount}</div>
+            <div className="text-xs sm:text-[14px] text-slate-500 font-semibold mt-1">Total Students</div>
           </div>
-          <div className="border-t border-slate-100 pt-2 text-[11px] text-slate-400 font-medium">
+          <div className="border-t border-slate-100 pt-2 text-[10px] sm:text-[11px] text-slate-400 font-medium">
             <strong>Real-time</strong> from Org
           </div>
         </div>
 
         {/* Total Teachers */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between h-40">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-36 sm:h-40">
           <div className="flex justify-between items-center">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-              <svg className="w-6 h-6 stroke-current fill-none" viewBox="0 0 24 24">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 stroke-current fill-none" viewBox="0 0 24 24">
                 <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" strokeWidth="2"></path>
                 <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" strokeWidth="2"></path>
               </svg>
             </div>
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">Faculty</span>
+            <span className="text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 uppercase">Faculty</span>
           </div>
           <div>
-            <div className="text-[32px] font-extrabold text-slate-800 leading-none">{stats.teachersCount}</div>
-            <div className="text-[14px] text-slate-500 font-semibold mt-1">Total Teachers</div>
+            <div className="text-2xl sm:text-[32px] font-extrabold text-slate-800 leading-none">{stats.teachersCount}</div>
+            <div className="text-xs sm:text-[14px] text-slate-500 font-semibold mt-1">Total Teachers</div>
           </div>
-          <div className="border-t border-slate-100 pt-2 text-[11px] text-slate-400 font-medium">
+          <div className="border-t border-slate-100 pt-2 text-[10px] sm:text-[11px] text-slate-400 font-medium">
             <strong>Real-time</strong> from Org
           </div>
         </div>
 
         {/* Total Classes */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between h-40">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-36 sm:h-40">
           <div className="flex justify-between items-center">
-            <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <svg className="w-6 h-6 stroke-current fill-none" viewBox="0 0 24 24">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 stroke-current fill-none" viewBox="0 0 24 24">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeWidth="2"></path>
                 <polyline points="9 22 9 12 15 12 15 22" strokeWidth="2"></polyline>
               </svg>
             </div>
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 uppercase">Academics</span>
+            <span className="text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 uppercase">Academics</span>
           </div>
           <div>
-            <div className="text-[32px] font-extrabold text-slate-800 leading-none">{stats.classesCount}</div>
-            <div className="text-[14px] text-slate-500 font-semibold mt-1">Total Classes</div>
+            <div className="text-2xl sm:text-[32px] font-extrabold text-slate-800 leading-none">{stats.classesCount}</div>
+            <div className="text-xs sm:text-[14px] text-slate-500 font-semibold mt-1">Total Classes</div>
           </div>
-          <div className="border-t border-slate-100 pt-2 text-[11px] text-slate-400 font-medium">
+          <div className="border-t border-slate-100 pt-2 text-[10px] sm:text-[11px] text-slate-400 font-medium">
             <strong>Real-time</strong> from Org
           </div>
         </div>
 
         {/* Average Attendance */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between h-40">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-36 sm:h-40">
           <div className="flex justify-between items-center">
-            <div className="w-12 h-12 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center">
-              <svg className="w-6 h-6 stroke-current fill-none" viewBox="0 0 24 24">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 stroke-current fill-none" viewBox="0 0 24 24">
                 <line x1="18" y1="20" x2="18" y2="10" strokeWidth="2"></line>
                 <line x1="12" y1="20" x2="12" y2="4" strokeWidth="2"></line>
                 <line x1="6" y1="20" x2="6" y2="14" strokeWidth="2"></line>
               </svg>
             </div>
-            <div className="flex items-center gap-1 text-[12px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600">
+            <div className="flex items-center gap-1 text-[10px] sm:text-[12px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600">
               <svg className="w-3 h-3 stroke-current fill-none" viewBox="0 0 24 24">
                 <polyline points="18 15 12 9 6 15" strokeWidth="3"></polyline>
               </svg>
@@ -333,20 +333,19 @@ function AdminDashboardOverview() {
             </div>
           </div>
           <div>
-            <div className="text-[32px] font-extrabold text-slate-800 leading-none">{stats.attendanceRate}%</div>
-            <div className="text-[14px] text-slate-500 font-semibold mt-1">Average Attendance</div>
+            <div className="text-2xl sm:text-[32px] font-extrabold text-slate-800 leading-none">{stats.attendanceRate}%</div>
+            <div className="text-xs sm:text-[14px] text-slate-500 font-semibold mt-1">Average Attendance</div>
           </div>
-          <div className="border-t border-slate-100 pt-2 text-[11px] text-slate-400 font-medium">
+          <div className="border-t border-slate-100 pt-2 text-[10px] sm:text-[11px] text-slate-400 font-medium">
             <strong>Real-time</strong> from Org
           </div>
         </div>
-
       </div>
 
       {/* SECTION GRID - admissions and transaction lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* RECENT ADMISSIONS */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between h-[450px]">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-[450px]">
           <div>
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
               <div className="text-[16px] font-bold text-slate-800 flex items-center gap-2">
@@ -415,7 +414,7 @@ function AdminDashboardOverview() {
         </div>
 
         {/* RECENT PAYMENTS / TRANSACTIONS */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between h-[450px]">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-[450px]">
           <div>
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
               <div className="text-[16px] font-bold text-slate-800 flex items-center gap-2">

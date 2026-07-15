@@ -277,11 +277,11 @@ export default function FeesBillingPage() {
 
       {/* ACTIVE BILLING SUITE PANEL */}
       {selectedStudent ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
             <div>
               <h3 className="font-extrabold text-slate-850 text-base flex items-center gap-1.5">
-                <User className="w-5 h-5 text-blue-500" />
+                <User className="w-5 h-5 text-blue-500 shrink-0" />
                 Ledger: <span className="text-blue-600 font-black">{selectedStudent.account.name}</span>
               </h3>
               <p className="text-[11px] text-slate-450 mt-1 font-semibold">
@@ -289,7 +289,7 @@ export default function FeesBillingPage() {
               </p>
             </div>
             
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
@@ -315,8 +315,8 @@ export default function FeesBillingPage() {
             </div>
           ) : (
             <>
-              {/* Fee Table */}
-              <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              {/* ── Fee Table: Desktop (sm and above) ── */}
+              <div className="hidden sm:block overflow-x-auto border border-slate-100 rounded-xl">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
@@ -364,24 +364,90 @@ export default function FeesBillingPage() {
                 </table>
               </div>
 
+              {/* ── Fee Cards: Mobile only (below sm) ── */}
+              <div className="sm:hidden space-y-2.5">
+                {feeItems.map((fee) => {
+                  const isPaid = fee.balance <= 0;
+                  return (
+                    <div
+                      key={fee.id}
+                      className={`border rounded-xl p-3 space-y-2.5 transition-all ${
+                        fee.isSelected
+                          ? 'bg-blue-50/40 border-blue-200'
+                          : 'bg-white border-slate-200'
+                      } ${isPaid ? 'opacity-60' : ''}`}
+                    >
+                      {/* Primary row: Checkbox + Name + Total */}
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={fee.isSelected}
+                          disabled={isPaid}
+                          onChange={() => handleCheckboxChange(fee.id)}
+                          className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-bold text-slate-800 text-[13px] block leading-tight">{fee.name}</span>
+                          {isPaid && (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100 mt-0.5 inline-block">
+                              ✓ Fully Paid
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[13px] font-bold text-slate-700 font-mono">₹{fee.total.toLocaleString()}</span>
+                          <span className="text-[9px] text-slate-400 font-medium block">Total</span>
+                        </div>
+                      </div>
+
+                      {/* Secondary row: Balance + Payment input */}
+                      <div className="flex items-end justify-between gap-3 pl-8">
+                        <div>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide block">Balance Due</span>
+                          <span className={`text-sm font-bold font-mono ${fee.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            ₹{fee.balance.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">Pay Now</span>
+                          <input
+                            type="number"
+                            value={fee.isSelected ? fee.input : 0}
+                            disabled={!fee.isSelected || isPaid}
+                            onChange={(e) => handleInputChange(fee.id, Number(e.target.value))}
+                            className="w-28 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-right font-mono text-slate-800 font-bold text-sm outline-none focus:border-blue-400 disabled:opacity-50 disabled:bg-slate-50"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tertiary row: Discount + Paid (collapsed info) */}
+                      <div className="flex gap-4 pl-8 text-[10px] text-slate-400 font-medium border-t border-slate-100 pt-2">
+                        <span>Disc: <span className="text-slate-600 font-semibold">₹{fee.discount.toLocaleString()} ({fee.discountPercent}%)</span></span>
+                        <span>Paid: <span className="text-slate-600 font-semibold">₹{fee.paid.toLocaleString()}</span></span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               {/* Payment Method selector */}
-              <div className="space-y-4 pt-2">
+              <div className="space-y-3 pt-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Choose Collection Channel</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {paymentChannels.map((c) => {
                     const isSelected = selectedChannel === c.value;
                     return (
                       <div
                         key={c.value}
                         onClick={() => setSelectedChannel(c.value)}
-                        className={`p-4 border rounded-xl cursor-pointer flex flex-col items-center justify-center gap-1 transition-all ${
+                        className={`p-3 sm:p-4 border rounded-xl cursor-pointer flex flex-col items-center justify-center gap-1 transition-all ${
                           isSelected 
                             ? 'bg-blue-50 border-[#2E5BFF] text-[#2E5BFF] font-bold shadow-xs'
                             : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold'
                         }`}
                       >
                         <span className="text-xl">{c.icon}</span>
-                        <span className="text-xs">{c.label}</span>
+                        <span className="text-xs text-center leading-tight">{c.label}</span>
                       </div>
                     );
                   })}
@@ -439,41 +505,41 @@ export default function FeesBillingPage() {
               })()}
 
               {selectedChannel === 'NET_BANKING' && (
-                <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-3 text-xs max-w-md">
+                <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-3 text-xs">
                   <h4 className="font-bold text-slate-700">Net Banking Settlement details:</h4>
-                  <div className="grid grid-cols-2 gap-3 font-semibold">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-semibold">
                     <div>
                       <span className="text-slate-400 block mb-0.5">Bank Name</span>
-                      <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1" />
+                      <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1.5" />
                     </div>
                     <div>
                       <span className="text-slate-400 block mb-0.5">IFSC Code</span>
-                      <input type="text" value={ifscCode} onChange={(e) => setIfscCode(e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1" />
+                      <input type="text" value={ifscCode} onChange={(e) => setIfscCode(e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1.5" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <span className="text-slate-400 block mb-0.5">Account Number</span>
-                      <input type="text" value={accountNo} onChange={(e) => setAccountNo(e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1" />
+                      <input type="text" value={accountNo} onChange={(e) => setAccountNo(e.target.value)} className="w-full bg-white border border-slate-200 rounded p-1.5" />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Footer total info & confirmation */}
+              {/* Footer total info & action buttons */}
               <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Settlement:</span>
                   <span className="text-2xl font-black text-slate-800 font-mono">₹{billingTotal.toLocaleString()}</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => setSelectedStudent(null)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs bg-white hover:bg-slate-50"
+                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs bg-white hover:bg-slate-50"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleFinalizePayment}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-500/10"
+                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-500/10"
                   >
                     ✓ Finalize Payment
                   </button>
@@ -493,7 +559,7 @@ export default function FeesBillingPage() {
       )}
 
       {/* RECENT TRANSACTION HISTORY */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
         <h3 className="font-extrabold text-slate-850 text-base">Recent Transaction History</h3>
         
         {transactions.length === 0 ? (
@@ -501,65 +567,121 @@ export default function FeesBillingPage() {
             No recent payment transactions recorded.
           </div>
         ) : (
-          <div className="overflow-x-auto border border-slate-100 rounded-xl">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                  <th className="px-4 py-3">Invoice ID</th>
-                  <th className="px-4 py-3">Student</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Channel</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Management Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-slate-650 font-semibold">
-                {transactions.map((t) => {
-                  const isCancelled = t.status === 'Cancelled';
-                  return (
-                    <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-mono font-bold text-slate-800">{t.id.slice(0, 8)}...</td>
-                      <td className="px-4 py-3">
-                        <div>{t.name}</div>
-                        <div className="text-[10px] text-slate-400">Roll: {t.rollNo || 'N/A'}</div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-450">{t.dateStr}</td>
-                      <td className="px-4 py-3 font-bold text-slate-800 font-mono">₹{t.totalAmount.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-slate-500">{t.paymentMethod}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                          isCancelled 
-                            ? 'bg-rose-50 text-rose-600 border-rose-100'
-                            : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        }`}>
-                          {t.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            href={`/dashboard/billing/invoices/${t.id}`}
-                            className="px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 text-[10px] font-bold border border-slate-200 inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <Printer className="w-3 h-3" /> Print
-                          </Link>
-                          {!isCancelled && (
-                            <button
-                              onClick={() => handleRollback(t.id)}
-                              className="px-2.5 py-1 rounded bg-rose-50 text-rose-600 hover:bg-rose-100/30 text-[10px] font-bold border border-rose-100 inline-flex items-center gap-1 cursor-pointer"
+          <>
+            {/* ── Transactions Table: Desktop ── */}
+            <div className="hidden sm:block overflow-x-auto border border-slate-100 rounded-xl">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="px-4 py-3">Invoice ID</th>
+                    <th className="px-4 py-3">Student</th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Amount</th>
+                    <th className="px-4 py-3">Channel</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Management Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-650 font-semibold">
+                  {transactions.map((t) => {
+                    const isCancelled = t.status === 'Cancelled';
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 font-mono font-bold text-slate-800">{t.id.slice(0, 8)}...</td>
+                        <td className="px-4 py-3">
+                          <div>{t.name}</div>
+                          <div className="text-[10px] text-slate-400">Roll: {t.rollNo || 'N/A'}</div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-450">{t.dateStr}</td>
+                        <td className="px-4 py-3 font-bold text-slate-800 font-mono">₹{t.totalAmount.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-slate-500">{t.paymentMethod}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                            isCancelled 
+                              ? 'bg-rose-50 text-rose-600 border-rose-100'
+                              : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          }`}>
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            <Link
+                              href={`/dashboard/billing/invoices/${t.id}`}
+                              className="px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 text-[10px] font-bold border border-slate-200 inline-flex items-center gap-1 cursor-pointer"
                             >
-                              <RotateCcw className="w-3 h-3" /> Rollback
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                              <Printer className="w-3 h-3" /> Print
+                            </Link>
+                            {!isCancelled && (
+                              <button
+                                onClick={() => handleRollback(t.id)}
+                                className="px-2.5 py-1 rounded bg-rose-50 text-rose-600 hover:bg-rose-100/30 text-[10px] font-bold border border-rose-100 inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <RotateCcw className="w-3 h-3" /> Rollback
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Transaction Cards: Mobile ── */}
+            <div className="sm:hidden space-y-2.5">
+              {transactions.map((t) => {
+                const isCancelled = t.status === 'Cancelled';
+                return (
+                  <div key={t.id} className="border border-slate-200 rounded-xl p-3 space-y-2 bg-white">
+                    {/* Row 1: Student + Amount */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-800 text-[13px] block truncate">{t.name}</span>
+                        <span className="text-[10px] text-slate-400">Roll: {t.rollNo || 'N/A'}</span>
+                      </div>
+                      <span className="font-bold text-slate-800 font-mono text-sm shrink-0">₹{t.totalAmount.toLocaleString()}</span>
+                    </div>
+
+                    {/* Row 2: Invoice ID, Date, Channel, Status */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[10px] text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                        #{t.id.slice(0, 8)}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{t.dateStr}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">{t.paymentMethod}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                        isCancelled 
+                          ? 'bg-rose-50 text-rose-600 border-rose-100'
+                          : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                      }`}>
+                        {t.status}
+                      </span>
+                    </div>
+
+                    {/* Row 3: Full-width action buttons */}
+                    <div className="flex gap-2 pt-0.5">
+                      <Link
+                        href={`/dashboard/billing/invoices/${t.id}`}
+                        className="flex-1 py-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 inline-flex items-center justify-center gap-1.5"
+                      >
+                        <Printer className="w-3.5 h-3.5" /> Print Invoice
+                      </Link>
+                      {!isCancelled && (
+                        <button
+                          onClick={() => handleRollback(t.id)}
+                          className="flex-1 py-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100/50 text-xs font-bold border border-rose-100 inline-flex items-center justify-center gap-1.5"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" /> Rollback
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>
