@@ -574,7 +574,18 @@ export class BillingService {
       }, 0);
 
       totalPaid = openOpp.invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+
+      // ── FALLBACK: If the opportunity has no line items (e.g. promotion without a matching pricebook),
+      //    compute the fee total from the class pricebook so the summary cards show correct numbers.
+      if (totalFee === 0 && openOpp.classId) {
+        const pricebookProducts = await this.getActiveProducts(
+          openOpp.classId,
+          openOpp.academicYearId || undefined,
+        );
+        totalFee = pricebookProducts.reduce((sum, p) => sum + p.unitPrice, 0);
+      }
     }
+
 
     // Determine currentYearStart for previous years calculation
     let currentYearStart = new Date(0);
@@ -710,7 +721,7 @@ export class BillingService {
       throw new NotFoundException('Opportunity not found');
     }
 
-    // Map Opportunity Line Item paid amounts
+    // Map Opportunity Line Item paid amounts from all non-voided invoices
     const invoiceItems = await this.prisma.invoiceItem.findMany({
       where: {
         tenantId,
@@ -729,20 +740,59 @@ export class BillingService {
       }
     }
 
+    // Also build a name-based paid map from invoice items that have no linked OLI
+    // (e.g. invoices created during promotion without OLI references)
+    const namePaidMap = new Map<string, number>();
+    for (const item of invoiceItems) {
+      if (!item.opportunityLineItemId && item.name) {
+        const cur = namePaidMap.get(item.name.toLowerCase()) || 0;
+        namePaidMap.set(item.name.toLowerCase(), cur + Number(item.amount));
+      }
+    }
+
     // Fetch opportunity line items
-    const olis = await this.prisma.opportunityLineItem.findMany({
+    let olis = await this.prisma.opportunityLineItem.findMany({
       where: { opportunityId, tenantId },
-      include: {
-        product: true,
-      },
+      include: { product: true },
     });
 
-    const result = olis.map(oli => {
+    // ── FALLBACK: If this opportunity has no OLIs (e.g. promotion when pricebook
+    //    lookup failed), auto-create them from the class pricebook so the admin can collect fees.
+    if (olis.length === 0 && opportunity.classId) {
+      const pricebookProducts = await this.getActiveProducts(
+        opportunity.classId,
+        opportunity.academicYearId || undefined,
+      );
+
+      if (pricebookProducts.length > 0) {
+        await this.prisma.opportunityLineItem.createMany({
+          data: pricebookProducts.map(p => ({
+            opportunityId,
+            pricebookEntryId: p.id,
+            productId: p.product2Id,
+            quantity: 1,
+            unitPrice: p.unitPrice,
+            discount: 0,
+            tenantId,
+          })),
+        });
+
+        olis = await this.prisma.opportunityLineItem.findMany({
+          where: { opportunityId, tenantId },
+          include: { product: true },
+        });
+      }
+    }
+
+    const result: any[] = olis.map(oli => {
       const totalAmount = Number(oli.unitPrice) * Number(oli.quantity);
       const discountPercent = Number(oli.discount);
       const discountAmount = (totalAmount * discountPercent) / 100;
       const netAmount = totalAmount - discountAmount;
-      const paidAmount = oliPaidMap.get(oli.id) || 0;
+      // Check both OLI-linked payments and name-based payments (from promotion invoices)
+      const paidByOli = oliPaidMap.get(oli.id) || 0;
+      const paidByName = namePaidMap.get(oli.product.name.toLowerCase()) || 0;
+      const paidAmount = Math.max(paidByOli, paidByName);
       const balanceDue = netAmount - paidAmount;
 
       return {
@@ -758,7 +808,7 @@ export class BillingService {
       };
     });
 
-    // Check if there are unpaid/partially paid invoices from previous years (aligned with getStudentById definition)
+    // Check if there are unpaid/partially paid invoices from previous years
     const studentInfo = await this.getStudentById(opportunity.studentId, opportunity.academicYearId);
     const prevBalanceDue = studentInfo.feeSummary.overall.totalPreviousYearDue;
 
