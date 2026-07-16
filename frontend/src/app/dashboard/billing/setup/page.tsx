@@ -64,10 +64,10 @@ export default function FeeSetupPage() {
 
   // ── Load dropdowns on mount ──────────────────────────────────────────────
 
-  const loadDropdownData = useCallback(async () => {
+  const loadDropdownData = useCallback(async (academicYearId?: string) => {
     try {
       const [classesRes, yearsRes, productsRes] = await Promise.all([
-        api.get('/academics/classes'),
+        api.get('/academics/classes', { params: academicYearId ? { academicYearId } : {} }),
         api.get('/academics/academic-years'),
         api.get('/billing/products'),
       ]);
@@ -83,7 +83,16 @@ export default function FeeSetupPage() {
     loadDropdownData();
   }, [loadDropdownData]);
 
-  useSchoolSetupUpdate(loadDropdownData);
+  useSchoolSetupUpdate(() => loadDropdownData(selectedYear || undefined));
+
+  // When academic year changes in the price book tab, reload classes filtered by that year
+  // and clear the selected class to force re-selection
+  useEffect(() => {
+    if (selectedYear) {
+      loadDropdownData(selectedYear);
+      setSelectedClass('');
+    }
+  }, [selectedYear, loadDropdownData]);
 
   // ── Auto-load pricebook when class + year are both selected ──────────────
 

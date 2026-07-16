@@ -95,10 +95,14 @@ export class AcademicsService {
     });
   }
 
-  async getClasses() {
+  async getClasses(academicYearId?: string) {
     const tenantId = this.getTenantId();
     return this.prisma.class.findMany({
-      where: { tenantId, isActive: true },
+      where: {
+        tenantId,
+        isActive: true,
+        ...(academicYearId ? { academicYearId } : {}),
+      },
       include: { academicYear: true },
       orderBy: { name: 'asc' },
     });

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { AcademicsService } from './academics.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -35,8 +35,8 @@ export class AcademicsController {
   }
 
   @Get('classes')
-  async getClasses() {
-    return this.academicsService.getClasses();
+  async getClasses(@Query('academicYearId') academicYearId?: string) {
+    return this.academicsService.getClasses(academicYearId);
   }
 
   @Get('classes/:id/student-count')

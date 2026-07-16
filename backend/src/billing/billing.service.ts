@@ -58,74 +58,74 @@ export class BillingService {
       return [];
     }
 
-    let classPriceBook;
+    // Get the class record so we know the class name for fallback lookups
+    const classRecord = await this.prisma.class.findFirst({
+      where: { id: classId, tenantId },
+    });
+    const className = classRecord?.name || '';
+
+    let classPriceBook: any = null;
+
+    // ── TIER 1: Exact match by classId + academicYearId ─────────────────────
     if (academicYearId) {
-      // First try strong relation
       classPriceBook = await this.prisma.pricebook.findFirst({
-        where: {
-          tenantId,
-          classId,
-          academicYearId,
-          isActive: true
-        }
+        where: { tenantId, classId, academicYearId, isActive: true },
       });
-
-      // Fallback to name matching
-      if (!classPriceBook) {
-        const classRecord = await this.prisma.class.findFirst({
-          where: { id: classId, tenantId },
-        });
-        if (classRecord) {
-          const className = classRecord.name;
-          const priceBookName = className.replace('-', ' ');
-          const priceBookNameAlt = className.replace(' ', '-');
-          classPriceBook = await this.prisma.pricebook.findFirst({
-            where: {
-              tenantId,
-              isActive: true,
-              academicYearId,
-              OR: [
-                { name: { equals: priceBookName, mode: 'insensitive' } },
-                { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
-                { name: { startsWith: priceBookName, mode: 'insensitive' } },
-                { name: { startsWith: priceBookNameAlt, mode: 'insensitive' } },
-              ],
-            },
-            orderBy: { academicYearId: 'asc' },
-          });
-        }
-      }
     } else {
-      // First try strong relation
+      classPriceBook = await this.prisma.pricebook.findFirst({
+        where: { tenantId, classId, isActive: true },
+        orderBy: { academicYearId: 'desc' },
+      });
+    }
+
+    // ── TIER 2: Find pricebook for same class name in the same academic year ─
+    // This handles the case where promotion created a NEW class entity (different ID)
+    // but the pricebook was linked to an OLDER class entity with the same name.
+    if (!classPriceBook && className && academicYearId) {
+      // Find all classes with the same name in the target academic year
+      const siblingsClasses = await this.prisma.class.findMany({
+        where: {
+          tenantId,
+          name: { equals: className, mode: 'insensitive' },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      const siblingIds = siblingsClasses.map(c => c.id).filter(id => id !== classId);
+
+      if (siblingIds.length > 0) {
+        // Look for a pricebook linked to any of these classes for this academic year
+        classPriceBook = await this.prisma.pricebook.findFirst({
+          where: {
+            tenantId,
+            classId: { in: siblingIds },
+            academicYearId,
+            isActive: true,
+          },
+        });
+      }
+    }
+
+    // ── TIER 3: Name-based pricebook lookup ──────────────────────────────────
+    // As a last resort, find pricebooks whose name contains the class name
+    if (!classPriceBook && className) {
+      const normalizedName = className.replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+      const hyphenName = className.replace(/\s+/g, '-');
+
       classPriceBook = await this.prisma.pricebook.findFirst({
         where: {
           tenantId,
-          classId,
-          isActive: true
-        }
+          isActive: true,
+          ...(academicYearId ? { academicYearId } : {}),
+          OR: [
+            { name: { startsWith: normalizedName, mode: 'insensitive' } },
+            { name: { startsWith: hyphenName, mode: 'insensitive' } },
+            { name: { equals: normalizedName, mode: 'insensitive' } },
+            { name: { equals: hyphenName, mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { academicYearId: 'desc' },
       });
-
-      // Fallback to name matching
-      if (!classPriceBook) {
-        const classRecord = await this.prisma.class.findFirst({
-          where: { id: classId, tenantId },
-        });
-        if (classRecord) {
-          const className = classRecord.name;
-          const priceBookName = className.replace('-', ' ');
-          const priceBookNameAlt = className.replace(' ', '-');
-          classPriceBook = await this.prisma.pricebook.findFirst({
-            where: {
-              tenantId,
-              isActive: true,
-              OR: [
-                { name: { equals: priceBookName, mode: 'insensitive' } },
-                { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
-              ],
-            },
-          });
-        }
-      }
     }
 
     if (!classPriceBook) {
