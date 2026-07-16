@@ -135,9 +135,19 @@ export class StudentsService implements OnModuleInit {
               where: { name: data.selectedSection, tenantId }
             });
             if (sec) {
-              const cs = await tx.classSection.findFirst({
+              let cs = await tx.classSection.findFirst({
                 where: { classId: cls.id, sectionId: sec.id, tenantId }
               });
+              if (!cs) {
+                cs = await tx.classSection.create({
+                  data: {
+                    classId: cls.id,
+                    sectionId: sec.id,
+                    tenantId,
+                    strength: 0
+                  }
+                });
+              }
               if (cs) {
                 classSectionId = cs.id;
               }

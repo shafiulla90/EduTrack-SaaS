@@ -204,13 +204,23 @@ export class BillingService {
       // Resolve classSection
       let classSectionId = null;
       if (studentData.selectedClass && studentData.selectedSection) {
-        const classSec = await tx.classSection.findFirst({
+        let classSec = await tx.classSection.findFirst({
           where: {
             classId: studentData.selectedClass,
             sectionId: studentData.selectedSection,
             tenantId,
           },
         });
+        if (!classSec) {
+          classSec = await tx.classSection.create({
+            data: {
+              classId: studentData.selectedClass,
+              sectionId: studentData.selectedSection,
+              tenantId,
+              strength: 0,
+            },
+          });
+        }
         if (classSec) {
           classSectionId = classSec.id;
         }
@@ -352,6 +362,26 @@ export class BillingService {
 
   async getSectionOptions(classId?: string) {
     const tenantId = this.getTenantId();
+    
+    if (classId) {
+      const classSections = await this.prisma.classSection.findMany({
+        where: {
+          tenantId,
+          classId,
+          section: { isActive: true },
+        },
+        include: {
+          section: true,
+        },
+        orderBy: {
+          section: { name: 'asc' },
+        },
+      });
+      if (classSections.length > 0) {
+        return classSections.map(cs => ({ label: cs.section.name, value: cs.section.id }));
+      }
+    }
+
     const sections = await this.prisma.section.findMany({
       where: { tenantId, isActive: true },
       orderBy: { name: 'asc' },
