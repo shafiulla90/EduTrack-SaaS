@@ -423,6 +423,13 @@ export class BillingService {
         studentId: { in: studentIds },
         tenantId,
         status: { in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID] }
+      },
+      include: {
+        opportunity: {
+          include: {
+            academicYear: true
+          }
+        }
       }
     });
 
@@ -439,10 +446,7 @@ export class BillingService {
           return sum + (itemTotal - itemDiscount);
         }, 0);
 
-        totalPaid = openOpp.invoices.reduce((sum, inv) => {
-          const invoiceSum = inv.invoiceItems.reduce((iSum, item) => iSum + Number(item.amount), 0);
-          return sum + invoiceSum;
-        }, 0);
+        totalPaid = openOpp.invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
       }
 
       // Calculate previous years unpaid balances
@@ -454,10 +458,14 @@ export class BillingService {
         if (cy) currentYearStart = cy.startDate;
       }
 
-      const studentPrevUnpaid = unpaidInvoices.filter(inv => 
-        inv.studentId === student.id && 
-        new Date(inv.invoiceDate) < currentYearStart
-      );
+      const studentPrevUnpaid = unpaidInvoices.filter(inv => {
+        if (inv.studentId !== student.id) return false;
+        if (inv.opportunity?.academicYearId) {
+          if (inv.opportunity.academicYearId === openOpp?.academicYearId) return false;
+          return new Date(inv.opportunity.academicYear.startDate) < currentYearStart;
+        }
+        return new Date(inv.invoiceDate) < currentYearStart;
+      });
 
       const totalPreviousYearDue = studentPrevUnpaid.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
 
@@ -532,10 +540,7 @@ export class BillingService {
         return sum + (itemTotal - itemDiscount);
       }, 0);
 
-      totalPaid = openOpp.invoices.reduce((sum, inv) => {
-        const invoiceSum = inv.invoiceItems.reduce((iSum, item) => iSum + Number(item.amount), 0);
-        return sum + invoiceSum;
-      }, 0);
+      totalPaid = openOpp.invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
     }
 
     // Calculate dynamic previous academic year outstanding dues
@@ -553,12 +558,29 @@ export class BillingService {
       where: {
         studentId,
         tenantId,
-        invoiceDate: {
-          lt: currentYearStart
-        },
         status: {
           in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
-        }
+        },
+        OR: [
+          {
+            opportunityId: null,
+            invoiceDate: {
+              lt: currentYearStart
+            }
+          },
+          {
+            opportunity: {
+              academicYearId: {
+                not: openOpp?.academicYearId || undefined
+              },
+              academicYear: {
+                startDate: {
+                  lt: currentYearStart
+                }
+              }
+            }
+          }
+        ]
       },
       include: {
         opportunity: {

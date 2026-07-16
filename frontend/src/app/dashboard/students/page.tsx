@@ -266,7 +266,13 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
           number: `INV-${inv.id.substring(0, 8).toUpperCase()}`,
           mode: inv.paymentMethod || '—',
           amount: Number(inv.totalAmount),
+          paidAmount: Number(inv.paidAmount),
+          remainingBalance: Number(inv.remainingBalance),
           status: inv.status === 'PAID' ? 'Paid' : 'Pending',
+          academicYearId: inv.opportunity?.academicYearId || null,
+          academicYearName: inv.opportunity?.academicYear?.name || null,
+          academicYearStart: inv.opportunity?.academicYear?.startDate || null,
+          invoiceDateRaw: inv.invoiceDate,
           items: inv.invoiceItems?.map((it: any) => ({
             name: it.name,
             amount: Number(it.amount)
@@ -292,6 +298,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
       }
 
       setActiveStudent(fullStudent);
+      setSelectedYear(fullStudent.academicYearId || 'All');
       setExpandedInvoices({});
       setExpandedExams({});
       setTempDiscount(0);
@@ -340,12 +347,49 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
   // Recalculated values based on discount
   const getRecalculatedFees = () => {
-    if (!activeStudent || !detailData) return { list: [], subtotal: 0, discVal: 0, final: 0 };
-    const baseTotal = activeStudent.paidAmount + activeStudent.balanceDue;
-    const discAmt = baseTotal * (appliedDiscountPercent / 100);
-    const finalVal = baseTotal - discAmt;
+    if (!activeStudent || !detailData) {
+      return { 
+        list: [], 
+        subtotal: 0, 
+        discVal: 0, 
+        final: 0, 
+        previousYearsDues: [], 
+        totalPreviousYearDue: 0 
+      };
+    }
+    
+    const currentYearId = (selectedYear === 'All' || !selectedYear) ? activeStudent.academicYearId : selectedYear;
+    const currentYearObj = academicYears.find(ay => ay.id === currentYearId);
+    const currentYearStart = currentYearObj ? new Date(currentYearObj.startDate) : new Date();
+    const currentYearEnd = currentYearObj ? new Date(currentYearObj.endDate) : new Date();
 
-    const list = detailData.products.map((p: any) => {
+    // 1. Filter current year invoices
+    const currentYearInvoices = detailData.invoices.filter((inv: any) => {
+      if (inv.academicYearId) {
+        return inv.academicYearId === currentYearId;
+      }
+      const invDate = new Date(inv.invoiceDateRaw);
+      return invDate >= currentYearStart && invDate <= currentYearEnd;
+    });
+
+    // 2. Map current year products
+    const productsList = currentYearInvoices.flatMap((inv: any) => 
+      inv.items.map((it: any, idx: number) => ({
+        id: `${inv.id}-${it.name}-${idx}`,
+        name: it.name,
+        price: Number(it.amount),
+        grossTotal: Number(it.amount),
+        discountPercent: 0,
+        discountAmount: 0,
+        netTotal: Number(it.amount)
+      }))
+    );
+
+    const subtotal = productsList.reduce((sum: number, p: any) => sum + p.price, 0);
+    const discVal = subtotal * (appliedDiscountPercent / 100);
+    const finalVal = subtotal - discVal;
+
+    const list = productsList.map((p: any) => {
       const price = p.price;
       const discountAmount = price * (appliedDiscountPercent / 100);
       const netTotal = price - discountAmount;
@@ -356,11 +400,39 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
       };
     });
 
+    // 3. Prior Year Dues mapping (outstanding remainingBalance)
+    const prevInvoices = detailData.invoices.filter((inv: any) => {
+      let isBefore = false;
+      if (inv.academicYearStart) {
+        isBefore = new Date(inv.academicYearStart) < currentYearStart;
+      } else {
+        isBefore = new Date(inv.invoiceDateRaw) < currentYearStart;
+      }
+      return isBefore && inv.remainingBalance > 0;
+    });
+
+    const prevYearDuesMap = new Map<string, { yearName: string, balance: number }>();
+    for (const inv of prevInvoices) {
+      const yearName = inv.academicYearName || 'Previous Years';
+      const balance = inv.remainingBalance;
+      if (balance > 0) {
+        const existing = prevYearDuesMap.get(yearName) || { yearName, balance: 0 };
+        prevYearDuesMap.set(yearName, {
+          yearName,
+          balance: existing.balance + balance
+        });
+      }
+    }
+    const previousYearsDues = Array.from(prevYearDuesMap.values());
+    const totalPreviousYearDue = previousYearsDues.reduce((sum: number, item: any) => sum + item.balance, 0);
+
     return {
       list,
-      subtotal: baseTotal,
-      discVal: discAmt,
-      final: finalVal
+      subtotal,
+      discVal,
+      final: finalVal,
+      previousYearsDues,
+      totalPreviousYearDue
     };
   };
 
@@ -774,30 +846,42 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
               </div>
 
               {/* Fee Information Summary Card */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <DollarSign className="w-5 h-5 text-blue-500" />
-                  <h3 className="text-base font-bold text-slate-800">Fee Information Summary</h3>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
-                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Allocated Amt</span>
-                    <span className="text-slate-800 text-lg font-extrabold block mt-1">₹{(activeStudent.paidAmount + activeStudent.balanceDue).toLocaleString()}</span>
+              {(() => {
+                const overallPaid = detailData 
+                  ? detailData.invoices.reduce((sum: number, inv: any) => sum + inv.paidAmount, 0) 
+                  : activeStudent.paidAmount;
+                const overallPending = detailData 
+                  ? detailData.invoices.reduce((sum: number, inv: any) => sum + inv.remainingBalance, 0) 
+                  : activeStudent.balanceDue;
+                const overallAllocated = overallPaid + overallPending;
+
+                return (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                      <DollarSign className="w-5 h-5 text-blue-500" />
+                      <h3 className="text-base font-bold text-slate-800">Fee Information Summary</h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                        <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Allocated Amt</span>
+                        <span className="text-slate-800 text-lg font-extrabold block mt-1">₹{overallAllocated.toLocaleString()}</span>
+                      </div>
+                      <div className="p-4 bg-emerald-50/40 border border-emerald-100/50 rounded-xl">
+                        <span className="text-emerald-600 text-[10px] font-bold uppercase tracking-wider block">Total Paid</span>
+                        <span className="text-emerald-700 text-lg font-extrabold block mt-1">₹{overallPaid.toLocaleString()}</span>
+                      </div>
+                      <div className="p-4 bg-amber-50/40 border border-amber-100/50 rounded-xl">
+                        <span className="text-amber-600 text-[10px] font-bold uppercase tracking-wider block">Pending Bal</span>
+                        <span className="text-amber-700 text-lg font-extrabold block mt-1">₹{overallPending.toLocaleString()}</span>
+                      </div>
+                      <div className="p-4 bg-purple-50/40 border border-purple-100/50 rounded-xl">
+                        <span className="text-purple-600 text-[10px] font-bold uppercase tracking-wider block">Discount Given</span>
+                        <span className="text-purple-700 text-lg font-extrabold block mt-1">₹{recFees.discVal.toLocaleString()}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-4 bg-emerald-50/40 border border-emerald-100/50 rounded-xl">
-                    <span className="text-emerald-600 text-[10px] font-bold uppercase tracking-wider block">Total Paid</span>
-                    <span className="text-emerald-700 text-lg font-extrabold block mt-1">₹{activeStudent.paidAmount.toLocaleString()}</span>
-                  </div>
-                  <div className="p-4 bg-amber-50/40 border border-amber-100/50 rounded-xl">
-                    <span className="text-amber-600 text-[10px] font-bold uppercase tracking-wider block">Pending Bal</span>
-                    <span className="text-amber-700 text-lg font-extrabold block mt-1">₹{activeStudent.balanceDue.toLocaleString()}</span>
-                  </div>
-                  <div className="p-4 bg-purple-50/40 border border-purple-100/50 rounded-xl">
-                    <span className="text-purple-600 text-[10px] font-bold uppercase tracking-wider block">Discount Given</span>
-                    <span className="text-purple-700 text-lg font-extrabold block mt-1">₹{recFees.discVal.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Current Academic Year Fees Card */}
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
@@ -879,6 +963,43 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                     </tbody>
                   </table>
                 </div>
+
+                {/* Previous Year Balance Brought Forward Section */}
+                {recFees.previousYearsDues && recFees.previousYearsDues.length > 0 && (
+                  <div className="mt-6 border-t border-slate-100 pt-5 space-y-3">
+                    <h4 className="text-xs font-bold text-rose-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4" />
+                      Previous Year Balance Brought Forward
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {recFees.previousYearsDues.map((item: any, idx: number) => (
+                        <div key={idx} className="bg-rose-50/50 border border-rose-100 rounded-xl p-3.5 flex justify-between items-center text-xs">
+                          <div>
+                            <span className="text-slate-500 font-medium block">Academic Year</span>
+                            <strong className="text-slate-800 text-sm font-bold block mt-0.5">{item.yearName}</strong>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-500 font-medium block">Outstanding Balance</span>
+                            <strong className="text-rose-600 text-sm font-extrabold block mt-0.5">₹{item.balance.toLocaleString()}</strong>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Grand Total Outstanding Banner */}
+                {recFees.previousYearsDues && recFees.previousYearsDues.length > 0 && (
+                  <div className="mt-4 p-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl flex justify-between items-center shadow-sm">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Grand Total Outstanding</span>
+                      <p className="text-[11px] text-slate-350 mt-0.5">(Current Year + Previous Years Outstanding)</p>
+                    </div>
+                    <strong className="text-rose-400 text-lg font-black font-mono">
+                      ₹{(recFees.final + recFees.totalPreviousYearDue).toLocaleString()}
+                    </strong>
+                  </div>
+                )}
               </div>
 
               {/* Invoice Transactions Card */}

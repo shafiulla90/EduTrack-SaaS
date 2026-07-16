@@ -357,7 +357,14 @@ export class StudentsService implements OnModuleInit {
         },
         invoices: {
           where: { tenantId },
-          include: { invoiceItems: true },
+          include: { 
+            invoiceItems: true,
+            opportunity: {
+              include: {
+                academicYear: true
+              }
+            }
+          },
           orderBy: { invoiceDate: 'desc' }
         },
         opportunities: {
@@ -868,10 +875,20 @@ export class StudentsService implements OnModuleInit {
             where: {
               studentId,
               tenantId,
-              invoiceDate: {
-                gte: sourceYear.startDate,
-                lte: sourceYear.endDate
-              },
+              OR: [
+                {
+                  opportunity: {
+                    academicYearId: sourceYearId
+                  }
+                },
+                {
+                  opportunityId: null,
+                  invoiceDate: {
+                    gte: sourceYear.startDate,
+                    lte: sourceYear.endDate
+                  }
+                }
+              ],
               status: {
                 in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
               }
@@ -1047,10 +1064,20 @@ export class StudentsService implements OnModuleInit {
         where: {
           studentId: { in: studentIds },
           tenantId,
-          invoiceDate: {
-            gte: sourceYear.startDate,
-            lte: sourceYear.endDate
-          },
+          OR: [
+            {
+              opportunity: {
+                academicYearId: sourceYearId
+              }
+            },
+            {
+              opportunityId: null,
+              invoiceDate: {
+                gte: sourceYear.startDate,
+                lte: sourceYear.endDate
+              }
+            }
+          ],
           status: {
             in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
           }
