@@ -82,6 +82,13 @@ export default function StudentPromotionPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [promotedCount, setPromotedCount] = useState(0);
 
+  // Validation / Summary Dialog States
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationData, setValidationData] = useState<any>(null);
+
+  // Post-Promotion Summary Report State
+  const [reportData, setReportData] = useState<any>(null);
+
   // Load Academic Years
   useEffect(() => {
     const fetchYears = async () => {
@@ -294,13 +301,40 @@ export default function StudentPromotionPage() {
     setSearchQuery('');
   };
 
+  const executePromotion = async (candidateIds: string[]) => {
+    const targetYearLabel = academicYears.find(y => y.id === targetYear)?.name || 'Next Year';
+    setIsLoading(true);
+    try {
+      const res = await api.post('/students/promote', {
+        studentIds: candidateIds,
+        sourceYearId: sourceYear,
+        targetYearId: targetYear,
+        targetClassName: sourceClass === 'ALL' ? 'ALL' : targetClass,
+        targetSectionName: targetSection || undefined,
+      });
+
+      setReportData(res.data);
+      setPromotedCount(res.data.promotedCount);
+      setSuccessMessage(
+        sourceClass === 'ALL' 
+          ? `Successfully promoted ${res.data.promotedCount} students across classes to their next grades for Academic Year ${targetYearLabel}.`
+          : `Successfully promoted ${res.data.promotedCount} students from ${sourceClass} to ${targetClass} (${targetSection || sourceSection}) for ${targetYearLabel}.`
+      );
+      
+      setShowSuccessModal(true);
+      fetchCandidates();
+    } catch (err: any) {
+      console.error('Promotion failed:', err);
+      alert(`Promotion failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Perform promotion on backend
   const handlePromote = async () => {
     const targetYearLabel = academicYears.find(y => y.id === targetYear)?.name || 'Next Year';
     
-    let confirmMsg = '';
-    let count = 0;
-
     const candidateIds = sourceClass === 'ALL' 
       ? studentsState.map(s => s.id)
       : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
@@ -310,39 +344,33 @@ export default function StudentPromotionPage() {
       return;
     }
 
-    if (sourceClass === 'ALL') {
-      count = sourceTotalCount;
-      confirmMsg = `PROMOTING ALL CLASSES:\nThis will promote all eligible classes (${count} students) to their next sequential grades for the Academic Year ${targetYearLabel}. Do you wish to proceed?`;
-    } else {
-      count = candidateIds.length;
-      confirmMsg = `Promote ${count} students from ${sourceClass} to ${targetClass} for ${targetYearLabel}?`;
-    }
-
-    if (!window.confirm(confirmMsg)) return;
-
     setIsLoading(true);
     try {
-      await api.post('/students/promote', {
+      const valRes = await api.post('/students/promote/validate', {
         studentIds: candidateIds,
-        sourceYearId: sourceYear,
-        targetYearId: targetYear,
-        targetClassName: sourceClass === 'ALL' ? 'ALL' : targetClass,
-        targetSectionName: targetSection || undefined,
+        sourceYearId: sourceYear
       });
+      setValidationData(valRes.data);
+      setIsLoading(false);
 
-      setPromotedCount(count);
-      setSuccessMessage(
-        sourceClass === 'ALL' 
-          ? `Successfully promoted ${count} students across classes to their next grades for Academic Year ${targetYearLabel}.`
-          : `Successfully promoted ${count} students from ${sourceClass} to ${targetClass} (${targetSection || sourceSection}) for ${targetYearLabel}.`
-      );
-      
-      setShowSuccessModal(true);
-      fetchCandidates();
+      if (valRes.data.studentsWithPendingDue > 0) {
+        setShowValidationModal(true);
+      } else {
+        // No dues, confirm normally
+        let confirmMsg = '';
+        let count = candidateIds.length;
+        if (sourceClass === 'ALL') {
+          confirmMsg = `PROMOTING ALL CLASSES:\nThis will promote all eligible classes (${count} students) to their next sequential grades for the Academic Year ${targetYearLabel}. Do you wish to proceed?`;
+        } else {
+          confirmMsg = `Promote ${count} students from ${sourceClass} to ${targetClass} for ${targetYearLabel}?`;
+        }
+
+        if (!window.confirm(confirmMsg)) return;
+        await executePromotion(candidateIds);
+      }
     } catch (err: any) {
-      console.error('Promotion failed:', err);
-      alert(`Promotion failed: ${err.response?.data?.message || err.message}`);
-    } finally {
+      console.error('Validation failed:', err);
+      alert(`Validation failed: ${err.response?.data?.message || err.message}`);
       setIsLoading(false);
     }
   };
@@ -833,8 +861,8 @@ export default function StudentPromotionPage() {
       {/* Success Modal Overlay */}
       {showSuccessModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border border-slate-100 animate-in flex flex-col items-center text-center">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-400 to-cyan-400 flex items-center justify-center text-white text-3xl shadow-lg shadow-emerald-500/20 mb-6 animate-bounce">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-2xl border border-slate-100 animate-in flex flex-col items-center text-center max-h-[90vh] overflow-y-auto">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-400 to-cyan-400 flex items-center justify-center text-white text-3xl shadow-lg shadow-emerald-500/20 mb-6 animate-bounce shrink-0">
               ✨
             </div>
             
@@ -842,9 +870,53 @@ export default function StudentPromotionPage() {
               Promotion Successful!
             </h3>
             
-            <p className="text-sm text-slate-500 font-medium leading-relaxed mb-6">
+            <p className="text-sm text-slate-500 font-medium leading-relaxed mb-4">
               {successMessage}
             </p>
+
+            {/* Post-Promotion Summary Report */}
+            {reportData && (
+              <div className="w-full space-y-4 mb-6">
+                <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 border border-slate-200 rounded-xl text-center text-xs">
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Promoted</span>
+                    <strong className="text-sm font-extrabold text-blue-600">{reportData.promotedCount}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Carried Forward</span>
+                    <strong className="text-sm font-extrabold text-amber-600">{reportData.studentsWithCarriedForwardDues}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">CF Amount</span>
+                    <strong className="text-sm font-extrabold text-rose-600">₹{reportData.totalCarriedForwardAmount.toLocaleString()}</strong>
+                  </div>
+                </div>
+
+                <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl text-xs text-left">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-250 text-slate-400 font-bold">
+                        <th className="p-2">Student</th>
+                        <th className="p-2 text-right">Carried Forward</th>
+                        <th className="p-2 text-right">Total Outstanding</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-655 font-semibold">
+                      {reportData.studentOutstandingBalances.map((item: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-2">
+                            <div className="font-bold text-slate-800">{item.name}</div>
+                            <div className="text-[9px] text-slate-400">Roll: {item.rollNo}</div>
+                          </td>
+                          <td className="p-2 text-right font-bold text-amber-600">₹{item.carriedForwardAmount.toLocaleString()}</td>
+                          <td className="p-2 text-right font-bold text-slate-800">₹{item.totalOutstanding.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4 w-full bg-slate-50 p-4 border border-slate-150 rounded-2xl mb-6 text-xs text-slate-600">
               <div className="text-center border-r border-slate-200">
@@ -863,6 +935,106 @@ export default function StudentPromotionPage() {
             >
               Continue
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── VALIDATION MODAL ── */}
+      {showValidationModal && validationData && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-200 pb-4 mb-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                <h3 className="text-lg font-bold text-slate-800">Student Promotion Summary</h3>
+              </div>
+              <button 
+                onClick={() => setShowValidationModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Metrics */}
+            <div className="grid grid-cols-4 gap-4 bg-slate-50 p-4 border border-slate-200 rounded-xl mb-4 text-center">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Selected</span>
+                <span className="text-base font-extrabold text-slate-700">{validationData.totalSelected}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">No Due</span>
+                <span className="text-base font-extrabold text-emerald-600">{validationData.studentsWithNoDue}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Pending Due</span>
+                <span className="text-base font-extrabold text-amber-600">{validationData.studentsWithPendingDue}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Due</span>
+                <span className="text-base font-extrabold text-rose-650">₹{validationData.totalOutstandingDue.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 overflow-y-auto min-h-[150px] border border-slate-200 rounded-xl mb-4">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-250 text-slate-400 font-bold sticky top-0">
+                    <th className="p-3">Student</th>
+                    <th className="p-3">Class</th>
+                    <th className="p-3">Previous Academic Year</th>
+                    <th className="p-3 text-right">Pending Due</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-655 font-semibold">
+                  {validationData.dueList.map((item: any) => (
+                    <tr key={item.studentId} className="hover:bg-slate-50">
+                      <td className="p-3">
+                        <div className="font-bold text-slate-800">{item.name}</div>
+                        <div className="text-[10px] text-slate-400">Adm: {item.rollNo}</div>
+                      </td>
+                      <td className="p-3">{item.class}-{item.section}</td>
+                      <td className="p-3">{item.sourceYear}</td>
+                      <td className="p-3 text-right font-bold text-rose-650">₹{item.pendingDue.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Warning Message */}
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-6 flex gap-3 text-xs text-amber-800">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed font-semibold">
+                Warning: Some students still have pending fees from the previous academic year. If you continue, these outstanding balances will automatically be carried forward to the next academic year along with the new academic year's fee structure. Do you want to continue?
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowValidationModal(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer text-xs"
+              >
+                Cancel Promotion
+              </button>
+              <button
+                onClick={() => {
+                  setShowValidationModal(false);
+                  const candidateIds = sourceClass === 'ALL' 
+                    ? studentsState.map(s => s.id)
+                    : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
+                  executePromotion(candidateIds);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-amber-650 hover:bg-amber-550 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
+              >
+                Promote Anyway
+              </button>
+            </div>
+
           </div>
         </div>
       )}

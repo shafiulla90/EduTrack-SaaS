@@ -55,6 +55,17 @@ export class StudentsController {
     });
   }
 
+  @Post('promote/validate')
+  async validatePromotion(
+    @Body('studentIds') studentIds: string[],
+    @Body('sourceYearId') sourceYearId: string,
+  ) {
+    return this.studentsService.validatePromotion({
+      studentIds,
+      sourceYearId,
+    });
+  }
+
   @Get('parents/all')
   async getParents() {
     return this.studentsService.getParents();

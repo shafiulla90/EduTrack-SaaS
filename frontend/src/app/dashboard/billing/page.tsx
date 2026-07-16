@@ -305,6 +305,69 @@ export default function FeesBillingPage() {
             </div>
           </div>
 
+          {selectedStudent.feeSummary && (
+            <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Card 1: Current Year */}
+              <div className="bg-white p-3.5 border border-slate-150 rounded-xl space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Academic Year</span>
+                <div className="divide-y divide-slate-100 text-xs text-slate-600 space-y-1">
+                  <div className="flex justify-between py-1">
+                    <span>Fee Products:</span>
+                    <strong className="text-slate-800 font-mono">₹{selectedStudent.feeSummary.currentYear.feeProductsAmount.toLocaleString()}</strong>
+                  </div>
+                  <div className="flex justify-between py-1">
+                    <span>Paid Amount:</span>
+                    <strong className="text-emerald-600 font-mono">₹{selectedStudent.feeSummary.currentYear.paidAmount.toLocaleString()}</strong>
+                  </div>
+                  <div className="flex justify-between py-1 pt-1.5">
+                    <span className="font-bold">Pending Amount:</span>
+                    <strong className="text-rose-600 font-bold font-mono">₹{selectedStudent.feeSummary.currentYear.pendingAmount.toLocaleString()}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Previous Year Outstanding */}
+              <div className="bg-white p-3.5 border border-slate-150 rounded-xl space-y-2 flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Previous Year Outstanding</span>
+                  <div className="max-h-20 overflow-y-auto divide-y divide-slate-100 text-xs text-slate-650 mt-1 font-semibold space-y-1">
+                    {selectedStudent.feeSummary.previousYears.length > 0 ? (
+                      selectedStudent.feeSummary.previousYears.map((py: any, idx: number) => (
+                        <div key={idx} className="flex justify-between py-1">
+                          <span className="text-slate-500 font-medium">Session {py.academicYearName}:</span>
+                          <strong className="text-rose-600 font-mono">₹{py.outstandingBalance.toLocaleString()}</strong>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-slate-400 py-3 text-center italic text-[11px] font-medium">
+                        No previous year outstanding dues
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Overall Outstanding */}
+              <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-4 rounded-xl space-y-2 flex flex-col justify-between shadow-md">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Overall Outstanding</span>
+                <div className="text-xs text-slate-300 space-y-1.5">
+                  <div className="flex justify-between">
+                    <span>Current Year Due:</span>
+                    <strong className="text-slate-200 font-mono">₹{selectedStudent.feeSummary.overall.totalCurrentYearDue.toLocaleString()}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Previous Year Due:</span>
+                    <strong className="text-amber-400 font-mono">₹{selectedStudent.feeSummary.overall.totalPreviousYearDue.toLocaleString()}</strong>
+                  </div>
+                  <div className="border-t border-slate-700/50 my-1 pt-1.5 flex justify-between">
+                    <span className="font-bold text-slate-100">Grand Total Due:</span>
+                    <strong className="text-rose-400 text-sm font-black font-mono">₹{selectedStudent.feeSummary.overall.grandTotalBalanceDue.toLocaleString()}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="py-12 text-center text-slate-400 font-medium text-xs animate-pulse">
               Processing fees query...

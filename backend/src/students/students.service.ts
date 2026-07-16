@@ -761,6 +761,9 @@ export class StudentsService implements OnModuleInit {
 
       return await this.prisma.$transaction(async (tx) => {
         const promotedCount = studentIds.length;
+        let studentsWithCarriedForwardDues = 0;
+        let totalCarriedForwardAmount = 0;
+        const studentOutstandingBalances = [];
 
         for (const studentId of studentIds) {
           const profile = await tx.studentProfile.findFirst({
@@ -860,6 +863,7 @@ export class StudentsService implements OnModuleInit {
             }
           });
 
+          // Fetch unpaid invoices from the source academic year
           const oldInvoices = await tx.invoice.findMany({
             where: {
               studentId,
@@ -874,17 +878,13 @@ export class StudentsService implements OnModuleInit {
             }
           });
 
-          for (const oldInv of oldInvoices) {
-            await tx.invoice.update({
-              where: { id: oldInv.id },
-              data: {
-                status: PaymentStatus.PAID,
-                paidAmount: oldInv.totalAmount,
-                remainingBalance: 0
-              }
-            });
+          const carriedForwardDue = oldInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
+          if (carriedForwardDue > 0) {
+            studentsWithCarriedForwardDues++;
+            totalCarriedForwardAmount += carriedForwardDue;
           }
 
+          // Define target year fee items
           const standardFees = [
             { name: `Tuition Fees - ${resolvedClassName}`, amount: 12000.00 },
             { name: 'Admission Registration Fee', amount: 3000.00 },
@@ -893,8 +893,86 @@ export class StudentsService implements OnModuleInit {
 
           const totalAmount = standardFees.reduce((sum, item) => sum + item.amount, 0);
 
+          // 1. Create target year Opportunity
+          const oppName = `${profile.user.name} - Promotion to ${resolvedClassName} - ${targetYear.name}`;
+          const newOpportunity = await tx.opportunity.create({
+            data: {
+              name: oppName,
+              studentId,
+              stageName: 'Prospecting',
+              closeDate: new Date(new Date().setDate(new Date().getDate() + 30)),
+              classId: targetClass.id,
+              sectionId: targetClassSection.sectionId,
+              academicYearId: targetYearId,
+              tenantId
+            }
+          });
+
+          // 2. Resolve/Create standard Product, Pricebook, PricebookEntry and OpportunityLineItem rows
+          let pricebook = await tx.pricebook.findFirst({
+            where: { tenantId, classId: targetClass.id, academicYearId: targetYearId }
+          });
+          if (!pricebook) {
+            pricebook = await tx.pricebook.create({
+              data: {
+                name: `Standard Pricebook - ${resolvedClassName} (${targetYear.name})`,
+                isActive: true,
+                classId: targetClass.id,
+                academicYearId: targetYearId,
+                tenantId
+              }
+            });
+          }
+
+          const lineItemsData = [];
+          for (const fee of standardFees) {
+            let product = await tx.product.findFirst({
+              where: { name: fee.name, tenantId }
+            });
+            if (!product) {
+              product = await tx.product.create({
+                data: {
+                  name: fee.name,
+                  isActive: true,
+                  tenantId
+                }
+              });
+            }
+
+            let pricebookEntry = await tx.pricebookEntry.findFirst({
+              where: { pricebookId: pricebook.id, productId: product.id, tenantId }
+            });
+            if (!pricebookEntry) {
+              pricebookEntry = await tx.pricebookEntry.create({
+                data: {
+                  pricebookId: pricebook.id,
+                  productId: product.id,
+                  unitPrice: fee.amount,
+                  isActive: true,
+                  tenantId
+                }
+              });
+            }
+
+            lineItemsData.push({
+              opportunityId: newOpportunity.id,
+              pricebookEntryId: pricebookEntry.id,
+              productId: product.id,
+              quantity: 1,
+              unitPrice: fee.amount,
+              discount: 0,
+              tenantId
+            });
+          }
+
+          await tx.opportunityLineItem.createMany({
+            data: lineItemsData
+          });
+
+          // 3. Create target year UNPAID Invoice linked to target year Opportunity
           const newInvoice = await tx.invoice.create({
             data: {
+              opportunityId: newOpportunity.id,
               studentId,
               invoiceDate: new Date(),
               dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
@@ -916,6 +994,13 @@ export class StudentsService implements OnModuleInit {
             }))
           });
 
+          studentOutstandingBalances.push({
+            name: profile.user.name,
+            rollNo: profile.rollNo || 'N/A',
+            carriedForwardAmount: carriedForwardDue,
+            totalOutstanding: carriedForwardDue + totalAmount
+          });
+
           await tx.activityLog.create({
             data: {
               userId: profile.userId,
@@ -930,12 +1015,103 @@ export class StudentsService implements OnModuleInit {
 
         return {
           success: true,
-          promotedCount
+          promotedCount,
+          studentsWithCarriedForwardDues,
+          totalCarriedForwardAmount,
+          studentOutstandingBalances
         };
       });
     } catch (err: any) {
       console.error('Promotion transaction error:', err);
       throw new BadRequestException(`Promotion failed: ${err.message || err}`);
+    }
+  }
+
+  async validatePromotion(payload: { studentIds: string[]; sourceYearId: string }) {
+    try {
+      const tenantId = this.getTenantId();
+      const { studentIds, sourceYearId } = payload;
+
+      if (!studentIds || studentIds.length === 0) {
+        throw new BadRequestException('No students selected for validation');
+      }
+
+      const sourceYear = await this.prisma.academicYear.findFirst({
+        where: { id: sourceYearId, tenantId }
+      });
+      if (!sourceYear) {
+        throw new NotFoundException('Source Academic Year not found');
+      }
+
+      const unpaidInvoices = await this.prisma.invoice.findMany({
+        where: {
+          studentId: { in: studentIds },
+          tenantId,
+          invoiceDate: {
+            gte: sourceYear.startDate,
+            lte: sourceYear.endDate
+          },
+          status: {
+            in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
+          }
+        },
+        include: {
+          student: {
+            include: {
+              user: true,
+              classSection: {
+                include: { class: true, section: true }
+              }
+            }
+          }
+        }
+      });
+
+      // Group by student
+      const studentDuesMap = new Map<string, {
+        studentId: string;
+        name: string;
+        rollNo: string;
+        class: string;
+        section: string;
+        pendingDue: number;
+        sourceYear: string;
+      }>();
+
+      for (const inv of unpaidInvoices) {
+        const studentId = inv.studentId;
+        const remainingBalance = Number(inv.remainingBalance);
+        if (remainingBalance <= 0) continue;
+
+        if (!studentDuesMap.has(studentId)) {
+          const student = inv.student;
+          studentDuesMap.set(studentId, {
+            studentId,
+            name: student.user.name,
+            rollNo: student.rollNo || 'N/A',
+            class: student.classSection?.class.name || 'N/A',
+            section: student.classSection?.section.name || 'N/A',
+            pendingDue: 0,
+            sourceYear: sourceYear.name
+          });
+        }
+        const entry = studentDuesMap.get(studentId)!;
+        entry.pendingDue += remainingBalance;
+      }
+
+      const dueList = Array.from(studentDuesMap.values());
+      const totalOutstandingDue = dueList.reduce((sum, item) => sum + item.pendingDue, 0);
+
+      return {
+        totalSelected: studentIds.length,
+        studentsWithNoDue: studentIds.length - dueList.length,
+        studentsWithPendingDue: dueList.length,
+        totalOutstandingDue,
+        dueList
+      };
+    } catch (err: any) {
+      console.error('Error validating promotion:', err);
+      throw new BadRequestException(`Validation failed: ${err.message || err}`);
     }
   }
 

@@ -417,6 +417,15 @@ export class BillingService {
       take: 20,
     });
 
+    const studentIds = students.map(s => s.id);
+    const unpaidInvoices = await this.prisma.invoice.findMany({
+      where: {
+        studentId: { in: studentIds },
+        tenantId,
+        status: { in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID] }
+      }
+    });
+
     const results = [];
     for (const student of students) {
       const openOpp = student.opportunities[0];
@@ -424,19 +433,33 @@ export class BillingService {
       let totalPaid = 0;
 
       if (openOpp) {
-        // Sum opportunity line items: TotalPrice = UnitPrice * Quantity * (1 - Discount/100)
         totalFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
           const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
           const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
           return sum + (itemTotal - itemDiscount);
         }, 0);
 
-        // Sum invoice payments
         totalPaid = openOpp.invoices.reduce((sum, inv) => {
           const invoiceSum = inv.invoiceItems.reduce((iSum, item) => iSum + Number(item.amount), 0);
           return sum + invoiceSum;
         }, 0);
       }
+
+      // Calculate previous years unpaid balances
+      let currentYearStart = new Date(0);
+      if (openOpp && openOpp.academicYearId) {
+        const cy = await this.prisma.academicYear.findFirst({
+          where: { id: openOpp.academicYearId, tenantId }
+        });
+        if (cy) currentYearStart = cy.startDate;
+      }
+
+      const studentPrevUnpaid = unpaidInvoices.filter(inv => 
+        inv.studentId === student.id && 
+        new Date(inv.invoiceDate) < currentYearStart
+      );
+
+      const totalPreviousYearDue = studentPrevUnpaid.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
 
       results.push({
         account: {
@@ -451,7 +474,7 @@ export class BillingService {
           sectionId: student.classSection?.sectionId || '',
           opportunities: openOpp ? [{ id: openOpp.id, academicYearId: openOpp.academicYearId }] : [],
         },
-        totalPendingBalance: Math.max(0, totalFee - totalPaid),
+        totalPendingBalance: Math.max(0, totalFee - totalPaid) + totalPreviousYearDue,
         totalPaidAmount: totalPaid,
       });
     }
@@ -515,6 +538,69 @@ export class BillingService {
       }, 0);
     }
 
+    // Calculate dynamic previous academic year outstanding dues
+    let currentYearStart = new Date(0);
+    if (openOpp && openOpp.academicYearId) {
+      const cy = await this.prisma.academicYear.findUnique({
+        where: { id: openOpp.academicYearId }
+      });
+      if (cy) {
+        currentYearStart = cy.startDate;
+      }
+    }
+
+    const prevInvoices = await this.prisma.invoice.findMany({
+      where: {
+        studentId,
+        tenantId,
+        invoiceDate: {
+          lt: currentYearStart
+        },
+        status: {
+          in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
+        }
+      },
+      include: {
+        opportunity: {
+          include: {
+            academicYear: true
+          }
+        }
+      }
+    });
+
+    const prevYearDuesMap = new Map<string, number>();
+    for (const inv of prevInvoices) {
+      const yearName = inv.opportunity?.academicYear?.name || 'Previous Years';
+      const balance = Number(inv.remainingBalance);
+      if (balance > 0) {
+        prevYearDuesMap.set(yearName, (prevYearDuesMap.get(yearName) || 0) + balance);
+      }
+    }
+
+    const previousYears = Array.from(prevYearDuesMap.entries()).map(([academicYearName, outstandingBalance]) => ({
+      academicYearName,
+      outstandingBalance
+    }));
+
+    const totalPreviousYearDue = previousYears.reduce((sum, item) => sum + item.outstandingBalance, 0);
+    const currentYearPending = Math.max(0, totalFee - totalPaid);
+    const grandTotalBalanceDue = currentYearPending + totalPreviousYearDue;
+
+    const feeSummary = {
+      currentYear: {
+        feeProductsAmount: totalFee,
+        paidAmount: totalPaid,
+        pendingAmount: currentYearPending
+      },
+      previousYears,
+      overall: {
+        totalCurrentYearDue: currentYearPending,
+        totalPreviousYearDue,
+        grandTotalBalanceDue
+      }
+    };
+
     return {
       account: {
         id: student.id,
@@ -531,8 +617,9 @@ export class BillingService {
         sectionId: student.classSection?.sectionId || '',
         opportunities: openOpp ? [{ id: openOpp.id, academicYearId: openOpp.academicYearId }] : [],
       },
-      totalPendingBalance: Math.max(0, totalFee - totalPaid),
+      totalPendingBalance: grandTotalBalanceDue,
       totalPaidAmount: totalPaid,
+      feeSummary
     };
   }
 
@@ -540,6 +627,14 @@ export class BillingService {
 
   async getUnpaidFees(opportunityId: string) {
     const tenantId = this.getTenantId();
+
+    const opportunity = await this.prisma.opportunity.findUnique({
+      where: { id: opportunityId },
+      include: { academicYear: true }
+    });
+    if (!opportunity) {
+      throw new NotFoundException('Opportunity not found');
+    }
 
     // Map Opportunity Line Item paid amounts
     const invoiceItems = await this.prisma.invoiceItem.findMany({
@@ -568,7 +663,7 @@ export class BillingService {
       },
     });
 
-    return olis.map(oli => {
+    const result = olis.map(oli => {
       const totalAmount = Number(oli.unitPrice) * Number(oli.quantity);
       const discountPercent = Number(oli.discount);
       const discountAmount = (totalAmount * discountPercent) / 100;
@@ -588,6 +683,37 @@ export class BillingService {
         discountAmount,
       };
     });
+
+    // Check if there are unpaid/partially paid invoices from previous years
+    const prevInvoices = await this.prisma.invoice.findMany({
+      where: {
+        studentId: opportunity.studentId,
+        tenantId,
+        invoiceDate: {
+          lt: opportunity.academicYear?.startDate || new Date()
+        },
+        status: {
+          in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
+        }
+      }
+    });
+
+    const prevBalanceDue = prevInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
+    if (prevBalanceDue > 0) {
+      result.unshift({
+        oliId: 'PREV_YEAR_DUE_CF',
+        productName: 'Previous Year Balance Brought Forward',
+        totalAmount: prevBalanceDue,
+        netAmount: prevBalanceDue,
+        paidAmount: 0,
+        balanceDue: prevBalanceDue,
+        productId: null,
+        discountPercent: 0,
+        discountAmount: 0
+      });
+    }
+
+    return result;
   }
 
   // ── CREATE INVOICE & REGISTER PAYMENT (Trigger Flow) ───────────────────────
@@ -621,6 +747,14 @@ export class BillingService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const opportunity = await tx.opportunity.findUnique({
+        where: { id: opportunityId },
+        include: { academicYear: true }
+      });
+      if (!opportunity) {
+        throw new NotFoundException('Opportunity not found');
+      }
+
       // Create Invoice
       const invoice = await tx.invoice.create({
         data: {
@@ -644,18 +778,70 @@ export class BillingService {
       // Create Invoice Items
       const invoiceItemsToCreate = [];
       for (const item of selectedItems) {
-        // Fetch product name
-        const p = await tx.product.findUnique({ where: { id: item.productId } });
-        const name = p ? p.name : 'School Fee Item';
+        if (item.oliId === 'PREV_YEAR_DUE_CF') {
+          // Carry Forward payment: Apply to original previous year's invoices
+          let amountToApply = Number(item.amount);
 
-        invoiceItemsToCreate.push({
-          invoiceId: invoice.id,
-          opportunityLineItemId: item.oliId,
-          productId: item.productId,
-          name,
-          amount: item.amount,
-          tenantId,
-        });
+          const prevInvoicesToPay = await tx.invoice.findMany({
+            where: {
+              studentId,
+              tenantId,
+              invoiceDate: {
+                lt: opportunity.academicYear?.startDate || new Date()
+              },
+              status: {
+                in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
+              }
+            },
+            orderBy: {
+              invoiceDate: 'asc'
+            }
+          });
+
+          for (const oldInv of prevInvoicesToPay) {
+            if (amountToApply <= 0) break;
+            const currentRemaining = Number(oldInv.remainingBalance);
+            if (currentRemaining <= 0) continue;
+
+            const paymentForThis = Math.min(amountToApply, currentRemaining);
+            const newPaidAmount = Number(oldInv.paidAmount) + paymentForThis;
+            const newRemaining = currentRemaining - paymentForThis;
+            const newStatus = newRemaining <= 0 ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_PAID;
+
+            await tx.invoice.update({
+              where: { id: oldInv.id },
+              data: {
+                paidAmount: newPaidAmount,
+                remainingBalance: newRemaining,
+                status: newStatus
+              }
+            });
+
+            amountToApply -= paymentForThis;
+          }
+
+          invoiceItemsToCreate.push({
+            invoiceId: invoice.id,
+            opportunityLineItemId: null,
+            productId: null,
+            name: 'Previous Year Balance Brought Forward Payment',
+            amount: item.amount,
+            tenantId,
+          });
+        } else {
+          // Fetch product name
+          const p = await tx.product.findUnique({ where: { id: item.productId } });
+          const name = p ? p.name : 'School Fee Item';
+
+          invoiceItemsToCreate.push({
+            invoiceId: invoice.id,
+            opportunityLineItemId: item.oliId,
+            productId: item.productId,
+            name,
+            amount: item.amount,
+            tenantId,
+          });
+        }
       }
 
       await tx.invoiceItem.createMany({
