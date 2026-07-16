@@ -353,20 +353,10 @@ export default function StudentPromotionPage() {
       setValidationData(valRes.data);
       setIsLoading(false);
 
-      if (valRes.data.studentsWithPendingDue > 0) {
+      if (valRes.data.totalSelected > 0) {
         setShowValidationModal(true);
       } else {
-        // No dues, confirm normally
-        let confirmMsg = '';
-        let count = candidateIds.length;
-        if (sourceClass === 'ALL') {
-          confirmMsg = `PROMOTING ALL CLASSES:\nThis will promote all eligible classes (${count} students) to their next sequential grades for the Academic Year ${targetYearLabel}. Do you wish to proceed?`;
-        } else {
-          confirmMsg = `Promote ${count} students from ${sourceClass} to ${targetClass} for ${targetYearLabel}?`;
-        }
-
-        if (!window.confirm(confirmMsg)) return;
-        await executePromotion(candidateIds);
+        alert('No students selected for promotion');
       }
     } catch (err: any) {
       console.error('Validation failed:', err);
@@ -947,7 +937,11 @@ export default function StudentPromotionPage() {
             {/* Header */}
             <div className="flex items-start justify-between border-b border-slate-200 pb-4 mb-4">
               <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                {validationData.studentsWithPendingDue > 0 ? (
+                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                ) : (
+                  <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+                )}
                 <h3 className="text-lg font-bold text-slate-800">Student Promotion Summary</h3>
               </div>
               <button 
@@ -998,20 +992,37 @@ export default function StudentPromotionPage() {
                       </td>
                       <td className="p-3">{item.class}-{item.section}</td>
                       <td className="p-3">{item.sourceYear}</td>
-                      <td className="p-3 text-right font-bold text-rose-650">₹{item.pendingDue.toLocaleString()}</td>
+                      <td className="p-3 text-right font-bold">
+                        {item.pendingDue > 0 ? (
+                          <span className="text-rose-600 font-mono">₹{item.pendingDue.toLocaleString()}</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold">
+                            Paid Clear
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            {/* Warning Message */}
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-6 flex gap-3 text-xs text-amber-800">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <p className="leading-relaxed font-semibold">
-                Warning: Some students still have pending fees from the previous academic year. If you continue, these outstanding balances will automatically be carried forward to the next academic year along with the new academic year's fee structure. Do you want to continue?
-              </p>
-            </div>
+            {/* Warning/Success Message */}
+            {validationData.studentsWithPendingDue > 0 ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-6 flex gap-3 text-xs text-amber-800 animate-in">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed font-semibold">
+                  Warning: Some students still have pending fees from the previous academic year. If you continue, these outstanding balances will automatically be carried forward to the next academic year along with the new academic year's fee structure. Do you want to continue?
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 bg-emerald-50 border border-emerald-250 rounded-xl mb-6 flex gap-3 text-xs text-emerald-800 animate-in">
+                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed font-semibold">
+                  All selected students are clear of any outstanding dues. Proceeding will enroll them in the target academic year and allocate their new class standard fee structures.
+                </p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 justify-end">
@@ -1021,18 +1032,33 @@ export default function StudentPromotionPage() {
               >
                 Cancel Promotion
               </button>
-              <button
-                onClick={() => {
-                  setShowValidationModal(false);
-                  const candidateIds = sourceClass === 'ALL' 
-                    ? studentsState.map(s => s.id)
-                    : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
-                  executePromotion(candidateIds);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-amber-650 hover:bg-amber-550 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
-              >
-                Promote Anyway
-              </button>
+              {validationData.studentsWithPendingDue > 0 ? (
+                <button
+                  onClick={() => {
+                    setShowValidationModal(false);
+                    const candidateIds = sourceClass === 'ALL' 
+                      ? studentsState.map(s => s.id)
+                      : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
+                    executePromotion(candidateIds);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-amber-650 hover:bg-amber-550 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
+                >
+                  Promote Anyway
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setShowValidationModal(false);
+                    const candidateIds = sourceClass === 'ALL' 
+                      ? studentsState.map(s => s.id)
+                      : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
+                    executePromotion(candidateIds);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
+                >
+                  Confirm Promotion
+                </button>
+              )}
             </div>
 
           </div>

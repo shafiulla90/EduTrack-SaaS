@@ -1129,12 +1129,36 @@ export class StudentsService implements OnModuleInit {
       const dueList = Array.from(studentDuesMap.values());
       const totalOutstandingDue = dueList.reduce((sum, item) => sum + item.pendingDue, 0);
 
+      // Fetch details of all selected students
+      const students = await this.prisma.studentProfile.findMany({
+        where: { id: { in: studentIds }, tenantId },
+        include: {
+          user: true,
+          classSection: {
+            include: { class: true, section: true }
+          }
+        }
+      });
+
+      const fullList = students.map(s => {
+        const duesInfo = studentDuesMap.get(s.id);
+        return {
+          studentId: s.id,
+          name: s.user.name,
+          rollNo: s.rollNo || 'N/A',
+          class: s.classSection?.class.name || 'N/A',
+          section: s.classSection?.section.name || 'N/A',
+          pendingDue: duesInfo ? duesInfo.pendingDue : 0,
+          sourceYear: sourceYear.name
+        };
+      });
+
       return {
         totalSelected: studentIds.length,
         studentsWithNoDue: studentIds.length - dueList.length,
         studentsWithPendingDue: dueList.length,
         totalOutstandingDue,
-        dueList
+        dueList: fullList
       };
     } catch (err: any) {
       console.error('Error validating promotion:', err);
