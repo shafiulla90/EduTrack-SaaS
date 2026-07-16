@@ -706,17 +706,35 @@ export class BillingService {
       };
     });
 
-    // Check if there are unpaid/partially paid invoices from previous years
+    // Check if there are unpaid/partially paid invoices from previous years (aligned with getStudentById definition)
+    const currentYearStart = opportunity.academicYear?.startDate || new Date(0);
     const prevInvoices = await this.prisma.invoice.findMany({
       where: {
         studentId: opportunity.studentId,
         tenantId,
-        invoiceDate: {
-          lt: opportunity.academicYear?.startDate || new Date()
-        },
         status: {
           in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
-        }
+        },
+        OR: [
+          {
+            opportunityId: null,
+            invoiceDate: {
+              lt: currentYearStart
+            }
+          },
+          {
+            opportunity: {
+              academicYearId: {
+                not: opportunity.academicYearId || undefined
+              },
+              academicYear: {
+                startDate: {
+                  lt: currentYearStart
+                }
+              }
+            }
+          }
+        ]
       }
     });
 

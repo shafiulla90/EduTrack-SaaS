@@ -768,6 +768,13 @@ export class StudentsService implements OnModuleInit {
         include: { class: true, section: true }
       });
 
+      // 1. Fetch all student billing balances OUTSIDE the transaction first to prevent NestJS/Prisma deadlocks/timeouts.
+      const studentBillingMap = new Map<string, number>();
+      for (const studentId of studentIds) {
+        const billingInfo = await this.billingService.getStudentById(studentId);
+        studentBillingMap.set(studentId, billingInfo.totalPendingBalance);
+      }
+
       return await this.prisma.$transaction(async (tx) => {
         const promotedCount = studentIds.length;
         let studentsWithCarriedForwardDues = 0;
@@ -872,12 +879,8 @@ export class StudentsService implements OnModuleInit {
             }
           });
 
-          // ── Use BillingService as the single source of truth for the student's carried-forward balance.
-          // This runs OUTSIDE the Prisma transaction because BillingService uses TenantContext (AsyncLocalStorage)
-          // which is already set by the middleware for this request, but nested transactions can cause issues.
-          // We capture the balance BEFORE the transaction mutations happen for this student.
-          const billingInfo = await this.billingService.getStudentById(studentId);
-          const carriedForwardDue = billingInfo.totalPendingBalance;
+          // ── Use the pre-fetched billing balance as the single source of truth.
+          const carriedForwardDue = studentBillingMap.get(studentId) || 0;
 
           if (carriedForwardDue > 0) {
             studentsWithCarriedForwardDues++;
@@ -1014,7 +1017,7 @@ export class StudentsService implements OnModuleInit {
           totalCarriedForwardAmount,
           studentOutstandingBalances
         };
-      });
+      }, { timeout: 30000 });
     } catch (err: any) {
       console.error('Promotion transaction error:', err);
       throw new BadRequestException(`Promotion failed: ${err.message || err}`);

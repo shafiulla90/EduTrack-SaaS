@@ -114,16 +114,24 @@ export default function FeesBillingPage() {
     }
   };
 
-  const handleSelectStudent = (student: any) => {
-    setSelectedStudent(student);
-    setSearch('');
-    setMatchingStudents([]);
-    
-    const openOpp = student.account.opportunities?.[0];
-    if (openOpp) {
-      loadUnpaidFees(openOpp.id);
-    } else {
-      setFeeItems([]);
+  const handleSelectStudent = async (student: any) => {
+    try {
+      setIsLoading(true);
+      const res = await api.get(`/billing/students/${student.account.id}`);
+      setSelectedStudent(res.data);
+      setSearch('');
+      setMatchingStudents([]);
+      
+      const openOpp = res.data.account.opportunities?.[0];
+      if (openOpp) {
+        await loadUnpaidFees(openOpp.id);
+      } else {
+        setFeeItems([]);
+      }
+    } catch (err) {
+      console.error('Failed to load student details', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
