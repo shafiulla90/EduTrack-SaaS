@@ -980,7 +980,8 @@ export default function StudentPromotionPage() {
                     <th className="p-3">Student</th>
                     <th className="p-3">Class</th>
                     <th className="p-3">Previous Academic Year</th>
-                    <th className="p-3 text-right">Pending Due</th>
+                    <th className="p-3 text-right">Prev Year Due</th>
+                    <th className="p-3 text-right">Total Pending</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-655 font-semibold">
@@ -988,10 +989,22 @@ export default function StudentPromotionPage() {
                     <tr key={item.studentId} className="hover:bg-slate-50">
                       <td className="p-3">
                         <div className="font-bold text-slate-800">{item.name}</div>
-                        <div className="text-[10px] text-slate-400">Adm: {item.rollNo}</div>
+                        <div className="text-[10px] text-slate-400">Roll: {item.rollNo}</div>
                       </td>
-                      <td className="p-3">{item.class}-{item.section}</td>
-                      <td className="p-3">{item.sourceYear}</td>
+                      <td className="p-3">
+                        <span className="font-medium text-slate-700">{item.class}</span>
+                        {item.section && item.section !== '—' && (
+                          <span className="text-slate-400"> / {item.section}</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-slate-500">{item.sourceYear || '—'}</td>
+                      <td className="p-3 text-right">
+                        {item.previousYearDue > 0 ? (
+                          <span className="text-amber-600 font-mono">₹{item.previousYearDue.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
                       <td className="p-3 text-right font-bold">
                         {item.pendingDue > 0 ? (
                           <span className="text-rose-600 font-mono">₹{item.pendingDue.toLocaleString()}</span>
@@ -1041,7 +1054,7 @@ export default function StudentPromotionPage() {
                       : Object.keys(selectedStudentIds).filter(id => selectedStudentIds[id]);
                     executePromotion(candidateIds);
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-amber-650 hover:bg-amber-550 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold cursor-pointer text-xs transition-all hover:scale-[1.02]"
                 >
                   Promote Anyway
                 </button>

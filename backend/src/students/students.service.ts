@@ -4,12 +4,14 @@ import { TenantContext } from '../tenants/tenant.context';
 import { Role, PaymentStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { StorageService } from '../common/storage.service';
+import { BillingService } from '../billing/billing.service';
 
 @Injectable()
 export class StudentsService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private storageService: StorageService,
+    private billingService: BillingService,
   ) {}
 
   async onModuleInit() {
@@ -870,47 +872,59 @@ export class StudentsService implements OnModuleInit {
             }
           });
 
-          // Fetch unpaid invoices from the source academic year
-          const oldInvoices = await tx.invoice.findMany({
-            where: {
-              studentId,
-              tenantId,
-              OR: [
-                {
-                  opportunity: {
-                    academicYearId: sourceYearId
-                  }
-                },
-                {
-                  opportunityId: null,
-                  invoiceDate: {
-                    gte: sourceYear.startDate,
-                    lte: sourceYear.endDate
-                  }
-                }
-              ],
-              status: {
-                in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
-              }
-            }
-          });
+          // ── Use BillingService as the single source of truth for the student's carried-forward balance.
+          // This runs OUTSIDE the Prisma transaction because BillingService uses TenantContext (AsyncLocalStorage)
+          // which is already set by the middleware for this request, but nested transactions can cause issues.
+          // We capture the balance BEFORE the transaction mutations happen for this student.
+          const billingInfo = await this.billingService.getStudentById(studentId);
+          const carriedForwardDue = billingInfo.totalPendingBalance;
 
-          const carriedForwardDue = oldInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
           if (carriedForwardDue > 0) {
             studentsWithCarriedForwardDues++;
             totalCarriedForwardAmount += carriedForwardDue;
           }
 
-          // Define target year fee items
-          const standardFees = [
-            { name: `Tuition Fees - ${resolvedClassName}`, amount: 12000.00 },
-            { name: 'Admission Registration Fee', amount: 3000.00 },
-            { name: 'Library Membership Fee', amount: 800.00 }
-          ];
+          // ── Resolve the real target-year pricebook for this class (single source of truth).
+          // Fall back: try by classId + academicYearId first, then by name pattern.
+          let targetPricebook = await tx.pricebook.findFirst({
+            where: { tenantId, classId: targetClass.id, academicYearId: targetYearId, isActive: true }
+          });
+          if (!targetPricebook) {
+            const priceBookName = resolvedClassName.replace('-', ' ');
+            const priceBookNameAlt = resolvedClassName.replace(' ', '-');
+            targetPricebook = await tx.pricebook.findFirst({
+              where: {
+                tenantId,
+                isActive: true,
+                academicYearId: targetYearId,
+                OR: [
+                  { name: { equals: priceBookName, mode: 'insensitive' } },
+                  { name: { equals: priceBookNameAlt, mode: 'insensitive' } },
+                  { name: { startsWith: priceBookName, mode: 'insensitive' } },
+                  { name: { startsWith: priceBookNameAlt, mode: 'insensitive' } },
+                ],
+              }
+            });
+          }
 
-          const totalAmount = standardFees.reduce((sum, item) => sum + item.amount, 0);
+          // Fetch active pricebook entries (excluding PREV_DUES meta-products)
+          const pbes = targetPricebook
+            ? await tx.pricebookEntry.findMany({
+                where: {
+                  tenantId,
+                  isActive: true,
+                  pricebookId: targetPricebook.id,
+                  product: {
+                    isActive: true,
+                    productCode: { not: 'PREV_DUES' },
+                    name: { not: { contains: 'Previous' } },
+                  },
+                },
+                include: { product: true },
+              })
+            : [];
 
-          // 1. Create target year Opportunity
+          // ── 1. Create target-year Opportunity
           const oppName = `${profile.user.name} - Promotion to ${resolvedClassName} - ${targetYear.name}`;
           const newOpportunity = await tx.opportunity.create({
             data: {
@@ -921,101 +935,64 @@ export class StudentsService implements OnModuleInit {
               classId: targetClass.id,
               sectionId: targetClassSection.sectionId,
               academicYearId: targetYearId,
+              totalPaidAmount: 0,
               tenantId
             }
           });
 
-          // 2. Resolve/Create standard Product, Pricebook, PricebookEntry and OpportunityLineItem rows
-          let pricebook = await tx.pricebook.findFirst({
-            where: { tenantId, classId: targetClass.id, academicYearId: targetYearId }
-          });
-          if (!pricebook) {
-            pricebook = await tx.pricebook.create({
+          // ── 2. Attach real fee products from pricebook as OpportunityLineItems
+          if (pbes.length > 0) {
+            await tx.opportunityLineItem.createMany({
+              data: pbes.map(pbe => ({
+                opportunityId: newOpportunity.id,
+                pricebookEntryId: pbe.id,
+                productId: pbe.productId,
+                quantity: 1,
+                unitPrice: pbe.unitPrice,
+                discount: 0,
+                tenantId,
+              }))
+            });
+          }
+
+          // ── 3. Create a single UNPAID Invoice for the target-year fees (if pricebook entries exist).
+          //       Previous-year balances are NOT duplicated — they stay on historical invoices and are
+          //       surfaced virtually by BillingService.getUnpaidFees as "Previous Year Balance Brought Forward".
+          if (pbes.length > 0) {
+            const totalAmount = pbes.reduce((sum, pbe) => sum + Number(pbe.unitPrice), 0);
+            const newInvoice = await tx.invoice.create({
               data: {
-                name: `Standard Pricebook - ${resolvedClassName} (${targetYear.name})`,
-                isActive: true,
-                classId: targetClass.id,
-                academicYearId: targetYearId,
+                opportunityId: newOpportunity.id,
+                studentId,
+                invoiceDate: new Date(),
+                dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
+                totalAmount,
+                paidAmount: 0,
+                remainingBalance: totalAmount,
+                status: PaymentStatus.UNPAID,
+                description: `Fees Invoice for ${resolvedClassName} — ${targetYear.name}`,
                 tenantId
               }
             });
-          }
 
-          const lineItemsData = [];
-          for (const fee of standardFees) {
-            let product = await tx.product.findFirst({
-              where: { name: fee.name, tenantId }
-            });
-            if (!product) {
-              product = await tx.product.create({
-                data: {
-                  name: fee.name,
-                  isActive: true,
-                  tenantId
-                }
-              });
-            }
-
-            let pricebookEntry = await tx.pricebookEntry.findFirst({
-              where: { pricebookId: pricebook.id, productId: product.id, tenantId }
-            });
-            if (!pricebookEntry) {
-              pricebookEntry = await tx.pricebookEntry.create({
-                data: {
-                  pricebookId: pricebook.id,
-                  productId: product.id,
-                  unitPrice: fee.amount,
-                  isActive: true,
-                  tenantId
-                }
-              });
-            }
-
-            lineItemsData.push({
-              opportunityId: newOpportunity.id,
-              pricebookEntryId: pricebookEntry.id,
-              productId: product.id,
-              quantity: 1,
-              unitPrice: fee.amount,
-              discount: 0,
-              tenantId
+            await tx.invoiceItem.createMany({
+              data: pbes.map(pbe => ({
+                invoiceId: newInvoice.id,
+                name: pbe.product.name,
+                amount: Number(pbe.unitPrice),
+                tenantId,
+              }))
             });
           }
-
-          await tx.opportunityLineItem.createMany({
-            data: lineItemsData
-          });
-
-          // 3. Create target year UNPAID Invoice linked to target year Opportunity
-          const newInvoice = await tx.invoice.create({
-            data: {
-              opportunityId: newOpportunity.id,
-              studentId,
-              invoiceDate: new Date(),
-              dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-              totalAmount,
-              paidAmount: 0,
-              remainingBalance: totalAmount,
-              status: PaymentStatus.UNPAID,
-              description: `Auto-generated Invoice upon promotion to ${resolvedClassName}`,
-              tenantId
-            }
-          });
-
-          await tx.invoiceItem.createMany({
-            data: standardFees.map(item => ({
-              invoiceId: newInvoice.id,
-              name: item.name,
-              amount: item.amount,
-              tenantId
-            }))
-          });
 
           studentOutstandingBalances.push({
             name: profile.user.name,
             rollNo: profile.rollNo || 'N/A',
+            class: currentClassName || resolvedClassName,
+            targetClass: resolvedClassName,
             carriedForwardAmount: carriedForwardDue,
-            totalOutstanding: carriedForwardDue + totalAmount
+            newYearFees: pbes.reduce((sum, pbe) => sum + Number(pbe.unitPrice), 0),
+            totalOutstanding: carriedForwardDue + pbes.reduce((sum, pbe) => sum + Number(pbe.unitPrice), 0),
           });
 
           await tx.activityLog.create({
@@ -1044,6 +1021,8 @@ export class StudentsService implements OnModuleInit {
     }
   }
 
+  // (constructor is defined once at the top of the class)
+
   async validatePromotion(payload: { studentIds: string[]; sourceYearId: string }) {
     try {
       const tenantId = this.getTenantId();
@@ -1053,112 +1032,66 @@ export class StudentsService implements OnModuleInit {
         throw new BadRequestException('No students selected for validation');
       }
 
-      const sourceYear = await this.prisma.academicYear.findFirst({
-        where: { id: sourceYearId, tenantId }
-      });
-      if (!sourceYear) {
-        throw new NotFoundException('Source Academic Year not found');
-      }
-
-      const unpaidInvoices = await this.prisma.invoice.findMany({
-        where: {
-          studentId: { in: studentIds },
-          tenantId,
-          OR: [
-            {
-              opportunity: {
-                academicYearId: sourceYearId
-              }
-            },
-            {
-              opportunityId: null,
-              invoiceDate: {
-                gte: sourceYear.startDate,
-                lte: sourceYear.endDate
-              }
-            }
-          ],
-          status: {
-            in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
-          }
-        },
-        include: {
-          student: {
-            include: {
-              user: true,
-              classSection: {
-                include: { class: true, section: true }
-              }
-            }
-          }
-        }
-      });
-
-      // Group by student
-      const studentDuesMap = new Map<string, {
-        studentId: string;
-        name: string;
-        rollNo: string;
-        class: string;
-        section: string;
-        pendingDue: number;
-        sourceYear: string;
-      }>();
-
-      for (const inv of unpaidInvoices) {
-        const studentId = inv.studentId;
-        const remainingBalance = Number(inv.remainingBalance);
-        if (remainingBalance <= 0) continue;
-
-        if (!studentDuesMap.has(studentId)) {
-          const student = inv.student;
-          studentDuesMap.set(studentId, {
-            studentId,
-            name: student.user.name,
-            rollNo: student.rollNo || 'N/A',
-            class: student.classSection?.class.name || 'N/A',
-            section: student.classSection?.section.name || 'N/A',
-            pendingDue: 0,
-            sourceYear: sourceYear.name
-          });
-        }
-        const entry = studentDuesMap.get(studentId)!;
-        entry.pendingDue += remainingBalance;
-      }
-
-      const dueList = Array.from(studentDuesMap.values());
-      const totalOutstandingDue = dueList.reduce((sum, item) => sum + item.pendingDue, 0);
-
-      // Fetch details of all selected students
-      const students = await this.prisma.studentProfile.findMany({
+      // Fetch student profile details for display (name, class, section, rollNo)
+      const profiles = await this.prisma.studentProfile.findMany({
         where: { id: { in: studentIds }, tenantId },
         include: {
-          user: true,
-          classSection: {
-            include: { class: true, section: true }
-          }
+          user: { select: { name: true } },
+          classSection: { include: { class: true, section: true } },
         }
       });
+      const profileMap = new Map(profiles.map(p => [p.id, p]));
 
-      const fullList = students.map(s => {
-        const duesInfo = studentDuesMap.get(s.id);
-        return {
-          studentId: s.id,
-          name: s.user.name,
-          rollNo: s.rollNo || 'N/A',
-          class: s.classSection?.class.name || 'N/A',
-          section: s.classSection?.section.name || 'N/A',
-          pendingDue: duesInfo ? duesInfo.pendingDue : 0,
-          sourceYear: sourceYear.name
-        };
+      // Resolve source year name for display
+      const sourceAcademicYear = await this.prisma.academicYear.findFirst({
+        where: { id: sourceYearId, tenantId },
+        select: { name: true }
       });
+      const sourceYearName = sourceAcademicYear?.name || '';
+
+      // ── Use BillingService as the single source of truth for each student's pending balance.
+      // getStudentById already accounts for discounts, partial payments, and split invoices.
+      let totalOutstandingDue = 0;
+      let totalCarriedForwardAmount = 0;
+      let studentsWithDue = 0;
+      const dueList = [] as any[];
+
+      for (const sid of studentIds) {
+        const details = await this.billingService.getStudentById(sid);
+        const pending = details.totalPendingBalance;
+        const prevYearDue = details.feeSummary?.previousYears?.reduce(
+          (sum: number, yr: any) => sum + yr.outstandingBalance, 0
+        ) || 0;
+
+        if (pending > 0) {
+          studentsWithDue++;
+          totalOutstandingDue += pending;
+          totalCarriedForwardAmount += prevYearDue;
+        }
+
+        const profile = profileMap.get(sid);
+        dueList.push({
+          studentId: sid,
+          name: profile?.user?.name || 'Unknown',
+          rollNo: profile?.rollNo || '—',
+          class: profile?.classSection?.class?.name || '—',
+          section: profile?.classSection?.section?.name || '—',
+          sourceYear: sourceYearName,
+          pendingDue: pending,
+          previousYearDue: prevYearDue,
+        });
+      }
+
+      const totalSelected = studentIds.length;
+      const studentsWithoutDue = totalSelected - studentsWithDue;
 
       return {
-        totalSelected: studentIds.length,
-        studentsWithNoDue: studentIds.length - dueList.length,
-        studentsWithPendingDue: dueList.length,
+        totalSelected,
+        studentsWithPendingDue: studentsWithDue,
+        studentsWithNoDue: studentsWithoutDue,
         totalOutstandingDue,
-        dueList: fullList
+        totalCarriedForwardAmount,
+        dueList,
       };
     } catch (err: any) {
       console.error('Error validating promotion:', err);
