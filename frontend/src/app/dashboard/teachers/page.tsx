@@ -1261,10 +1261,18 @@ export default function TeacherClassManagement() {
   }, [showCreateClass, fetchExistingClasses]);
 
   const handleDeleteClass = async (classId: string) => {
-    if (!confirm('Are you sure you want to delete this class? This will delete all associated records.')) {
-      return;
-    }
     try {
+      setIsLoading(true);
+      const res = await api.get(`/academics/classes/${classId}/student-count`);
+      const studentCount = res.data.count || 0;
+      setIsLoading(false);
+
+      showToast(`This class has ${studentCount} allotted student(s).`, 'info');
+
+      if (!confirm(`Are you sure you want to delete this class? This will delete all associated records (Allotted students: ${studentCount}).`)) {
+        return;
+      }
+
       setIsLoading(true);
       await api.delete(`/academics/classes/${classId}`);
       showToast('Class deleted successfully.', 'success');

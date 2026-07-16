@@ -104,6 +104,24 @@ export class AcademicsService {
     });
   }
 
+  async getClassStudentCount(id: string) {
+    const tenantId = this.getTenantId();
+    const classSections = await this.prisma.classSection.findMany({
+      where: { classId: id, tenantId },
+      select: { id: true },
+    });
+    const classSectionIds = classSections.map((cs) => cs.id);
+
+    const count =
+      classSectionIds.length > 0
+        ? await this.prisma.studentProfile.count({
+            where: { classSectionId: { in: classSectionIds } },
+          })
+        : 0;
+
+    return { count };
+  }
+
   async deleteClass(id: string) {
     const tenantId = this.getTenantId();
 

@@ -39,6 +39,11 @@ export class AcademicsController {
     return this.academicsService.getClasses();
   }
 
+  @Get('classes/:id/student-count')
+  async getClassStudentCount(@Param('id') id: string) {
+    return this.academicsService.getClassStudentCount(id);
+  }
+
   @Delete('classes/:id')
   async deleteClass(@Param('id') id: string) {
     return this.academicsService.deleteClass(id);
