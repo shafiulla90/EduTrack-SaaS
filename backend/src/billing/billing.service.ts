@@ -178,12 +178,12 @@ export class BillingService {
       emailLower = `${firstName}${lastName ? '.' + lastName : ''}.${randomSuffix}@noemail.local`;
     }
 
-    // ── Email uniqueness check scoped to this tenant only ───────────────────
-    const existingUser = await this.prisma.user.findFirst({
-      where: { email: emailLower, tenantId },
+    // ── Email uniqueness check (globally unique field in DB) ────────────────
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: emailLower },
     });
     if (existingUser) {
-      throw new ConflictException('A student with this email is already registered in your school');
+      throw new ConflictException('A user with this email is already registered in the system');
     }
 
     const defaultPassword = studentData.password || 'Welcome@123';

@@ -100,12 +100,12 @@ export class StudentsService implements OnModuleInit {
       emailLower = `${firstName}${lastName ? '.' + lastName : ''}.${randomSuffix}@noemail.local`;
     }
 
-    // ── Email uniqueness scoped to this tenant only ───────────────────────────
-    const existing = await this.prisma.user.findFirst({
-      where: { email: emailLower, tenantId },
+    // ── Email uniqueness check (globally unique field in DB) ──────────────────
+    const existing = await this.prisma.user.findUnique({
+      where: { email: emailLower },
     });
     if (existing) {
-      throw new ConflictException('A student with this email is already registered in your school');
+      throw new ConflictException('A user with this email is already registered in the system');
     }
 
     // ── Phone: prefix with tenantId to avoid cross-tenant uniqueness issues ───
