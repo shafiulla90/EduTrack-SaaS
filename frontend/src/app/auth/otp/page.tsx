@@ -84,6 +84,21 @@ function OtpContent() {
             localStorage.setItem('teacher_userPhone', data.user.phone);
           }
           sessionStorage.setItem('active_role', 'TEACHER');
+          setSuccessMsg('Authenticated! Redirecting...');
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 500);
+        } else if (role === 'PARENT') {
+          localStorage.setItem('parent_token', data.access_token);
+          localStorage.setItem('parent_tenantId', data.user.tenantId);
+          if (data.user.phone) {
+            localStorage.setItem('parent_userPhone', data.user.phone);
+          }
+          sessionStorage.setItem('active_role', 'PARENT');
+          setSuccessMsg('Authenticated! Redirecting to Parent Portal...');
+          setTimeout(() => {
+            router.push('/parent');
+          }, 500);
         } else {
           localStorage.setItem('admin_token', data.access_token);
           localStorage.setItem('admin_tenantId', data.user.tenantId);
@@ -91,12 +106,11 @@ function OtpContent() {
             localStorage.setItem('admin_userPhone', data.user.phone);
           }
           sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
+          setSuccessMsg('Authenticated! Redirecting...');
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 500);
         }
-        
-        setSuccessMsg('Authenticated! Redirecting...');
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 500);
       } else {
         setSuccessMsg('Verification successful! Opening registration wizard...');
         // Redirect to School Onboarding Wizard

@@ -118,13 +118,131 @@ export class AuthService {
       where: { id: request.id },
     }).catch(() => {}); // ignore cleanup error if any
 
-    const user = await this.prisma.user.findFirst({
+    // --- AUTO-ASSOCIATION FOR PARENTS AND STUDENTS ---
+    // Search for students linked to this phone number
+    const matchingStudents = await this.prisma.studentProfile.findMany({
       where: {
-        phone: {
-          endsWith: normalizedPhone,
-        },
+        OR: [
+          { user: { phone: { endsWith: normalizedPhone } } },
+          { fatherPhone: { endsWith: normalizedPhone } },
+          { motherPhone: { endsWith: normalizedPhone } },
+          { guardianPhone: { endsWith: normalizedPhone } }
+        ]
+      },
+      include: {
+        user: true
+      }
+    });
+
+    let parentUser = await this.prisma.user.findFirst({
+      where: {
+        role: Role.PARENT,
+        phone: { endsWith: normalizedPhone }
+      },
+      include: {
+        parentProfile: true
+      }
+    });
+
+    if (matchingStudents.length > 0) {
+      const firstStudent = matchingStudents[0];
+      const tenantId = firstStudent.tenantId;
+
+      if (!parentUser) {
+        const parentName = firstStudent.fatherName || firstStudent.motherName || `Parent of ${firstStudent.user.name}`;
+        const parentEmail = `parent.${normalizedPhone}@edutrack.local`;
+        const passwordHash = await bcrypt.hash('Welcome@123', 10);
+        const parentPhone = `${tenantId.substring(0, 8)}-${normalizedPhone}`;
+
+        parentUser = await this.prisma.$transaction(async (tx) => {
+          let existing = await tx.user.findFirst({
+            where: {
+              OR: [
+                { email: parentEmail },
+                { phone: parentPhone, role: Role.PARENT }
+              ]
+            },
+            include: { parentProfile: true }
+          });
+          if (existing) return existing;
+
+          const user = await tx.user.create({
+            data: {
+              email: parentEmail,
+              name: parentName,
+              passwordHash,
+              role: Role.PARENT,
+              phone: parentPhone,
+              tenantId,
+            }
+          });
+
+          const profile = await tx.parentProfile.create({
+            data: {
+              userId: user.id,
+            }
+          });
+
+          return {
+            ...user,
+            parentProfile: profile
+          } as any;
+        });
+      }
+
+      // Link students to the parent profile
+      if (parentUser && parentUser.parentProfile) {
+        for (const student of matchingStudents) {
+          let relationship = "Guardian";
+          if (student.fatherPhone && student.fatherPhone.replace(/\D/g, '').endsWith(normalizedPhone)) {
+            relationship = "Father";
+          } else if (student.motherPhone && student.motherPhone.replace(/\D/g, '').endsWith(normalizedPhone)) {
+            relationship = "Mother";
+          }
+
+          await this.prisma.parentStudent.upsert({
+            where: {
+              parentId_studentId: {
+                parentId: parentUser.parentProfile.id,
+                studentId: student.id
+              }
+            },
+            update: {},
+            create: {
+              parentId: parentUser.parentProfile.id,
+              studentId: student.id,
+              relationship,
+              isPrimary: true
+            }
+          }).catch(() => {});
+
+          // Also set legacy field for backward compatibility
+          if (student.parentProfileId !== parentUser.parentProfile.id) {
+            await this.prisma.studentProfile.update({
+              where: { id: student.id },
+              data: { parentProfileId: parentUser.parentProfile.id }
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // Attempt to login as PARENT user first
+    let user = await this.prisma.user.findFirst({
+      where: {
+        phone: { endsWith: normalizedPhone },
+        role: Role.PARENT
       },
     });
+
+    if (!user) {
+      // Fallback
+      user = await this.prisma.user.findFirst({
+        where: {
+          phone: { endsWith: normalizedPhone }
+        },
+      });
+    }
 
     if (!user) {
       return {

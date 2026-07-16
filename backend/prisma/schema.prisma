@@ -216,6 +216,7 @@ model ParentProfile {
   user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   emergencyContact String?
   students         StudentProfile[]
+  parentStudents   ParentStudent[]
 }
 
 model StudentProfile {
@@ -227,9 +228,13 @@ model StudentProfile {
   motherName      String?
   aadharNo        String?
   profilePhotoUrl String?
+  fatherPhone      String?
+  motherPhone      String?
+  guardianPhone    String?
 
   parentProfileId String?
   parentProfile   ParentProfile? @relation(fields: [parentProfileId], references: [id], onDelete: SetNull)
+  parentStudents   ParentStudent[]
 
   classSectionId String?
   classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
@@ -1007,4 +1012,17 @@ model ExamSchedule {
   updatedAt      DateTime     @updatedAt
 
   @@index([tenantId, classSectionId, subjectId])
+}
+
+model ParentStudent {
+  id           String         @id @default(uuid())
+  parentId     String
+  parent       ParentProfile  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  relationship String         @default("Guardian") // Father, Mother, Guardian
+  isPrimary    Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+
+  @@unique([parentId, studentId])
 }

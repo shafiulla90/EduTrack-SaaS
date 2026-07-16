@@ -49,6 +49,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             const role = getActiveRole();
             if (role === 'TEACHER') {
               localStorage.setItem('teacher_tenantId', data.id);
+            } else if (role === 'PARENT') {
+              localStorage.setItem('parent_tenantId', data.id);
             } else {
               localStorage.setItem('admin_tenantId', data.id);
             }
@@ -79,6 +81,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           sessionStorage.setItem('active_role', 'TEACHER');
         } else if (data.currentUser.role === 'SCHOOL_ADMIN') {
           sessionStorage.setItem('active_role', 'SCHOOL_ADMIN');
+        } else if (data.currentUser.role === 'PARENT') {
+          sessionStorage.setItem('active_role', 'PARENT');
         }
       }
       
@@ -92,6 +96,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           const role = getActiveRole();
           if (role === 'TEACHER') {
             localStorage.setItem('teacher_tenantId', setupObj.tenantId);
+          } else if (role === 'PARENT') {
+            localStorage.setItem('parent_tenantId', setupObj.tenantId);
           } else {
             localStorage.setItem('admin_tenantId', setupObj.tenantId);
           }

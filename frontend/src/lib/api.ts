@@ -9,12 +9,14 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
     ? 'http://localhost:3001'          // Server-side rendering in dev: direct backend call
     : '/api';                          // Client-side on Vercel: use Next.js proxy route
 
-export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' {
+export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' {
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';
   
-  let role = sessionStorage.getItem('active_role') as 'TEACHER' | 'SCHOOL_ADMIN' | null;
+  let role = sessionStorage.getItem('active_role') as 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | null;
   if (!role) {
-    if (localStorage.getItem('teacher_token') && !localStorage.getItem('admin_token')) {
+    if (localStorage.getItem('parent_token')) {
+      role = 'PARENT';
+    } else if (localStorage.getItem('teacher_token') && !localStorage.getItem('admin_token')) {
       role = 'TEACHER';
     } else {
       role = 'SCHOOL_ADMIN';
@@ -27,25 +29,32 @@ export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' {
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
+  if (role === 'PARENT') return localStorage.getItem('parent_token');
   return role === 'TEACHER' ? localStorage.getItem('teacher_token') : localStorage.getItem('admin_token');
 }
 
 export function getStoredTenantId(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
+  if (role === 'PARENT') return localStorage.getItem('parent_tenantId');
   return role === 'TEACHER' ? localStorage.getItem('teacher_tenantId') : localStorage.getItem('admin_tenantId');
 }
 
 export function getStoredUserPhone(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
+  if (role === 'PARENT') return localStorage.getItem('parent_userPhone');
   return role === 'TEACHER' ? localStorage.getItem('teacher_userPhone') : localStorage.getItem('admin_userPhone');
 }
 
 export function clearStoredAuth() {
   if (typeof window === 'undefined') return;
   const role = getActiveRole();
-  if (role === 'TEACHER') {
+  if (role === 'PARENT') {
+    localStorage.removeItem('parent_token');
+    localStorage.removeItem('parent_tenantId');
+    localStorage.removeItem('parent_userPhone');
+  } else if (role === 'TEACHER') {
     localStorage.removeItem('teacher_token');
     localStorage.removeItem('teacher_tenantId');
     localStorage.removeItem('teacher_userPhone');

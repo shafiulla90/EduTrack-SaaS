@@ -1,0 +1,159 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useParent } from '../ParentContext';
+import { api } from '@/lib/api';
+import { Bell, Info, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react';
+
+export default function AnnouncementsPage() {
+  const { selectedChild } = useParent();
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [acknowledgedIds, setAcknowledgedIds] = useState<Set<string>>(new Set());
+  const [successMsg, setSuccessMsg] = useState('');
+
+  const fetchAnnouncements = async (childId: string) => {
+    try {
+      setLoading(true);
+      const res = await api.get(`/parent-portal/children/${childId}/announcements`);
+      setAnnouncements(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch announcements:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedChild) {
+      fetchAnnouncements(selectedChild.id);
+    }
+  }, [selectedChild]);
+
+  // Listen to switcher events
+  useEffect(() => {
+    const handleChildChange = (e: any) => {
+      fetchAnnouncements(e.detail);
+    };
+    window.addEventListener('parentChildChanged', handleChildChange);
+    return () => window.removeEventListener('parentChildChanged', handleChildChange);
+  }, []);
+
+  const handleAcknowledge = (id: string, title: string) => {
+    setAcknowledgedIds(prev => {
+      const copy = new Set(prev);
+      copy.add(id);
+      return copy;
+    });
+    setSuccessMsg(`Acknowledged announcement: "${title}"`);
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  if (!selectedChild) {
+    return (
+      <div className="text-slate-400 text-sm text-center py-12">
+        Please select a child to view announcements.
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="w-8 h-8 border-4 border-t-brand-500 border-r-brand-500 border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-4xl mx-auto animate-fade-in relative">
+      <div>
+        <h2 className="text-2xl font-black text-slate-100 flex items-center gap-2">
+          Notice Board: <span className="text-brand-300 font-extrabold">{selectedChild.name}</span>
+        </h2>
+        <p className="text-slate-400 text-xs mt-1 font-light">Read general and class-specific announcements issued by the principal or teachers.</p>
+      </div>
+
+      {successMsg && (
+        <div className="fixed top-4 right-4 z-50 p-4 rounded-xl bg-emerald-500 text-white font-semibold text-xs shadow-2xl flex items-center gap-2 animate-bounce">
+          <CheckCircle2 className="w-4.5 h-4.5 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {announcements.length === 0 ? (
+          <div className="bg-slate-900/40 border border-slate-850 p-12 rounded-3xl text-center text-slate-500">
+            <Bell className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+            <p className="text-sm font-semibold">No announcements issued.</p>
+            <p className="text-xs font-light mt-1">Check back later for circulars or alerts.</p>
+          </div>
+        ) : (
+          announcements.map((ann: any) => {
+            const isHigh = ann.priority === 'High' || ann.priority === 'HIGH';
+            const isRead = acknowledgedIds.has(ann.id);
+            return (
+              <div
+                key={ann.id}
+                className="bg-slate-900/40 border border-slate-850 p-6 rounded-3xl shadow-xl flex flex-col justify-between hover:border-slate-800 transition-all space-y-4 relative overflow-hidden"
+              >
+                {isHigh && (
+                  <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-rose-500" />
+                )}
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider ${
+                        isHigh 
+                          ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400' 
+                          : 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400'
+                      }`}>
+                        {ann.priority} Priority
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-light">
+                        {new Date(ann.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+
+                    {isRead ? (
+                      <span className="flex items-center gap-1 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                        <ShieldCheck className="w-4 h-4" /> Acknowledged
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleAcknowledge(ann.id, ann.title)}
+                        className="px-3 py-1 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-slate-200 transition-all font-bold text-[10px] cursor-pointer"
+                      >
+                        Acknowledge
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-slate-100 text-sm leading-snug flex items-center gap-2">
+                      {isHigh ? <AlertTriangle className="w-4.5 h-4.5 text-rose-500 shrink-0" /> : <Info className="w-4.5 h-4.5 text-indigo-400 shrink-0" />}
+                      {ann.title}
+                    </h3>
+                    <p className="text-slate-400 text-xs font-light leading-relaxed whitespace-pre-line">{ann.content}</p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-900 pt-3 flex justify-between items-center text-[10px] text-slate-500">
+                  <span>From: <strong className="text-slate-300 font-bold">{ann.teacher?.user?.name || 'Principal Office'}</strong></span>
+                  {ann.audienceType && (
+                    <span>Audience: <strong className="text-brand-300 font-bold uppercase tracking-wider">{ann.audienceType}</strong></span>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
