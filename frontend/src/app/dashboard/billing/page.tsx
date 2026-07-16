@@ -114,18 +114,26 @@ export default function FeesBillingPage() {
     }
   };
 
+  const [loadedBillingKey, setLoadedBillingKey] = useState('');
+
   const handleSelectStudent = async (student: any) => {
     try {
       setIsLoading(true);
       const res = await api.get(`/billing/students/${student.account.id}`);
+      const openOpp = res.data.account.opportunities?.[0];
+      
+      const key = `${student.account.id}-${openOpp?.academicYearId || ''}`;
+      setLoadedBillingKey(key);
+      
       setSelectedStudent(res.data);
       setSearch('');
       setMatchingStudents([]);
       
-      const openOpp = res.data.account.opportunities?.[0];
       if (openOpp) {
+        setSelectedYear(openOpp.academicYearId);
         await loadUnpaidFees(openOpp.id);
       } else {
+        setSelectedYear('');
         setFeeItems([]);
       }
     } catch (err) {
@@ -134,6 +142,36 @@ export default function FeesBillingPage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedStudent && selectedYear) {
+      const key = `${selectedStudent.account.id}-${selectedYear}`;
+      if (loadedBillingKey === key) return;
+
+      const reloadBillingData = async () => {
+        try {
+          setIsLoading(true);
+          const res = await api.get(`/billing/students/${selectedStudent.account.id}`, {
+            params: { academicYearId: selectedYear }
+          });
+          setSelectedStudent(res.data);
+          setLoadedBillingKey(key);
+          
+          const openOpp = res.data.account.opportunities?.[0];
+          if (openOpp) {
+            await loadUnpaidFees(openOpp.id);
+          } else {
+            setFeeItems([]);
+          }
+        } catch (err) {
+          console.error('Failed to reload billing data', err);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      reloadBillingData();
+    }
+  }, [selectedYear, selectedStudent]);
 
   const handleCheckboxChange = (id: string) => {
     setFeeItems(prev => prev.map(item => {

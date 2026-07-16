@@ -71,8 +71,11 @@ export class BillingController {
   }
 
   @Get('students/:id')
-  async getStudent(@Param('id') id: string) {
-    return this.billingService.getStudentById(id);
+  async getStudent(
+    @Param('id') id: string,
+    @Query('academicYearId') academicYearId?: string,
+  ) {
+    return this.billingService.getStudentById(id, academicYearId);
   }
 
   @Get('unpaid-fees/:opportunityId')

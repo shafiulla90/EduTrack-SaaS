@@ -190,13 +190,18 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
 
 
-  // Switch to detail view and load details
-  const handleViewDetails = async (student: Student) => {
+  const [loadedDetailsKey, setLoadedDetailsKey] = useState('');
+
+  const loadStudentDetails = async (studentId: string, yearId: string) => {
+    const key = `${studentId}-${yearId}`;
+    if (loadedDetailsKey === key) return;
+    
     try {
-      setLoading(true);
       const [detailsRes, casesRes] = await Promise.all([
-        api.get(`/students/${student.id}`),
-        api.get(`/complaint-box/student-cases/${student.id}`)
+        api.get(`/students/${studentId}`, {
+          params: yearId && yearId !== 'All' ? { academicYearId: yearId } : {}
+        }),
+        api.get(`/complaint-box/student-cases/${studentId}`)
       ]);
       
       const data = detailsRes.data;
@@ -251,15 +256,18 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
       });
 
       setActiveStudentDetails({
-        products: data.invoices?.flatMap((inv: any) => inv.invoiceItems?.map((it: any) => ({
-          id: it.id,
-          name: it.name,
-          price: Number(it.amount),
-          grossTotal: Number(it.amount),
-          discountPercent: 0,
-          discountAmount: 0,
-          netTotal: Number(it.amount)
-        }))) || [],
+        products: data.feeItems?.map((item: any) => ({
+          id: item.oliId,
+          name: item.productName,
+          price: Number(item.totalAmount),
+          grossTotal: Number(item.totalAmount),
+          discountPercent: Number(item.discountPercent),
+          discountAmount: Number(item.discountAmount),
+          netTotal: Number(item.netAmount),
+          paid: Number(item.paidAmount),
+          balance: Number(item.balanceDue)
+        })) || [],
+        feeSummary: data.feeSummary,
         invoices: data.invoices?.map((inv: any) => ({
           id: inv.id,
           date: new Date(inv.invoiceDate).toISOString().split('T')[0],
@@ -297,19 +305,36 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
         setSelectedExamTab('Unit Test');
       }
 
+      setLoadedDetailsKey(key);
       setActiveStudent(fullStudent);
-      setSelectedYear(fullStudent.academicYearId || 'All');
       setExpandedInvoices({});
       setExpandedExams({});
       setTempDiscount(0);
       setAppliedDiscountPercent(0);
     } catch (err) {
-      console.error('Failed to load student profile details:', err);
+      console.error('Failed to load student details:', err);
       alert('Failed to load student details');
+    }
+  };
+
+  // Switch to detail view and load details
+  const handleViewDetails = async (student: Student) => {
+    try {
+      setLoading(true);
+      setSelectedYear(student.academicYearId || 'All');
+      await loadStudentDetails(student.id, student.academicYearId || 'All');
+    } catch (err) {
+      console.error('Failed to load student details:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeStudent && selectedYear && selectedYear !== 'All') {
+      loadStudentDetails(activeStudent.id, selectedYear);
+    }
+  }, [selectedYear, activeStudent]);
 
   const handleApplyDiscount = () => {
     if (tempDiscount < 0 || tempDiscount > 100) {
@@ -358,32 +383,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
       };
     }
     
-    const currentYearId = (selectedYear === 'All' || !selectedYear) ? activeStudent.academicYearId : selectedYear;
-    const currentYearObj = academicYears.find(ay => ay.id === currentYearId);
-    const currentYearStart = currentYearObj ? new Date(currentYearObj.startDate) : new Date();
-    const currentYearEnd = currentYearObj ? new Date(currentYearObj.endDate) : new Date();
-
-    // 1. Filter current year invoices
-    const currentYearInvoices = detailData.invoices.filter((inv: any) => {
-      if (inv.academicYearId) {
-        return inv.academicYearId === currentYearId;
-      }
-      const invDate = new Date(inv.invoiceDateRaw);
-      return invDate >= currentYearStart && invDate <= currentYearEnd;
-    });
-
-    // 2. Map current year products
-    const productsList = currentYearInvoices.flatMap((inv: any) => 
-      inv.items.map((it: any, idx: number) => ({
-        id: `${inv.id}-${it.name}-${idx}`,
-        name: it.name,
-        price: Number(it.amount),
-        grossTotal: Number(it.amount),
-        discountPercent: 0,
-        discountAmount: 0,
-        netTotal: Number(it.amount)
-      }))
-    );
+    const productsList = detailData.products || [];
 
     const subtotal = productsList.reduce((sum: number, p: any) => sum + p.price, 0);
     const discVal = subtotal * (appliedDiscountPercent / 100);
@@ -400,31 +400,12 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
       };
     });
 
-    // 3. Prior Year Dues mapping (outstanding remainingBalance)
-    const prevInvoices = detailData.invoices.filter((inv: any) => {
-      let isBefore = false;
-      if (inv.academicYearStart) {
-        isBefore = new Date(inv.academicYearStart) < currentYearStart;
-      } else {
-        isBefore = new Date(inv.invoiceDateRaw) < currentYearStart;
-      }
-      return isBefore && inv.remainingBalance > 0;
-    });
+    const previousYearsDues = detailData.feeSummary?.previousYears?.map((py: any) => ({
+      yearName: py.academicYearName,
+      balance: py.outstandingBalance
+    })) || [];
 
-    const prevYearDuesMap = new Map<string, { yearName: string, balance: number }>();
-    for (const inv of prevInvoices) {
-      const yearName = inv.academicYearName || 'Previous Years';
-      const balance = inv.remainingBalance;
-      if (balance > 0) {
-        const existing = prevYearDuesMap.get(yearName) || { yearName, balance: 0 };
-        prevYearDuesMap.set(yearName, {
-          yearName,
-          balance: existing.balance + balance
-        });
-      }
-    }
-    const previousYearsDues = Array.from(prevYearDuesMap.values());
-    const totalPreviousYearDue = previousYearsDues.reduce((sum: number, item: any) => sum + item.balance, 0);
+    const totalPreviousYearDue = detailData.feeSummary?.overall?.totalPreviousYearDue || 0;
 
     return {
       list,
@@ -847,13 +828,15 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
               {/* Fee Information Summary Card */}
               {(() => {
-                const overallPaid = detailData 
-                  ? detailData.invoices.reduce((sum: number, inv: any) => sum + inv.paidAmount, 0) 
+                const overallPaid = detailData?.feeSummary
+                  ? detailData.feeSummary.currentYear.paidAmount
                   : activeStudent.paidAmount;
-                const overallPending = detailData 
-                  ? detailData.invoices.reduce((sum: number, inv: any) => sum + inv.remainingBalance, 0) 
+                const overallPending = detailData?.feeSummary
+                  ? detailData.feeSummary.currentYear.pendingAmount
                   : activeStudent.balanceDue;
-                const overallAllocated = overallPaid + overallPending;
+                const overallAllocated = detailData?.feeSummary
+                  ? detailData.feeSummary.currentYear.feeProductsAmount
+                  : (overallPaid + overallPending);
 
                 return (
                   <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">

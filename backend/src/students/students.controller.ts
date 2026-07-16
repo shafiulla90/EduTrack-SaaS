@@ -72,8 +72,11 @@ export class StudentsController {
   }
 
   @Get(':id')
-  async getDetails(@Param('id') id: string) {
-    return this.studentsService.getStudentDetails(id);
+  async getDetails(
+    @Param('id') id: string,
+    @Query('academicYearId') academicYearId?: string,
+  ) {
+    return this.studentsService.getStudentDetails(id, academicYearId);
   }
 
   @Patch(':id')

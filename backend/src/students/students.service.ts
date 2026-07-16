@@ -339,7 +339,7 @@ export class StudentsService implements OnModuleInit {
     });
   }
 
-  async getStudentDetails(studentId: string) {
+  async getStudentDetails(studentId: string, academicYearId?: string) {
     const tenantId = this.getTenantId();
 
     const profile = await this.prisma.studentProfile.findUnique({
@@ -372,10 +372,11 @@ export class StudentsService implements OnModuleInit {
         opportunities: {
           where: {
             tenantId,
-            stageName: { notIn: ['Closed Won', 'Closed Lost'] }
           },
           include: {
-            opportunityLineItems: true
+            opportunityLineItems: {
+              include: { product: true }
+            }
           }
         },
         examMarks: {
@@ -396,31 +397,22 @@ export class StudentsService implements OnModuleInit {
       throw new NotFoundException('Student profile not found');
     }
 
-    const nonVoidedInvoices = profile.invoices.filter(inv => inv.status !== PaymentStatus.VOIDED);
-    const totalPaid = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
-    const invoicePending = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
+    const billingInfo = await this.billingService.getStudentById(studentId, academicYearId);
 
-    let oppPending = 0;
-    const openOpp = profile.opportunities[0];
-    if (openOpp) {
-      const totalOppFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
-        const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
-        const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
-        return sum + (itemTotal - itemDiscount);
-      }, 0);
+    const selectedYear = academicYearId || profile.classSection?.class.academicYearId;
+    const refOpp = profile.opportunities.find(opp => opp.academicYearId === selectedYear);
 
-      const oppInvoices = nonVoidedInvoices.filter(inv => inv.opportunityId === openOpp.id);
-      const totalOppPaid = oppInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
-
-      oppPending = Math.max(0, totalOppFee - totalOppPaid);
+    let unpaidFees = [];
+    if (refOpp) {
+      unpaidFees = await this.billingService.getUnpaidFees(refOpp.id);
     }
-
-    const totalPending = invoicePending + oppPending;
 
     return {
       ...profile,
-      paidAmount: totalPaid,
-      balanceDue: totalPending
+      paidAmount: billingInfo.feeSummary.currentYear.paidAmount,
+      balanceDue: billingInfo.feeSummary.currentYear.pendingAmount,
+      feeSummary: billingInfo.feeSummary,
+      feeItems: unpaidFees
     };
   }
 

@@ -490,8 +490,17 @@ export class BillingService {
     return results;
   }
 
-  async getStudentById(studentId: string) {
+  async getStudentById(studentId: string, academicYearId?: string) {
     const tenantId = this.getTenantId();
+
+    let oppFilter: any = {
+      tenantId,
+    };
+    if (academicYearId) {
+      oppFilter.academicYearId = academicYearId;
+    } else {
+      oppFilter.stageName = { notIn: ['Closed Won', 'Closed Lost'] };
+    }
 
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
@@ -504,12 +513,11 @@ export class BillingService {
           },
         },
         opportunities: {
-          where: {
-            stageName: { notIn: ['Closed Won', 'Closed Lost'] },
-          },
+          where: oppFilter,
           orderBy: { createdAt: 'desc' },
           take: 1,
           include: {
+            academicYear: true,
             opportunityLineItems: {
               include: { product: true }
             },
@@ -529,7 +537,32 @@ export class BillingService {
       throw new NotFoundException('Student not found.');
     }
 
-    const openOpp = student.opportunities[0];
+    // Fallback if no active opportunity matches the filter
+    let openOpp = student.opportunities[0];
+    if (!openOpp && !academicYearId) {
+      // Fallback to the latest opportunity overall
+      const latestOpp = await this.prisma.opportunity.findFirst({
+        where: { studentId, tenantId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          academicYear: true,
+          opportunityLineItems: {
+            include: { product: true }
+          },
+          invoices: {
+            where: {
+              tenantId,
+              status: { not: PaymentStatus.VOIDED }
+            },
+            include: { invoiceItems: true }
+          }
+        }
+      });
+      if (latestOpp) {
+        openOpp = latestOpp;
+      }
+    }
+
     let totalFee = 0;
     let totalPaid = 0;
 
@@ -543,57 +576,76 @@ export class BillingService {
       totalPaid = openOpp.invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
     }
 
-    // Calculate dynamic previous academic year outstanding dues
+    // Determine currentYearStart for previous years calculation
     let currentYearStart = new Date(0);
-    if (openOpp && openOpp.academicYearId) {
+    if (academicYearId) {
       const cy = await this.prisma.academicYear.findUnique({
-        where: { id: openOpp.academicYearId }
+        where: { id: academicYearId }
       });
       if (cy) {
         currentYearStart = cy.startDate;
       }
+    } else if (openOpp && openOpp.academicYear) {
+      currentYearStart = openOpp.academicYear.startDate;
     }
 
-    const prevInvoices = await this.prisma.invoice.findMany({
+    // Retrieve all opportunities starting BEFORE currentYearStart
+    const prevOpps = await this.prisma.opportunity.findMany({
       where: {
         studentId,
         tenantId,
-        status: {
-          in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
-        },
-        OR: [
-          {
-            opportunityId: null,
-            invoiceDate: {
-              lt: currentYearStart
-            }
-          },
-          {
-            opportunity: {
-              academicYearId: {
-                not: openOpp?.academicYearId || undefined
-              },
-              academicYear: {
-                startDate: {
-                  lt: currentYearStart
-                }
-              }
-            }
+        academicYear: {
+          startDate: {
+            lt: currentYearStart
           }
-        ]
+        }
       },
       include: {
-        opportunity: {
-          include: {
-            academicYear: true
+        academicYear: true,
+        opportunityLineItems: true,
+        invoices: {
+          where: {
+            tenantId,
+            status: { not: PaymentStatus.VOIDED }
           }
         }
       }
     });
 
     const prevYearDuesMap = new Map<string, number>();
-    for (const inv of prevInvoices) {
-      const yearName = inv.opportunity?.academicYear?.name || 'Previous Years';
+
+    // 1. Calculate dues from preceding opportunities
+    for (const opp of prevOpps) {
+      const yearName = opp.academicYear?.name || 'Previous Years';
+      const oppFee = opp.opportunityLineItems.reduce((sum, oli) => {
+        const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+        const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+        return sum + (itemTotal - itemDiscount);
+      }, 0);
+      const oppPaid = opp.invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+      const balance = Math.max(0, oppFee - oppPaid);
+      if (balance > 0) {
+        prevYearDuesMap.set(yearName, (prevYearDuesMap.get(yearName) || 0) + balance);
+      }
+    }
+
+    // 2. Retrieve standalone invoices starting BEFORE currentYearStart (where opportunityId === null)
+    const prevOrphanInvoices = await this.prisma.invoice.findMany({
+      where: {
+        studentId,
+        tenantId,
+        opportunityId: null,
+        invoiceDate: {
+          lt: currentYearStart
+        },
+        status: {
+          in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
+        }
+      }
+    });
+
+    for (const inv of prevOrphanInvoices) {
+      const yearName = 'Previous Years';
       const balance = Number(inv.remainingBalance);
       if (balance > 0) {
         prevYearDuesMap.set(yearName, (prevYearDuesMap.get(yearName) || 0) + balance);
@@ -707,38 +759,9 @@ export class BillingService {
     });
 
     // Check if there are unpaid/partially paid invoices from previous years (aligned with getStudentById definition)
-    const currentYearStart = opportunity.academicYear?.startDate || new Date(0);
-    const prevInvoices = await this.prisma.invoice.findMany({
-      where: {
-        studentId: opportunity.studentId,
-        tenantId,
-        status: {
-          in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID]
-        },
-        OR: [
-          {
-            opportunityId: null,
-            invoiceDate: {
-              lt: currentYearStart
-            }
-          },
-          {
-            opportunity: {
-              academicYearId: {
-                not: opportunity.academicYearId || undefined
-              },
-              academicYear: {
-                startDate: {
-                  lt: currentYearStart
-                }
-              }
-            }
-          }
-        ]
-      }
-    });
+    const studentInfo = await this.getStudentById(opportunity.studentId, opportunity.academicYearId);
+    const prevBalanceDue = studentInfo.feeSummary.overall.totalPreviousYearDue;
 
-    const prevBalanceDue = prevInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
     if (prevBalanceDue > 0) {
       result.unshift({
         oliId: 'PREV_YEAR_DUE_CF',
@@ -749,7 +772,7 @@ export class BillingService {
         balanceDue: prevBalanceDue,
         productId: null,
         discountPercent: 0,
-        discountAmount: 0
+        discountAmount: 0,
       });
     }
 
