@@ -69,20 +69,48 @@ export class HomeworkService {
       const scope = await this.roleFilterHelper.buildTeacherScope(userId, tenantId);
       if (scope.assignedClassSectionIds.length === 0) return [];
 
-      const assignments = await this.prisma.teacherAssignment.findMany({
-        where: { tenantId, teacherId: scope.staff.id },
-        include: {
-          classSection: { include: { class: true, section: true } },
-          subject: true,
-        },
-        orderBy: { classSection: { class: { name: 'asc' } } },
+      const [assignments, periods] = await Promise.all([
+        this.prisma.teacherAssignment.findMany({
+          where: { tenantId, teacherId: scope.staff.id },
+          include: {
+            classSection: { include: { class: true, section: true } },
+            subject: true,
+          },
+        }),
+        this.prisma.period.findMany({
+          where: { tenantId, teacherId: scope.staff.id },
+          include: {
+            classSection: { include: { class: true, section: true } },
+            subject: true,
+          },
+        }),
+      ]);
+
+      const classMap = new Map<string, any>();
+      assignments.forEach(a => {
+        const key = `${a.classSectionId}-${a.subjectId}`;
+        classMap.set(key, {
+          classSectionId: a.classSectionId,
+          subjectId: a.subjectId,
+          className: `${a.classSection.class.name} - ${a.classSection.section.name}`,
+          subjectName: a.subject.name,
+        });
       });
-      return assignments.map(a => ({
-        classSectionId: a.classSectionId,
-        subjectId: a.subjectId,
-        className: `${a.classSection.class.name} - ${a.classSection.section.name}`,
-        subjectName: a.subject.name,
-      }));
+      periods.forEach(p => {
+        const key = `${p.classSectionId}-${p.subjectId}`;
+        if (!classMap.has(key)) {
+          classMap.set(key, {
+            classSectionId: p.classSectionId,
+            subjectId: p.subjectId,
+            className: `${p.classSection.class.name} - ${p.classSection.section.name}`,
+            subjectName: p.subject.name,
+          });
+        }
+      });
+
+      const list = Array.from(classMap.values());
+      list.sort((x, y) => x.className.localeCompare(y.className));
+      return list;
     }
 
     // Admin: all class-section × subject combinations

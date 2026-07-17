@@ -34,10 +34,22 @@ export class TeacherPortalService {
         ...(subjectId ? { subjectId } : {}),
       },
     });
-    if (!assignment) {
+    if (assignment) {
+      return assignment;
+    }
+
+    const period = await this.prisma.period.findFirst({
+      where: {
+        teacherId: staffProfileId,
+        classSectionId,
+        ...(subjectId ? { subjectId } : {}),
+      },
+    });
+
+    if (!period) {
       throw new UnauthorizedException('You do not have teaching permissions for this class/subject.');
     }
-    return assignment;
+    return period;
   }
 
   // Centralized audit logging helper
@@ -68,6 +80,7 @@ export class TeacherPortalService {
     const [
       todayClasses,
       assignments,
+      weeklyPeriods,
       homeworkPendingCount,
       currentLeave,
       homeworkCreated,
@@ -93,6 +106,12 @@ export class TeacherPortalService {
       this.prisma.teacherAssignment.findMany({
         where: { tenantId, teacherId: staff.id },
         include: { classSection: true },
+      }),
+
+      // 2b. Timetable Periods
+      this.prisma.period.findMany({
+        where: { tenantId, teacherId: staff.id },
+        select: { classSectionId: true, subjectId: true },
       }),
 
       // 3. Today's Homework Pending
@@ -136,9 +155,15 @@ export class TeacherPortalService {
       })
     ]);
 
-    const classSectionIds = assignments.map(a => a.classSectionId);
+    const classSectionIds = [
+      ...assignments.map(a => a.classSectionId),
+      ...weeklyPeriods.map(p => p.classSectionId),
+    ];
     const uniqueClassSectionIds = Array.from(new Set(classSectionIds));
-    const uniqueSubjectIds = Array.from(new Set(assignments.map(a => a.subjectId)));
+    const uniqueSubjectIds = Array.from(new Set([
+      ...assignments.map(a => a.subjectId),
+      ...weeklyPeriods.map(p => p.subjectId),
+    ]));
     const totalSubjects = uniqueSubjectIds.length;
 
     // Execute section-dependent queries concurrently
@@ -340,33 +365,76 @@ export class TeacherPortalService {
     }
 
     const staff = await this.getStaffProfile(userId, tenantId);
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { tenantId, teacherId: staff.id },
-      include: {
-        classSection: {
-          include: {
-            class: true,
-            section: true,
-            _count: {
-              select: { students: true },
+    const [assignments, periods] = await Promise.all([
+      this.prisma.teacherAssignment.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: {
+          classSection: {
+            include: {
+              class: true,
+              section: true,
+              _count: {
+                select: { students: true },
+              },
             },
           },
+          subject: true,
         },
-        subject: true,
-      },
-      orderBy: { classSection: { class: { name: 'asc' } } },
-    });
+      }),
+      this.prisma.period.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: {
+          classSection: {
+            include: {
+              class: true,
+              section: true,
+              _count: {
+                select: { students: true },
+              },
+            },
+          },
+          subject: true,
+        },
+      }),
+    ]);
 
-    return assignments.map(a => ({
-      classSectionId: a.classSectionId,
-      subjectId: a.subjectId,
-      className: `${a.classSection.class.name} - ${a.classSection.section.name}`,
-      classOnlyName: a.classSection.class.name,
-      sectionOnlyName: a.classSection.section.name,
-      subjectName: a.subject.name,
-      periodsPerWeek: a.periodsPerWeek,
-      strength: a.classSection._count.students,
-    }));
+    const uniqueAssignments = new Map<string, any>();
+
+    for (const a of assignments) {
+      const key = `${a.classSectionId}-${a.subjectId}`;
+      if (!uniqueAssignments.has(key)) {
+        uniqueAssignments.set(key, {
+          classSectionId: a.classSectionId,
+          subjectId: a.subjectId,
+          className: `${a.classSection.class.name} - ${a.classSection.section.name}`,
+          classOnlyName: a.classSection.class.name,
+          sectionOnlyName: a.classSection.section.name,
+          subjectName: a.subject.name,
+          periodsPerWeek: a.periodsPerWeek,
+          strength: a.classSection._count.students,
+        });
+      }
+    }
+
+    for (const p of periods) {
+      const key = `${p.classSectionId}-${p.subjectId}`;
+      if (!uniqueAssignments.has(key)) {
+        uniqueAssignments.set(key, {
+          classSectionId: p.classSectionId,
+          subjectId: p.subjectId,
+          className: `${p.classSection.class.name} - ${p.classSection.section.name}`,
+          classOnlyName: p.classSection.class.name,
+          sectionOnlyName: p.classSection.section.name,
+          subjectName: p.subject.name,
+          periodsPerWeek: 1,
+          strength: p.classSection._count.students,
+        });
+      }
+    }
+
+    const merged = Array.from(uniqueAssignments.values());
+    merged.sort((x, y) => x.className.localeCompare(y.className));
+    return merged;
   }
 
   async getStudentsForClassSection(userId: string, tenantId: string, classSectionId: string) {
@@ -385,14 +453,24 @@ export class TeacherPortalService {
   // 4. Attendance (Strict permission checked proxy to existing service)
   async getClassesForAttendance(userId: string, tenantId: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { tenantId, teacherId: staff.id },
-      include: { classSection: { include: { class: true } } },
-    });
+    const [assignments, periods] = await Promise.all([
+      this.prisma.teacherAssignment.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: { classSection: { include: { class: true } } },
+      }),
+      this.prisma.period.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: { classSection: { include: { class: true } } },
+      }),
+    ]);
 
     const classesMap = new Map();
     assignments.forEach(a => {
       const cls = a.classSection.class;
+      classesMap.set(cls.id, cls);
+    });
+    periods.forEach(p => {
+      const cls = p.classSection.class;
       classesMap.set(cls.id, cls);
     });
 
@@ -404,18 +482,32 @@ export class TeacherPortalService {
 
   async getSectionsForAttendance(userId: string, tenantId: string, classVal: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: {
-        tenantId,
-        teacherId: staff.id,
-        classSection: { class: { name: { equals: classVal, mode: 'insensitive' } } },
-      },
-      include: { classSection: { include: { section: true } } },
-    });
+    const [assignments, periods] = await Promise.all([
+      this.prisma.teacherAssignment.findMany({
+        where: {
+          tenantId,
+          teacherId: staff.id,
+          classSection: { class: { name: { equals: classVal, mode: 'insensitive' } } },
+        },
+        include: { classSection: { include: { section: true } } },
+      }),
+      this.prisma.period.findMany({
+        where: {
+          tenantId,
+          teacherId: staff.id,
+          classSection: { class: { name: { equals: classVal, mode: 'insensitive' } } },
+        },
+        include: { classSection: { include: { section: true } } },
+      }),
+    ]);
 
     const sectionsMap = new Map();
     assignments.forEach(a => {
       const sec = a.classSection.section;
+      sectionsMap.set(sec.id, sec);
+    });
+    periods.forEach(p => {
+      const sec = p.classSection.section;
       sectionsMap.set(sec.id, sec);
     });
 
@@ -731,14 +823,16 @@ export class TeacherPortalService {
       where: { userId, tenantId },
       include: {
         classSections: { select: { id: true } },
-        teacherAssignments: { select: { classSectionId: true } }
+        teacherAssignments: { select: { classSectionId: true } },
+        periods: { select: { classSectionId: true } },
       }
     });
     if (!staff) return [];
 
     const advisorClassIds = staff.classSections.map(cs => cs.id);
     const assignedClassIds = staff.teacherAssignments.map(ta => ta.classSectionId);
-    const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds]));
+    const periodClassIds = staff.periods.map(p => p.classSectionId);
+    const classSectionIds = Array.from(new Set([...advisorClassIds, ...assignedClassIds, ...periodClassIds]));
 
     return this.prisma.announcement.findMany({
       where: {
@@ -1017,26 +1111,54 @@ export class TeacherPortalService {
   // 10. Unified Communication Log Endpoint
   async getCommunicationAudience(userId: string, tenantId: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { tenantId, teacherId: staff.id },
-      include: {
-        classSection: {
-          include: {
-            class: true,
-            section: true,
+    const [assignments, periods] = await Promise.all([
+      this.prisma.teacherAssignment.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: {
+          classSection: {
+            include: {
+              class: true,
+              section: true,
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.period.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: {
+          classSection: {
+            include: {
+              class: true,
+              section: true,
+            },
+          },
+        },
+      }),
+    ]);
 
     const audience = [];
-    // Class/Sections
+    const classSectionIds = new Set<string>();
+
     assignments.forEach(a => {
-      audience.push({
-        type: 'CLASS_SECTION',
-        id: a.classSectionId,
-        name: `${a.classSection.class.name} - ${a.classSection.section.name}`,
-      });
+      if (!classSectionIds.has(a.classSectionId)) {
+        classSectionIds.add(a.classSectionId);
+        audience.push({
+          type: 'CLASS_SECTION',
+          id: a.classSectionId,
+          name: `${a.classSection.class.name} - ${a.classSection.section.name}`,
+        });
+      }
+    });
+
+    periods.forEach(p => {
+      if (!classSectionIds.has(p.classSectionId)) {
+        classSectionIds.add(p.classSectionId);
+        audience.push({
+          type: 'CLASS_SECTION',
+          id: p.classSectionId,
+          name: `${p.classSection.class.name} - ${p.classSection.section.name}`,
+        });
+      }
     });
 
     return audience;
@@ -1089,11 +1211,20 @@ export class TeacherPortalService {
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 0, 23, 59, 59);
 
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { tenantId, teacherId: staff.id },
-      select: { classSectionId: true },
-    });
-    const classSectionIds = Array.from(new Set(assignments.map(a => a.classSectionId)));
+    const [assignments, periods] = await Promise.all([
+      this.prisma.teacherAssignment.findMany({
+        where: { tenantId, teacherId: staff.id },
+        select: { classSectionId: true },
+      }),
+      this.prisma.period.findMany({
+        where: { tenantId, teacherId: staff.id },
+        select: { classSectionId: true },
+      }),
+    ]);
+    const classSectionIds = Array.from(new Set([
+      ...assignments.map(a => a.classSectionId),
+      ...periods.map(p => p.classSectionId),
+    ]));
 
     // Fetch Homeworks due in this range
     const homeworks = await this.prisma.homework.findMany({

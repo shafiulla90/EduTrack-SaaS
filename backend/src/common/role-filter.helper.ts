@@ -46,13 +46,25 @@ export class RoleFilterHelper {
       );
     }
 
-    const assignments = await this.prisma.teacherAssignment.findMany({
-      where: { tenantId, teacherId: staff.id },
-      select: { classSectionId: true, subjectId: true },
-    });
+    const [assignments, periods] = await Promise.all([
+      this.prisma.teacherAssignment.findMany({
+        where: { tenantId, teacherId: staff.id },
+        select: { classSectionId: true, subjectId: true },
+      }),
+      this.prisma.period.findMany({
+        where: { tenantId, teacherId: staff.id },
+        select: { classSectionId: true, subjectId: true },
+      }),
+    ]);
 
-    const assignedClassSectionIds = [...new Set(assignments.map(a => a.classSectionId))];
-    const assignedSubjectIds = [...new Set(assignments.map(a => a.subjectId))];
+    const assignedClassSectionIds = [...new Set([
+      ...assignments.map(a => a.classSectionId),
+      ...periods.map(p => p.classSectionId),
+    ])];
+    const assignedSubjectIds = [...new Set([
+      ...assignments.map(a => a.subjectId),
+      ...periods.map(p => p.subjectId),
+    ])];
 
     return { staff, assignedClassSectionIds, assignedSubjectIds };
   }
@@ -81,7 +93,13 @@ export class RoleFilterHelper {
     const assignment = await this.prisma.teacherAssignment.findFirst({
       where: { teacherId, classSectionId, subjectId, tenantId },
     });
-    if (!assignment) {
+    if (assignment) return;
+
+    const period = await this.prisma.period.findFirst({
+      where: { teacherId, classSectionId, subjectId, tenantId },
+    });
+
+    if (!period) {
       throw new BadRequestException(
         'You do not have teaching permissions for this class and subject combination.',
       );
