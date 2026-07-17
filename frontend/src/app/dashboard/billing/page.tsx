@@ -50,6 +50,10 @@ export default function FeesBillingPage() {
   const [matchingStudents, setMatchingStudents] = useState<any[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successInvoiceId, setSuccessInvoiceId] = useState<string | null>(null);
+  const [lastPaidStudentName, setLastPaidStudentName] = useState('');
+  const [lastPaidAmount, setLastPaidAmount] = useState(0);
 
   // Load initial options & recent invoices
   useEffect(() => {
@@ -223,7 +227,7 @@ export default function FeesBillingPage() {
 
     try {
       setIsLoading(true);
-      await api.post('/billing/invoices', {
+      const res = await api.post('/billing/invoices', {
         opportunityId: openOpp.id,
         studentId: selectedStudent.account.id,
         items: itemsToPay,
@@ -235,6 +239,12 @@ export default function FeesBillingPage() {
           bankBranch: 'Main Branch'
         } : null
       });
+
+      const createdInvoiceId = res.data;
+      setLastPaidStudentName(selectedStudent.account.name);
+      setLastPaidAmount(billingTotal);
+      setSuccessInvoiceId(createdInvoiceId);
+      setSuccessModalOpen(true);
 
       setToastMessage(`Success: Payment of ₹${billingTotal.toLocaleString()} logged for ${selectedStudent.account.name}.`);
       
@@ -818,6 +828,57 @@ export default function FeesBillingPage() {
           </>
         )}
       </div>
+      {/* Success Modal Popup */}
+      {successModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 mx-auto">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900">
+                Payment Successful!
+              </h3>
+              <p className="text-xs text-slate-500 font-semibold mt-1">
+                Transaction processed successfully and registered in student ledger.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-3.5 text-xs text-slate-600 space-y-1.5 text-left border border-slate-100">
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-400">Student:</span>
+                <span className="font-bold text-slate-800">{lastPaidStudentName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-400">Total Amount:</span>
+                <span className="font-extrabold text-slate-900">₹{lastPaidAmount.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (successInvoiceId) {
+                    window.open(`/dashboard/billing/invoices/${successInvoiceId}`, '_blank');
+                  }
+                  setSuccessModalOpen(false);
+                }}
+                className="w-full sm:w-auto flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer border-none"
+              >
+                <Printer className="w-4 h-4" /> Save / Print PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setSuccessModalOpen(false)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all cursor-pointer bg-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
