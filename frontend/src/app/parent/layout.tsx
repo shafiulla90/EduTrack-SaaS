@@ -27,7 +27,7 @@ import {
 function ParentLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
-  const { logoUrl, schoolName } = useTenant();
+  const { logoUrl, schoolName, schoolType } = useTenant();
   const { children: childrenList, selectedChild, setSelectedChildId } = useParent();
   const [showSwitcher, setShowSwitcher] = useState(false);
 
@@ -55,12 +55,26 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="h-[72px] bg-white border-b border-slate-200 sticky top-0 z-40 flex items-center justify-between px-4 lg:px-8 shrink-0 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/10">
-            <span className="font-extrabold text-white text-base tracking-tight">ET</span>
+          {/* School logo or ET fallback */}
+          <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden">
+            {logoUrl ? (
+              <img src={logoUrl} alt={schoolName} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-md shadow-blue-500/10">
+                <svg className="w-5 h-5 stroke-white fill-none" viewBox="0 0 24 24">
+                  <path d="M22 10v6M2 10l10-5 10 5-10 5z" strokeWidth="2"></path>
+                  <path d="M6 12v5c3 3 9 3 12 0v-5" strokeWidth="2"></path>
+                </svg>
+              </div>
+            )}
           </div>
-          <div className="hidden sm:block text-left">
-            <h1 className="font-extrabold text-xs text-indigo-900 uppercase tracking-wider leading-none">EduTrack</h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Parent Portal</p>
+          <div className="text-left max-w-[140px] xs:max-w-[200px] sm:max-w-[300px] md:max-w-none">
+            <h1 className="font-extrabold text-[12px] sm:text-[14px] text-indigo-900 leading-none uppercase tracking-wide truncate">
+              {schoolName || 'EduTrack'}
+            </h1>
+            <p className="text-[9px] text-slate-500 font-bold tracking-wider uppercase mt-0.5 truncate">
+              Parent Portal {schoolName ? '• ' + (schoolType || 'Powered by Covenant Synergy') : ''}
+            </p>
           </div>
         </div>
 
