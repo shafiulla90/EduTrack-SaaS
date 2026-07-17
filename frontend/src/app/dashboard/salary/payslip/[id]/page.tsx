@@ -91,6 +91,34 @@ export default function PayslipPrintPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 print:bg-white print:p-0 p-3 sm:p-6 flex flex-col items-center">
+      {/* ── Print Sizing Styles Override ── */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 8mm 12mm !important;
+          }
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+          .print-card {
+            border: none !important;
+            box-shadow: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            transform: scale(0.92);
+            transform-origin: top center;
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            page-break-before: avoid !important;
+          }
+        }
+      `}} />
+
       {/* ── Top Action Bar (hidden during print) ── */}
       <div className="w-full max-w-[800px] mb-4 sm:mb-6 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 shadow-sm print:hidden">
         <button
@@ -110,7 +138,7 @@ export default function PayslipPrintPage() {
       </div>
 
       {/* ── Payslip Sheet (A4-styled printable card) ── */}
-      <div className="w-full max-w-[800px] bg-white text-slate-800 border border-slate-200 print:border-none shadow-lg print:shadow-none print:min-h-0 relative font-sans print:m-0 flex flex-col print:block">
+      <div className="print-card w-full max-w-[800px] bg-white text-slate-800 border border-slate-200 print:border-none shadow-lg print:shadow-none print:min-h-0 relative font-sans print:m-0 flex flex-col print:block">
         {/* Header Block with Navy blue bar */}
         <div className="bg-[#1e3a8a] text-white border-b-[6px] border-amber-500 relative p-6 sm:p-8 flex items-center justify-between">
           <div className="space-y-1">
