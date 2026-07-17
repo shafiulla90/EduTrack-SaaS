@@ -49,8 +49,10 @@
 }
 .dark .bg-slate-50\/50,
 .dark .bg-slate-50\/10,
-.dark .bg-slate-50\/30 {
-  background-color: rgba(15, 23, 42, 0.4) !important;
+.dark .bg-slate-50\/30,
+.dark .bg-slate-50\/80,
+.dark [class*="bg-slate-50/"] {
+  background-color: rgba(15, 23, 42, 0.6) !important;
 }
 
 /* Border utilities */
