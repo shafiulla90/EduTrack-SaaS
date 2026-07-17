@@ -85,7 +85,7 @@ export default function HomeworkPage() {
 
   if (!selectedChild) {
     return (
-      <div className="text-slate-400 text-sm text-center py-12">
+      <div className="text-slate-500 text-sm text-center py-12">
         Please select a child to view homework.
       </div>
     );
@@ -94,7 +94,7 @@ export default function HomeworkPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
-        <div className="w-8 h-8 border-4 border-t-brand-500 border-r-brand-500 border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-t-[#2E5BFF] border-r-[#2E5BFF] border-b-transparent border-l-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -102,16 +102,16 @@ export default function HomeworkPage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto animate-fade-in relative">
       <div>
-        <h2 className="text-2xl font-black text-slate-100 flex items-center gap-2">
-          Homework Desk: <span className="text-brand-300 font-extrabold">{selectedChild.name}</span>
+        <h2 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+          Homework Desk: <span className="text-[#2E5BFF] font-extrabold">{selectedChild.name}</span>
         </h2>
-        <p className="text-slate-400 text-xs mt-1 font-light">Monitor pending and completed class assignments.</p>
+        <p className="text-slate-500 text-xs mt-1 font-light">Monitor pending and completed class assignments.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {homeworkList.length === 0 ? (
-          <div className="col-span-2 bg-slate-900/40 border border-slate-850 p-12 rounded-3xl text-center text-slate-500">
-            <BookOpen className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+          <div className="col-span-2 bg-white border border-slate-200 p-12 rounded-3xl text-center text-slate-500 shadow-sm">
+            <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-semibold">No homework assigned yet.</p>
             <p className="text-xs font-light mt-1">Excellent! Your child is all caught up.</p>
           </div>
@@ -119,24 +119,24 @@ export default function HomeworkPage() {
           homeworkList.map((hw: any) => (
             <div
               key={hw.id}
-              className="bg-slate-900/40 border border-slate-850 p-6 rounded-3xl shadow-xl flex flex-col justify-between hover:border-brand-500/25 transition-all space-y-5"
+              className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all space-y-5"
             >
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-[10px] text-brand-400 font-black uppercase tracking-wider bg-brand-500/10 border border-brand-500/20 px-2.5 py-1 rounded-lg">
+                    <span className="text-[10px] text-[#2E5BFF] font-black uppercase tracking-wider bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
                       {hw.subject}
                     </span>
                     <span className="text-[10px] text-slate-500 font-medium block mt-2">Assigned by: {hw.teacher}</span>
                   </div>
                   
                   {hw.submitted ? (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
                       <CheckCircle className="w-3.5 h-3.5" />
                       {hw.submissionStatus}
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
                       <Clock className="w-3.5 h-3.5" />
                       Pending
                     </span>
@@ -144,8 +144,8 @@ export default function HomeworkPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <h3 className="font-bold text-slate-200 text-sm leading-snug">{hw.title}</h3>
-                  <p className="text-slate-400 text-xs font-light leading-relaxed whitespace-pre-line">{hw.description}</p>
+                  <h3 className="font-bold text-slate-700 text-sm leading-snug">{hw.title}</h3>
+                  <p className="text-slate-500 text-xs font-normal leading-relaxed whitespace-pre-line">{hw.description}</p>
                 </div>
 
                 {hw.attachments && hw.attachments.length > 0 && (
@@ -156,7 +156,7 @@ export default function HomeworkPage() {
                         href={att.startsWith('http') || att.startsWith('/uploads') ? att : '#'}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-950 border border-slate-900 rounded-xl text-[10px] text-slate-400 hover:text-white transition-all cursor-pointer font-semibold"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer font-semibold"
                       >
                         <Paperclip className="w-3 h-3" />
                         Attachment File {idx + 1}
@@ -166,12 +166,12 @@ export default function HomeworkPage() {
                 )}
               </div>
 
-              <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[10px] text-slate-500">
-                <span>Due Date: <strong className="text-slate-300 font-bold">{new Date(hw.dueDate).toLocaleDateString()}</strong></span>
+              <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-[10px] text-slate-400">
+                <span>Due Date: <strong className="text-slate-700 font-bold">{new Date(hw.dueDate).toLocaleDateString()}</strong></span>
                 {!hw.submitted && (
                   <button
                     onClick={() => setSubmittingHomework(hw)}
-                    className="px-3.5 py-1.5 rounded-xl bg-brand-500 text-white font-bold tracking-wide hover:bg-brand-600 transition-all flex items-center gap-1.5 cursor-pointer text-[10px]"
+                    className="px-3.5 py-1.5 rounded-xl bg-[#2E5BFF] text-white font-bold tracking-wide hover:bg-blue-600 transition-all flex items-center gap-1.5 cursor-pointer text-[10px]"
                   >
                     <Upload className="w-3.5 h-3.5" />
                     Submit Work
@@ -185,29 +185,29 @@ export default function HomeworkPage() {
 
       {/* Submission Modal Dialog */}
       {submittingHomework && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-885 rounded-3xl shadow-2xl p-6 relative animate-scale-up space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-xl p-6 relative animate-scale-up space-y-4">
             <button
               onClick={() => {
                 setSubmittingHomework(null);
                 setUploadFile(null);
                 setMessage('');
               }}
-              className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-805 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
+              className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
 
             <div>
-              <h3 className="text-base font-bold text-slate-100">Submit Assignment</h3>
-              <p className="text-xs text-slate-500 font-light mt-0.5">{submittingHomework.title}</p>
+              <h3 className="text-base font-bold text-slate-800">Submit Assignment</h3>
+              <p className="text-xs text-slate-400 font-light mt-0.5">{submittingHomework.title}</p>
             </div>
 
             {message && (
               <div className={`p-3 border rounded-2xl text-xs font-semibold leading-relaxed flex items-center gap-2 ${
                 message.includes('successfully') 
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                  ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+                  : 'bg-rose-50 border-rose-100 text-rose-700'
               }`}>
                 {message.includes('successfully') ? <CheckCircle className="w-4.5 h-4.5 shrink-0" /> : <ShieldAlert className="w-4.5 h-4.5 shrink-0" />}
                 <span>{message}</span>
@@ -216,8 +216,8 @@ export default function HomeworkPage() {
 
             <form onSubmit={handleSubmitAssignment} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Attachment File (PDF, PNG, JPG)</label>
-                <div className="border border-dashed border-slate-800 hover:border-slate-700 bg-slate-950/50 rounded-2xl p-6 text-center transition-all relative cursor-pointer flex flex-col items-center justify-center">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Attachment File (PDF, PNG, JPG)</label>
+                <div className="border border-dashed border-slate-200 hover:border-slate-350 bg-slate-50 rounded-2xl p-6 text-center transition-all relative cursor-pointer flex flex-col items-center justify-center">
                   <input
                     type="file"
                     className="absolute inset-0 opacity-0 cursor-pointer"
@@ -227,18 +227,18 @@ export default function HomeworkPage() {
                     }}
                     required
                   />
-                  <Upload className="w-7 h-7 text-slate-600 mb-2" />
-                  <span className="text-xs text-slate-400 font-semibold block block truncate max-w-[250px]">
+                  <Upload className="w-7 h-7 text-slate-400 mb-2" />
+                  <span className="text-xs text-slate-500 font-semibold block truncate max-w-[250px]">
                     {uploadFile ? uploadFile.name : 'Select or drag file to upload'}
                   </span>
-                  <span className="text-[9px] text-slate-600 block mt-1">Maximum upload size: 2MB (Base64)</span>
+                  <span className="text-[9px] text-slate-400 block mt-1">Maximum upload size: 2MB (Base64)</span>
                 </div>
               </div>
 
               <button
                 type="submit"
                 disabled={submitLoading || !uploadFile}
-                className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-xs transition-all shadow-lg shadow-brand-500/15 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl font-semibold text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitLoading ? (
                   <>

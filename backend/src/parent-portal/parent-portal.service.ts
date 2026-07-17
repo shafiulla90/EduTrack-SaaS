@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { StorageService } from '../common/storage.service';
 import { Role, PaymentStatus } from '@prisma/client';
+import { parseAttendanceDate } from '../attendance/date.utils';
 
 export interface PaymentGatewayResult {
   success: boolean;
@@ -210,24 +211,33 @@ export class ParentPortalService {
     });
 
     // 6. Today's Attendance Summary
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const attendances = await this.prisma.attendance.findMany({
+    const todayUTC = parseAttendanceDate(null);
+    const sessions = await this.prisma.attendanceSession.findMany({
       where: {
-        studentId: { in: studentIds },
-        attendanceSession: {
-          date: today,
-        },
-      },
-      select: {
-        status: true,
-        studentId: true,
+        classSectionId: { in: classSectionIds },
+        date: todayUTC,
+        tenantId,
       },
     });
 
-    let todayAttendanceStr = `${attendances.filter(a => a.status === 'PRESENT').length}/${children.length} Present`;
-    if (attendances.length === 0) {
-      todayAttendanceStr = 'Not Marked';
+    let todayAttendanceStr = 'Not Marked';
+    if (sessions.length > 0) {
+      const todayAttendances = await this.prisma.attendance.findMany({
+        where: {
+          studentId: { in: studentIds },
+          attendanceSession: {
+            date: todayUTC,
+          },
+        },
+        select: {
+          status: true,
+          studentId: true,
+        },
+      });
+
+      const absentCount = todayAttendances.filter(a => a.status === 'ABSENT').length;
+      const presentCount = children.length - absentCount;
+      todayAttendanceStr = `${presentCount}/${children.length} Present`;
     }
 
     return {

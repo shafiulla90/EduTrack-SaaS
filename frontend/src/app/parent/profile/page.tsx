@@ -39,7 +39,7 @@ export default function StudentProfilePage() {
 
   if (!selectedChild) {
     return (
-      <div className="text-slate-400 text-sm text-center py-12">
+      <div className="text-slate-500 text-sm text-center py-12">
         Please select a child to view their profile.
       </div>
     );
@@ -48,7 +48,7 @@ export default function StudentProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
-        <div className="w-8 h-8 border-4 border-t-brand-500 border-r-brand-500 border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-t-[#2E5BFF] border-r-[#2E5BFF] border-b-transparent border-l-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -56,28 +56,28 @@ export default function StudentProfilePage() {
   return (
     <div className="space-y-6 max-w-3xl mx-auto animate-fade-in">
       {/* Profile Card */}
-      <div className="bg-slate-900/40 border border-slate-850 p-6 rounded-3xl shadow-xl flex flex-col items-center text-center relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-r from-brand-600/20 to-indigo-500/20" />
+      <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex flex-col items-center text-center relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-r from-blue-50 to-indigo-50" />
         
         <div className="relative mt-8">
           {selectedChild.avatarUrl ? (
             <img
               src={selectedChild.avatarUrl}
               alt={selectedChild.name}
-              className="w-24 h-24 rounded-3xl object-cover border-4 border-slate-950 shadow-2xl"
+              className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-md"
             />
           ) : (
-            <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center font-black text-3xl border-4 border-slate-950 shadow-2xl">
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center font-black text-3xl border-4 border-white shadow-md">
               {selectedChild.name[0]}
             </div>
           )}
         </div>
 
-        <h2 className="text-2xl font-black text-slate-100 mt-4">{selectedChild.name}</h2>
-        <p className="text-xs text-slate-400 font-light mt-1">
+        <h2 className="text-2xl font-black text-slate-800 mt-4">{selectedChild.name}</h2>
+        <p className="text-xs text-slate-500 font-light mt-1">
           Class {selectedChild.class} • Section {selectedChild.section}
         </p>
-        <span className="mt-3 px-3 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300 text-[10px] font-bold uppercase tracking-wider">
+        <span className="mt-3 px-3 py-1.5 rounded-full bg-blue-550/10 bg-blue-50 border border-blue-100 text-[#2E5BFF] text-[10px] font-bold uppercase tracking-wider">
           Student ID: {selectedChild.id.substring(0, 8).toUpperCase()}
         </span>
       </div>
@@ -86,84 +86,84 @@ export default function StudentProfilePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Personal Details */}
-        <div className="bg-slate-900/40 border border-slate-850 p-6 rounded-3xl shadow-xl space-y-4">
-          <h3 className="font-bold text-sm text-slate-200 border-b border-slate-900 pb-2 flex items-center gap-2">
-            <Info className="w-4 h-4 text-brand-400" />
+        <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+          <h3 className="font-bold text-sm text-slate-800 border-b border-slate-105 border-slate-100 pb-2 flex items-center gap-2">
+            <Info className="w-4 h-4 text-[#2E5BFF]" />
             Academic Details
           </h3>
-          <div className="space-y-3.5 text-xs">
+          <div className="space-y-3.5 text-xs text-slate-600">
             <div className="flex justify-between">
-              <span className="text-slate-500">Roll Number</span>
-              <strong className="text-slate-300">{selectedChild.rollNo}</strong>
+              <span className="text-slate-400">Roll Number</span>
+              <strong className="text-slate-700">{selectedChild.rollNo}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Class Section</span>
-              <strong className="text-slate-300">{selectedChild.class} - {selectedChild.section}</strong>
+              <span className="text-slate-400">Class Section</span>
+              <strong className="text-slate-700">{selectedChild.class} - {selectedChild.section}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Blood Group</span>
-              <strong className="text-slate-300">O+ (Positive)</strong>
+              <span className="text-slate-400">Blood Group</span>
+              <strong className="text-slate-700">O+ (Positive)</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Date of Birth</span>
-              <strong className="text-slate-300">12th August 2016</strong>
+              <span className="text-slate-400">Date of Birth</span>
+              <strong className="text-slate-700">12th August 2016</strong>
             </div>
           </div>
         </div>
 
         {/* Parent Details */}
-        <div className="bg-slate-900/40 border border-slate-850 p-6 rounded-3xl shadow-xl space-y-4">
-          <h3 className="font-bold text-sm text-slate-200 border-b border-slate-900 pb-2 flex items-center gap-2">
-            <Heart className="w-4 h-4 text-rose-400" />
+        <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+          <h3 className="font-bold text-sm text-slate-800 border-b border-slate-105 border-slate-100 pb-2 flex items-center gap-2">
+            <Heart className="w-4 h-4 text-rose-500" />
             Guardian Details
           </h3>
-          <div className="space-y-3.5 text-xs">
+          <div className="space-y-3.5 text-xs text-slate-600">
             <div className="flex justify-between">
-              <span className="text-slate-500">Father's Name</span>
-              <strong className="text-slate-300">{selectedChild.fatherName}</strong>
+              <span className="text-slate-400">Father's Name</span>
+              <strong className="text-slate-700">{selectedChild.fatherName}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Mother's Name</span>
-              <strong className="text-slate-300">{selectedChild.motherName}</strong>
+              <span className="text-slate-400">Mother's Name</span>
+              <strong className="text-slate-700">{selectedChild.motherName}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Emergency Phone</span>
-              <strong className="text-slate-300">+91 98867 54321</strong>
+              <span className="text-slate-400">Emergency Phone</span>
+              <strong className="text-slate-700">+91 98867 54321</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Primary Contact Role</span>
-              <strong className="text-brand-300 uppercase tracking-wider text-[10px] font-bold">Primary Guardian</strong>
+              <span className="text-slate-400">Primary Contact Role</span>
+              <strong className="text-indigo-600 uppercase tracking-wider text-[10px] font-bold">Primary Guardian</strong>
             </div>
           </div>
         </div>
 
         {/* Advisor Teacher Info */}
-        <div className="bg-slate-900/40 border border-slate-850 p-6 rounded-3xl shadow-xl space-y-4 md:col-span-2">
-          <h3 className="font-bold text-sm text-slate-200 border-b border-slate-900 pb-2 flex items-center gap-2">
-            <Briefcase className="w-4 h-4 text-indigo-400" />
+        <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4 md:col-span-2">
+          <h3 className="font-bold text-sm text-slate-800 border-b border-slate-105 border-slate-100 pb-2 flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-indigo-500" />
             Class Advisor Information
           </h3>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center text-slate-400">
+              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400">
                 <User className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-slate-200">Mrs. Ananya Sharma</h4>
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Advisor / English Department</p>
+                <h4 className="text-sm font-bold text-slate-700">Mrs. Ananya Sharma</h4>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Advisor / English Department</p>
               </div>
             </div>
             <div className="flex gap-2">
               <a
                 href="mailto:ananya.sharma@school.edu"
-                className="p-2.5 rounded-xl bg-slate-950 border border-slate-900 text-slate-400 hover:text-white transition-all cursor-pointer"
+                className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
                 title="Send Email"
               >
                 <Mail className="w-4 h-4" />
               </a>
               <a
                 href="tel:+919876543210"
-                className="p-2.5 rounded-xl bg-slate-950 border border-slate-900 text-slate-400 hover:text-white transition-all cursor-pointer"
+                className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
                 title="Call Advisor"
               >
                 <Phone className="w-4 h-4" />
