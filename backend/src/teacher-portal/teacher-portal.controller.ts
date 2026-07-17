@@ -208,4 +208,22 @@ export class TeacherPortalController {
   async getStudentProgress(@Req() req: any, @Param('studentId') studentId: string) {
     return this.portalService.getStudentProgressDetails(req.user.sub, req.user.tenantId, studentId);
   }
+
+  @Get('salary/details')
+  @Roles(Role.TEACHER)
+  async getSalaryDetails(@Req() req: any) {
+    return this.portalService.getMySalaryDetails(req.user.sub, req.user.tenantId);
+  }
+
+  @Get('salary/history')
+  @Roles(Role.TEACHER)
+  async getSalaryHistory(@Req() req: any) {
+    return this.portalService.getMySalaryHistory(req.user.sub, req.user.tenantId);
+  }
+
+  @Get('salary/payslip/:expenseId')
+  @Roles(Role.TEACHER)
+  async getPayslipData(@Req() req: any, @Param('expenseId') expenseId: string) {
+    return this.portalService.getPayslipPDFData(req.user.sub, req.user.tenantId, expenseId);
+  }
 }

@@ -1559,5 +1559,181 @@ export class TeacherPortalService {
       failed
     };
   }
+
+  // 11. Salary & Payslip management methods
+  async getMySalaryDetails(userId: string, tenantId: string) {
+    const staff = await this.getStaffProfile(userId, tenantId);
+    
+    // Find the latest PAID salary expense for this teacher
+    const nameFragment = staff.user.name;
+    const latestSalary = await this.prisma.expense.findFirst({
+      where: {
+        tenantId,
+        category: 'Salary',
+        description: {
+          contains: nameFragment,
+          mode: 'insensitive'
+        },
+        status: 'PAID'
+      },
+      orderBy: { date: 'desc' }
+    });
+
+    const basic = Number(staff.basicSalary || 0);
+    const allowances = Number(staff.allowances || 0);
+    const deductions = Number(staff.deductions || 0);
+    const pfDeduction = Number(staff.pfDeduction || 0);
+    
+    let netSalary = basic + allowances - deductions - pfDeduction;
+    let bonus = 0;
+
+    if (latestSalary) {
+      netSalary = Number(latestSalary.amount);
+      const standardNet = basic + allowances - deductions - pfDeduction;
+      if (netSalary > standardNet) {
+        bonus = netSalary - standardNet;
+      }
+    }
+
+    // Parse Month from description
+    // e.g. "Salary disbursed to Panini Yadav (EMP001) for January 2026" -> "January 2026"
+    let salaryMonth = 'N/A';
+    if (latestSalary && latestSalary.description) {
+      const match = latestSalary.description.match(/for\s+(.+)$/i);
+      if (match) {
+        salaryMonth = match[1];
+      }
+    }
+
+    return {
+      basicSalary: basic,
+      allowances: allowances,
+      deductions: deductions,
+      pfDeduction: pfDeduction,
+      bonus: bonus,
+      netSalary: netSalary,
+      paymentStatus: latestSalary ? 'Paid' : 'Pending',
+      paymentDate: latestSalary ? latestSalary.date.toISOString().split('T')[0] : 'N/A',
+      salaryMonth: latestSalary ? salaryMonth : 'N/A',
+      payrollReference: latestSalary ? latestSalary.id : 'N/A',
+      employeeId: staff.employeeId || 'N/A',
+      designation: staff.designation || 'Teacher'
+    };
+  }
+
+  async getMySalaryHistory(userId: string, tenantId: string) {
+    const staff = await this.getStaffProfile(userId, tenantId);
+    
+    // Find all salary expenses for this teacher
+    const nameFragment = staff.user.name;
+    const salaries = await this.prisma.expense.findMany({
+      where: {
+        tenantId,
+        category: 'Salary',
+        description: {
+          contains: nameFragment,
+          mode: 'insensitive'
+        }
+      },
+      orderBy: { date: 'desc' }
+    });
+
+    const basic = Number(staff.basicSalary || 0);
+    const allowances = Number(staff.allowances || 0);
+    const deductions = Number(staff.deductions || 0);
+    const pfDeduction = Number(staff.pfDeduction || 0);
+
+    return salaries.map(s => {
+      let salaryMonth = 'N/A';
+      if (s.description) {
+        const match = s.description.match(/for\s+(.+)$/i);
+        if (match) {
+          salaryMonth = match[1];
+        }
+      }
+
+      const netSalary = Number(s.amount);
+      const standardNet = basic + allowances - deductions - pfDeduction;
+      const bonus = netSalary > standardNet ? netSalary - standardNet : 0;
+
+      return {
+        id: s.id,
+        salaryMonth,
+        paymentDate: s.date.toISOString().split('T')[0],
+        grossSalary: basic + allowances + bonus,
+        deductions: deductions,
+        pfDeduction: pfDeduction,
+        bonus: bonus,
+        netSalary: netSalary,
+        paymentStatus: s.status === 'PAID' ? 'Paid' : 'Pending',
+        paymentMethod: s.paymentMode || 'BANK_TRANSFER',
+        transactionReference: s.id
+      };
+    });
+  }
+
+  async getPayslipPDFData(userId: string, tenantId: string, expenseId: string) {
+    const staff = await this.getStaffProfile(userId, tenantId);
+    
+    // Verify the expense exists, belongs to this tenant, is a Salary category,
+    // and contains this teacher's name in description (security boundary!)
+    const expense = await this.prisma.expense.findFirst({
+      where: {
+        id: expenseId,
+        tenantId,
+        category: 'Salary',
+        description: {
+          contains: staff.user.name,
+          mode: 'insensitive'
+        }
+      }
+    });
+
+    if (!expense) {
+      throw new NotFoundException('Payslip not found or access denied.');
+    }
+
+    const school = await this.prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+
+    let salaryMonth = 'N/A';
+    if (expense.description) {
+      const match = expense.description.match(/for\s+(.+)$/i);
+      if (match) {
+        salaryMonth = match[1];
+      }
+    }
+
+    const basic = Number(staff.basicSalary || 0);
+    const allowances = Number(staff.allowances || 0);
+    const deductions = Number(staff.deductions || 0);
+    const pfDeduction = Number(staff.pfDeduction || 0);
+
+    let netSalary = Number(expense.amount);
+    const standardNet = basic + allowances - deductions - pfDeduction;
+    const bonus = netSalary > standardNet ? netSalary - standardNet : 0;
+
+    return {
+      schoolLogo: school?.logoUrl || '',
+      schoolName: school?.name || 'Vikas Senior Secondary School',
+      teacherName: staff.user.name,
+      employeeId: staff.employeeId || 'N/A',
+      designation: staff.designation || 'Teacher',
+      department: 'Academic',
+      salaryMonth,
+      basicSalary: basic,
+      allowances: allowances,
+      deductions: deductions,
+      pfDeduction: pfDeduction,
+      bonus: bonus,
+      grossSalary: basic + allowances + bonus,
+      netSalary: netSalary,
+      paymentDate: expense.date.toISOString().split('T')[0],
+      paymentMethod: expense.paymentMode || 'BANK_TRANSFER',
+      payrollReference: expense.id,
+      authorizedSignature: 'School Principal'
+    };
+  }
 }
 
