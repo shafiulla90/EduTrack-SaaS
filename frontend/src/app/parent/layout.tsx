@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ParentProvider, useParent } from './ParentContext';
 import { useTenant } from '../providers/TenantContext';
+import { useTheme } from '../providers/ThemeContext';
 import ToastProvider from '@/components/Toast';
 import { clearStoredAuth } from '@/lib/api';
 import {
@@ -25,6 +26,7 @@ import {
 
 function ParentLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
   const { logoUrl, schoolName } = useTenant();
   const { children: childrenList, selectedChild, setSelectedChildId } = useParent();
   const [showSwitcher, setShowSwitcher] = useState(false);
@@ -62,80 +64,107 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Child Switcher Dropdown */}
-        {selectedChild && (
-          <div className="relative">
-            <button
-              onClick={() => setShowSwitcher(!showSwitcher)}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 hover:text-[#2E5BFF] hover:border-blue-300 hover:bg-blue-50/20 transition-all cursor-pointer min-h-[36px]"
-            >
-              {selectedChild.avatarUrl ? (
-                <img
-                  src={selectedChild.avatarUrl}
-                  alt={selectedChild.name}
-                  className="w-5 h-5 rounded-full object-cover border border-slate-200"
-                />
-              ) : (
-                <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-[10px]">
-                  {selectedChild.name[0]}
-                </div>
-              )}
-              <span className="max-w-[80px] sm:max-w-[120px] truncate">{selectedChild.name}</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${showSwitcher ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showSwitcher && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowSwitcher(false)} />
-                <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-50 animate-fade-in space-y-1">
-                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5">
-                    Switch Student
+        <div className="flex items-center gap-3">
+          {/* Child Switcher Dropdown */}
+          {selectedChild && (
+            <div className="relative">
+              <button
+                onClick={() => setShowSwitcher(!showSwitcher)}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 hover:text-[#2E5BFF] hover:border-blue-300 hover:bg-blue-50/20 transition-all cursor-pointer min-h-[36px]"
+              >
+                {selectedChild.avatarUrl ? (
+                  <img
+                    src={selectedChild.avatarUrl}
+                    alt={selectedChild.name}
+                    className="w-5 h-5 rounded-full object-cover border border-slate-200"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-[10px]">
+                    {selectedChild.name[0]}
                   </div>
-                  {childrenList.map((child) => (
-                    <button
-                      key={child.id}
-                      onClick={() => {
-                        setSelectedChildId(child.id);
-                        setShowSwitcher(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all ${
-                        child.id === selectedChild.id
-                          ? 'bg-blue-50 border border-blue-100 text-[#2E5BFF]'
-                          : 'border border-transparent hover:bg-slate-50 text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {child.avatarUrl ? (
-                        <img
-                          src={child.avatarUrl}
-                          alt={child.name}
-                          className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs">
-                          {child.name[0]}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold truncate">{child.name}</p>
-                        <p className="text-[10px] text-slate-500 font-light truncate">
-                          {child.class} - {child.section}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                )}
+                <span className="max-w-[80px] sm:max-w-[120px] truncate">{selectedChild.name}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${showSwitcher ? 'rotate-180' : ''}`} />
+              </button>
 
-        <button
-          onClick={handleLogout}
-          className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-red-600 hover:bg-red-50 hover:border-red-100 transition-all cursor-pointer"
-        >
-          <LogOut className="w-4 h-4" />
-          Logout
-        </button>
+              {showSwitcher && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSwitcher(false)} />
+                  <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-50 animate-fade-in space-y-1">
+                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-3 py-1.5">
+                      Switch Student
+                    </div>
+                    {childrenList.map((child) => (
+                      <button
+                        key={child.id}
+                        onClick={() => {
+                          setSelectedChildId(child.id);
+                          setShowSwitcher(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all ${
+                          child.id === selectedChild.id
+                            ? 'bg-blue-50 border border-blue-100 text-[#2E5BFF]'
+                            : 'border border-transparent hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {child.avatarUrl ? (
+                          <img
+                            src={child.avatarUrl}
+                            alt={child.name}
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs">
+                            {child.name[0]}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate">{child.name}</p>
+                          <p className="text-[10px] text-slate-500 font-light truncate">
+                            {child.class} - {child.section}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Theme Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center border border-slate-200 dark:border-slate-700"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? (
+              <svg className="w-4 h-4 stroke-current fill-none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="5" strokeWidth="2"></circle>
+                <line x1="12" y1="1" x2="12" y2="3" strokeWidth="2" strokeLinecap="round"></line>
+                <line x1="12" y1="21" x2="12" y2="23" strokeWidth="2" strokeLinecap="round"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" strokeWidth="2" strokeLinecap="round"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" strokeWidth="2" strokeLinecap="round"></line>
+                <line x1="1" y1="12" x2="3" y2="12" strokeWidth="2" strokeLinecap="round"></line>
+                <line x1="21" y1="12" x2="23" y2="12" strokeWidth="2" strokeLinecap="round"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" strokeWidth="2" strokeLinecap="round"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" strokeWidth="2" strokeLinecap="round"></line>
+              </svg>
+            ) : (
+              <svg className="w-4 h-4 stroke-current fill-none" viewBox="0 0 24 24">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+              </svg>
+            )}
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="hidden lg:flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-red-600 hover:bg-red-50 hover:border-red-100 transition-all cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+        </div>
       </header>
 
       {/* Main Layout Container */}

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { TenantProvider } from './providers/TenantContext';
+import { ThemeProvider } from './providers/ThemeContext';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -13,11 +14,31 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('edutrack-theme');
+                  if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {}
+              })()
+            `,
+          }}
+        />
+      </head>
       <body className="antialiased">
-        <TenantProvider>
-          {children}
-        </TenantProvider>
+        <ThemeProvider>
+          <TenantProvider>
+            {children}
+          </TenantProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

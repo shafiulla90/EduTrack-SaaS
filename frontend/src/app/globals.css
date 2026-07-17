@@ -2,6 +2,159 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== GLOBAL DARK MODE OVERRIDES ==================== */
+.dark body {
+  --foreground-rgb: 248, 250, 252;
+  --background-start-rgb: 15, 23, 42;
+  --background-end-rgb: 11, 15, 25;
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb)) !important;
+  color: rgb(var(--foreground-rgb)) !important;
+}
+
+/* Background utilities */
+.dark .bg-white {
+  background-color: #1e293b !important; /* slate-800 */
+}
+.dark .bg-slate-50 {
+  background-color: #0f172a !important; /* slate-900 */
+}
+.dark .bg-slate-100 {
+  background-color: #1e293b !important; /* slate-800 */
+}
+.dark .bg-slate-200 {
+  background-color: #334155 !important; /* slate-700 */
+}
+.dark .bg-slate-900 {
+  background-color: #0f172a !important; /* slate-900 */
+}
+.dark .bg-slate-950 {
+  background-color: #0b0f19 !important; /* slate-950 */
+}
+.dark .bg-slate-955 {
+  background-color: #0b0f19 !important; /* slate-950 */
+}
+.dark .bg-slate-950\/20,
+.dark .bg-slate-950\/30,
+.dark .bg-slate-950\/40,
+.dark .bg-slate-950\/50,
+.dark .bg-slate-900\/40,
+.dark .bg-slate-900\/90,
+.dark .bg-slate-950\/80 {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+}
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/10,
+.dark .bg-slate-50\/30 {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+}
+
+/* Border utilities */
+.dark .border-slate-200,
+.dark .border-slate-100,
+.dark .border-slate-150,
+.dark .border-slate-250,
+.dark .border-slate-300,
+.dark .border-slate-350,
+.dark .border-slate-800,
+.dark .border-slate-850,
+.dark .border-slate-900,
+.dark .border-slate-950 {
+  border-color: #334155 !important; /* slate-700 */
+}
+
+/* Text utilities */
+.dark .text-slate-850,
+.dark .text-slate-800,
+.dark .text-slate-900,
+.dark .text-indigo-900,
+.dark .text-slate-700,
+.dark .text-slate-200,
+.dark .text-slate-100,
+.dark .text-slate-300 {
+  color: #f8fafc !important; /* slate-50 */
+}
+
+.dark .text-slate-600,
+.dark .text-slate-500 {
+  color: #cbd5e1 !important; /* slate-300 */
+}
+
+.dark .text-slate-400 {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+/* Light alerts override */
+.dark .bg-blue-50 {
+  background-color: rgba(46, 91, 255, 0.1) !important;
+}
+.dark .bg-blue-55 {
+  background-color: rgba(46, 91, 255, 0.1) !important;
+}
+.dark .bg-indigo-50 {
+  background-color: rgba(99, 102, 241, 0.1) !important;
+}
+.dark .bg-purple-55 {
+  background-color: rgba(139, 92, 246, 0.1) !important;
+}
+.dark .bg-emerald-55,
+.dark .bg-emerald-50,
+.dark .bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+.dark .bg-pink-55 {
+  background-color: rgba(236, 72, 153, 0.1) !important;
+}
+.dark .bg-amber-55,
+.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+}
+.dark .bg-rose-50,
+.dark .bg-rose-55,
+.dark .bg-rose-500\/10 {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+}
+.dark .bg-teal-55 {
+  background-color: rgba(20, 184, 166, 0.1) !important;
+}
+
+/* Hover and active states */
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-200:hover,
+.dark .hover\:bg-slate-900:hover {
+  background-color: #334155 !important;
+}
+.dark .hover\:bg-blue-50:hover {
+  background-color: rgba(46, 91, 255, 0.15) !important;
+}
+
+/* Selection and custom classes */
+.dark .teacher-selection-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+.dark .card-content {
+  color: #f8fafc !important;
+}
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+/* ==================== END GLOBAL DARK MODE OVERRIDES ==================== */
+
+
 :root {
   --foreground-rgb: 15, 23, 42;
   --background-start-rgb: 248, 250, 252;
