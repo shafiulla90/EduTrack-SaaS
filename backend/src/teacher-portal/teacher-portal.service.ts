@@ -27,6 +27,16 @@ export class TeacherPortalService {
 
   // Strict check: verify that a teacher is assigned to the class section and subject
   async verifyTeacherAssignment(staffProfileId: string, classSectionId: string, subjectId?: string) {
+    const classSection = await this.prisma.classSection.findFirst({
+      where: {
+        id: classSectionId,
+        teacherId: staffProfileId,
+      },
+    });
+    if (classSection) {
+      return classSection;
+    }
+
     const assignment = await this.prisma.teacherAssignment.findFirst({
       where: {
         teacherId: staffProfileId,
@@ -453,7 +463,7 @@ export class TeacherPortalService {
   // 4. Attendance (Strict permission checked proxy to existing service)
   async getClassesForAttendance(userId: string, tenantId: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    const [assignments, periods] = await Promise.all([
+    const [assignments, periods, advisorSections] = await Promise.all([
       this.prisma.teacherAssignment.findMany({
         where: { tenantId, teacherId: staff.id },
         include: { classSection: { include: { class: true } } },
@@ -461,6 +471,10 @@ export class TeacherPortalService {
       this.prisma.period.findMany({
         where: { tenantId, teacherId: staff.id },
         include: { classSection: { include: { class: true } } },
+      }),
+      this.prisma.classSection.findMany({
+        where: { tenantId, teacherId: staff.id },
+        include: { class: true },
       }),
     ]);
 
@@ -473,6 +487,12 @@ export class TeacherPortalService {
       const cls = p.classSection.class;
       classesMap.set(cls.id, cls);
     });
+    advisorSections.forEach(cs => {
+      const cls = cs.class;
+      if (cls) {
+        classesMap.set(cls.id, cls);
+      }
+    });
 
     return Array.from(classesMap.values()).map((c: any) => ({
       label: c.name,
@@ -482,7 +502,7 @@ export class TeacherPortalService {
 
   async getSectionsForAttendance(userId: string, tenantId: string, classVal: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    const [assignments, periods] = await Promise.all([
+    const [assignments, periods, advisorSections] = await Promise.all([
       this.prisma.teacherAssignment.findMany({
         where: {
           tenantId,
@@ -499,6 +519,14 @@ export class TeacherPortalService {
         },
         include: { classSection: { include: { section: true } } },
       }),
+      this.prisma.classSection.findMany({
+        where: {
+          tenantId,
+          teacherId: staff.id,
+          class: { name: { equals: classVal, mode: 'insensitive' } },
+        },
+        include: { section: true },
+      }),
     ]);
 
     const sectionsMap = new Map();
@@ -509,6 +537,12 @@ export class TeacherPortalService {
     periods.forEach(p => {
       const sec = p.classSection.section;
       sectionsMap.set(sec.id, sec);
+    });
+    advisorSections.forEach(cs => {
+      const sec = cs.section;
+      if (sec) {
+        sectionsMap.set(sec.id, sec);
+      }
     });
 
     return Array.from(sectionsMap.values()).map((s: any) => ({

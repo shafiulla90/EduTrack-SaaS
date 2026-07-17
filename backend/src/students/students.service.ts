@@ -124,15 +124,20 @@ export class StudentsService implements OnModuleInit {
 
     return this.prisma.$transaction(async (tx) => {
       let classSectionId = data.classSectionId;
+      let matchedClassId = null;
+      let matchedAcademicYearId = null;
+
       if (!classSectionId && data.selectedClass && data.selectedSection && data.academicYear) {
         const ay = await tx.academicYear.findFirst({
           where: { name: data.academicYear, tenantId }
         });
         if (ay) {
+          matchedAcademicYearId = ay.id;
           const cls = await tx.class.findFirst({
             where: { name: data.selectedClass, academicYearId: ay.id, tenantId }
           });
           if (cls) {
+            matchedClassId = cls.id;
             const sec = await tx.section.findFirst({
               where: { name: data.selectedSection, tenantId }
             });
@@ -155,6 +160,15 @@ export class StudentsService implements OnModuleInit {
               }
             }
           }
+        }
+      } else if (classSectionId) {
+        const cs = await tx.classSection.findUnique({
+          where: { id: classSectionId },
+          include: { class: true }
+        });
+        if (cs) {
+          matchedClassId = cs.classId;
+          matchedAcademicYearId = cs.class.academicYearId;
         }
       }
 
@@ -241,6 +255,11 @@ export class StudentsService implements OnModuleInit {
             tenantId,
           })),
         });
+      }
+
+      // Automatically sync student ledger with Price Book if class & academic year are resolved
+      if (matchedClassId && matchedAcademicYearId) {
+        await this.billingService.syncPriceBookToStudents(matchedClassId, matchedAcademicYearId, tx);
       }
 
       return { user, profile };
@@ -637,6 +656,9 @@ export class StudentsService implements OnModuleInit {
               data: olis,
             });
           }
+
+          // Trigger sync to ensure ledger is fully initialized & recalculated
+          await this.billingService.syncPriceBookToStudents(matchedClass.id, matchedAY.id, tx);
         });
 
         successCount++;
@@ -772,6 +794,7 @@ export class StudentsService implements OnModuleInit {
         let studentsWithCarriedForwardDues = 0;
         let totalCarriedForwardAmount = 0;
         const studentOutstandingBalances = [];
+        const targetClassYearPairs = new Map<string, { classId: string; targetYearId: string }>();
 
         for (const studentId of studentIds) {
           const profile = await tx.studentProfile.findFirst({
@@ -819,6 +842,11 @@ export class StudentsService implements OnModuleInit {
               });
             }
             classes.push(targetClass);
+          }
+
+          const pairKey = `${targetClass.id}-${targetYearId}`;
+          if (!targetClassYearPairs.has(pairKey)) {
+            targetClassYearPairs.set(pairKey, { classId: targetClass.id, targetYearId });
           }
 
           const resolvedSectionName = targetSectionName || currentSectionName || 'Section A';
@@ -1000,6 +1028,11 @@ export class StudentsService implements OnModuleInit {
               tenantId
             }
           });
+        }
+
+        // Run Price Book synchronization for all target class-year cohorts
+        for (const pair of targetClassYearPairs.values()) {
+          await this.billingService.syncPriceBookToStudents(pair.classId, pair.targetYearId, tx);
         }
 
         return {
