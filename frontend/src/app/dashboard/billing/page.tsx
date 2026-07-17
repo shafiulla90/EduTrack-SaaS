@@ -182,6 +182,17 @@ export default function FeesBillingPage() {
     }));
   };
 
+  const handleSelectAllToggle = () => {
+    const allUnpaidSelected = feeItems.filter(f => f.balance > 0).every(f => f.isSelected);
+    setFeeItems(prev => prev.map(item => {
+      if (item.balance <= 0) return item;
+      return { ...item, isSelected: !allUnpaidSelected };
+    }));
+  };
+
+  const unpaidItems = feeItems.filter(f => f.balance > 0);
+  const isAllSelected = unpaidItems.length > 0 && unpaidItems.every(f => f.isSelected);
+
   const handleInputChange = (id: string, val: number) => {
     setFeeItems(prev => prev.map(item => {
       if (item.id === id) {
@@ -429,7 +440,15 @@ export default function FeesBillingPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                      <th className="px-4 py-3" style={{ width: '40px' }}></th>
+                      <th className="px-4 py-3" style={{ width: '40px' }}>
+                        <input
+                          type="checkbox"
+                          checked={isAllSelected}
+                          disabled={unpaidItems.length === 0}
+                          onChange={handleSelectAllToggle}
+                          className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </th>
                       <th className="px-4 py-3">Fee Particulars</th>
                       <th className="px-4 py-3 text-right">Total Amt</th>
                       <th className="px-4 py-3 text-right">Discount</th>
