@@ -26,6 +26,10 @@ interface Student {
   aadharNo: string;
   paidAmount: number;
   balanceDue: number;
+  totalFees?: number;
+  pendingPercentage?: number;
+  paidPercentage?: number;
+  financialStatus?: string;
   academicYearId?: string;
   profilePhotoUrl?: string | null;
 }
@@ -134,6 +138,10 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
           aadharNo: s.aadharNo || 'N/A',
           paidAmount: paid,
           balanceDue: due,
+          totalFees: s.totalFees,
+          pendingPercentage: s.pendingPercentage,
+          paidPercentage: s.paidPercentage,
+          financialStatus: s.financialStatus,
           academicYearId: s.classSection?.class?.academicYearId || '',
           profilePhotoUrl: s.profilePhotoUrl || null,
         };
@@ -223,6 +231,10 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
         aadharNo: data.aadharNo || 'N/A',
         paidAmount: paid,
         balanceDue: due,
+        totalFees: data.totalFees,
+        pendingPercentage: data.pendingPercentage,
+        paidPercentage: data.paidPercentage,
+        financialStatus: data.financialStatus,
         academicYearId: data.classSection?.class?.academicYearId || '',
         profilePhotoUrl: data.profilePhotoUrl || null,
       };
@@ -511,8 +523,9 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                 <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
                   {filteredStudents.slice(0, 30).map((student) => {
                     const hasDue = student.balanceDue > 0;
-                    const totalFees = student.paidAmount + student.balanceDue;
-                    const paidPercentage = totalFees > 0 ? Math.round((student.paidAmount / totalFees) * 100) : 100;
+                    const totalFees = student.totalFees ?? (student.paidAmount + student.balanceDue);
+                    const pendingPercentage = student.pendingPercentage ?? (totalFees > 0 ? Math.round((student.balanceDue / totalFees) * 100) : 0);
+                    const financialStatus = student.financialStatus || (hasDue ? `Pending Due (${pendingPercentage}%)` : 'Fully Paid (100%)');
                     return (
                       <tr key={student.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4">
@@ -549,7 +562,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                               : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                            {hasDue ? `Pending Due (${paidPercentage}%)` : 'Paid Clear (100%)'}
+                            {financialStatus}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -601,8 +614,9 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
             <div className="block md:hidden divide-y divide-slate-100">
               {filteredStudents.slice(0, 30).map((student) => {
                 const hasDue = student.balanceDue > 0;
-                const totalFees = student.paidAmount + student.balanceDue;
-                const paidPercentage = totalFees > 0 ? Math.round((student.paidAmount / totalFees) * 100) : 100;
+                const totalFees = student.totalFees ?? (student.paidAmount + student.balanceDue);
+                const pendingPercentage = student.pendingPercentage ?? (totalFees > 0 ? Math.round((student.balanceDue / totalFees) * 100) : 0);
+                const financialStatus = student.financialStatus || (hasDue ? `Pending Due (${pendingPercentage}%)` : 'Fully Paid (100%)');
                 return (
                   <div key={student.id} className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
@@ -622,7 +636,7 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                           : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                        {hasDue ? `Due (${paidPercentage}%)` : 'Clear (100%)'}
+                        {financialStatus}
                       </span>
                     </div>
 

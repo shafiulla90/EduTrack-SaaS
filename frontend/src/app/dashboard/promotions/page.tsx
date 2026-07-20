@@ -720,7 +720,7 @@ export default function StudentPromotionPage() {
                               : 'bg-emerald-50 text-emerald-600 border-emerald-200'
                           }`}>
                             <span className={`w-1 h-1 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                            {hasDue ? `₹${s.balanceDue} Due` : 'Paid Clear'}
+                            {s.financialStatus || (hasDue ? `₹${s.balanceDue} Due` : 'Paid Clear')}
                           </span>
                         </div>
                       );

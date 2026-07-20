@@ -328,34 +328,20 @@ export class StudentsService implements OnModuleInit {
       take: limit,
     });
 
-    return students.map(s => {
-      const nonVoidedInvoices = s.invoices.filter(inv => inv.status !== PaymentStatus.VOIDED);
-      const totalPaid = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
-      const invoicePending = nonVoidedInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
-
-      let oppPending = 0;
-      const openOpp = s.opportunities[0];
-      if (openOpp) {
-        const totalOppFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
-          const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
-          const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
-          return sum + (itemTotal - itemDiscount);
-        }, 0);
-
-        const oppInvoices = nonVoidedInvoices.filter(inv => inv.opportunityId === openOpp.id);
-        const totalOppPaid = oppInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
-
-        oppPending = Math.max(0, totalOppFee - totalOppPaid);
-      }
-
-      const totalPending = invoicePending + oppPending;
+    return Promise.all(students.map(async s => {
+      const billingInfo = await this.billingService.getStudentById(s.id);
 
       return {
         ...s,
-        paidAmount: totalPaid,
-        balanceDue: totalPending
+        paidAmount: billingInfo.paidAmount,
+        balanceDue: billingInfo.totalPendingBalance,
+        totalFees: billingInfo.totalFees,
+        pendingPercentage: billingInfo.pendingPercentage,
+        paidPercentage: billingInfo.paidPercentage,
+        financialStatus: billingInfo.financialStatus,
+        feeSummary: billingInfo.feeSummary
       };
-    });
+    }));
   }
 
   async getStudentDetails(studentId: string, academicYearId?: string) {
@@ -428,8 +414,12 @@ export class StudentsService implements OnModuleInit {
 
     return {
       ...profile,
-      paidAmount: billingInfo.feeSummary.currentYear.paidAmount,
-      balanceDue: billingInfo.feeSummary.currentYear.pendingAmount,
+      paidAmount: billingInfo.paidAmount,
+      balanceDue: billingInfo.totalPendingBalance,
+      totalFees: billingInfo.totalFees,
+      pendingPercentage: billingInfo.pendingPercentage,
+      paidPercentage: billingInfo.paidPercentage,
+      financialStatus: billingInfo.financialStatus,
       feeSummary: billingInfo.feeSummary,
       feeItems: unpaidFees
     };
@@ -720,10 +710,8 @@ export class StudentsService implements OnModuleInit {
       }
     });
 
-    return students.map(s => {
-      const unpaidInvoices = s.invoices.filter(inv => inv.status !== 'VOIDED');
-      const balanceDue = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
-      const paidAmount = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+    return Promise.all(students.map(async s => {
+      const billingInfo = await this.billingService.getStudentById(s.id);
 
       return {
         id: s.id,
@@ -736,12 +724,16 @@ export class StudentsService implements OnModuleInit {
         motherName: s.motherName || '',
         aadharNo: s.aadharNo || '',
         phone: s.user.phone || '',
-        balanceDue,
-        paidAmount,
+        balanceDue: billingInfo.totalPendingBalance,
+        paidAmount: billingInfo.paidAmount,
+        totalFees: billingInfo.totalFees,
+        pendingPercentage: billingInfo.pendingPercentage,
+        paidPercentage: billingInfo.paidPercentage,
+        financialStatus: billingInfo.financialStatus,
         parentEmail: '',
         profilePhotoUrl: s.profilePhotoUrl || null,
       };
-    });
+    }));
   }
 
   async promoteStudents(payload: {

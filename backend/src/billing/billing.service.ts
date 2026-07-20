@@ -671,6 +671,19 @@ export class BillingService {
     const totalPreviousYearDue = previousYears.reduce((sum, item) => sum + item.outstandingBalance, 0);
     const currentYearPending = Math.max(0, totalFee - totalPaid);
     const grandTotalBalanceDue = currentYearPending + totalPreviousYearDue;
+    const totalFees = totalPaid + grandTotalBalanceDue;
+
+    const pendingPercentage = totalFees > 0
+      ? Math.round((grandTotalBalanceDue / totalFees) * 100)
+      : 0;
+
+    const paidPercentage = totalFees > 0
+      ? Math.round((totalPaid / totalFees) * 100)
+      : 100;
+
+    const financialStatus = grandTotalBalanceDue > 0
+      ? `Pending Due (${pendingPercentage}%)`
+      : 'Fully Paid (100%)';
 
     const feeSummary = {
       currentYear: {
@@ -702,7 +715,14 @@ export class BillingService {
         sectionId: student.classSection?.sectionId || '',
         opportunities: openOpp ? [{ id: openOpp.id, academicYearId: openOpp.academicYearId }] : [],
       },
+      totalFees,
+      paidAmount: totalPaid,
+      currentYearPending,
+      previousYearPending: totalPreviousYearDue,
       totalPendingBalance: grandTotalBalanceDue,
+      pendingPercentage,
+      paidPercentage,
+      financialStatus,
       totalPaidAmount: totalPaid,
       feeSummary
     };
