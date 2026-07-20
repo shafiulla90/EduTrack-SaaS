@@ -139,6 +139,7 @@ model Tenant {
   studentProfiles StudentProfile[]
   staffProfiles   StaffProfile[]
   examTypes       ExamType[]
+  examConfigs     ExamConfig[]
   homeworks       Homework[]
   leaveRequests   LeaveRequest[]
   announcements   Announcement[]
@@ -1012,6 +1013,23 @@ model ExamSchedule {
   updatedAt      DateTime     @updatedAt
 
   @@index([tenantId, classSectionId, subjectId])
+}
+
+model ExamConfig {
+  id                String   @id @default(uuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// null = global default that applies to ALL exam types
+  examTypeName      String?
+  passingPercentage Decimal  @default(35) @db.Decimal(5, 2)
+  maxMarks          Int      @default(100)
+  /// JSON array: [{min:90,max:100,grade:'A+',gpa:10},{min:80,max:89,grade:'A',gpa:9},...]
+  gradeRanges       Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([tenantId, examTypeName])
+  @@index([tenantId])
 }
 
 model ParentStudent {

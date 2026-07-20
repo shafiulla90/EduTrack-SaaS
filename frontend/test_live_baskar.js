@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 async function run() {
-  const phone = '9642402639';
+  const phone = '9060020002'; // Baskar Don phone
   console.log("1. Sending OTP to phone:", phone);
   let loginResult;
 
@@ -27,28 +27,27 @@ async function run() {
   const tenantId = loginResult.user.tenantId;
   console.log("Auth Success. Token length:", token.length, "Tenant ID:", tenantId);
 
-  // Now query the workload APIs on the live Vercel backend!
-  const endpoints = [
-    '/timetable/workload/summary',
-    '/timetable/workload/teachers',
-    '/timetable/workload/classes',
-    '/timetable/subjects',
-    '/academics/academic-years',
-    '/academics/sections'
-  ];
+  // Query sections for each class returned
+  try {
+    const classesRes = await axios.get('https://edu-track-saa-s-orcin.vercel.app/_backend/teacher-portal/attendance/classes', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'X-Tenant-ID': tenantId
+      }
+    });
+    console.log("Classes response:", classesRes.data);
 
-  for (const ep of endpoints) {
-    try {
-      const res = await axios.get(`https://edu-track-saa-s-orcin.vercel.app/_backend${ep}`, {
+    for (const c of classesRes.data) {
+      const sectionsRes = await axios.get(`https://edu-track-saa-s-orcin.vercel.app/_backend/teacher-portal/attendance/sections?classVal=${encodeURIComponent(c.value)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Tenant-ID': tenantId
         }
       });
-      console.log(`EP ${ep} Status: ${res.status}, data:`, Array.isArray(res.data) ? `Array of size ${res.data.length}` : res.data);
-    } catch (err) {
-      console.error(`EP ${ep} failed:`, err.response ? err.response.data : err.message);
+      console.log(`Sections response for ${c.value}:`, sectionsRes.data);
     }
+  } catch (err) {
+    console.error("Query failed:", err.response ? err.response.data : err.message);
   }
 }
 

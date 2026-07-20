@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Award, FileText, CheckCircle, Save, Plus, ArrowRight, X,
   PlusCircle, MinusCircle, Info, TrendingUp, Sparkles, RefreshCw, Settings
@@ -55,6 +56,11 @@ export default function ExamsAndMarksPage() {
   const [editingTypeName, setEditingTypeName] = useState('');
   const [isSavingType, setIsSavingType] = useState(false);
   const [typeError, setTypeError] = useState('');
+
+  // Exam configuration (pass % from ExamConfigService)
+  const [examConfig, setExamConfig] = useState<{ passingPercentage: number; maxMarks: number }>(
+    { passingPercentage: 35, maxMarks: 100 },
+  );
 
   // Fetch types for management modal
   const fetchManageTypes = async () => {
@@ -140,12 +146,25 @@ export default function ExamsAndMarksPage() {
       setExamTypes(typeRes.data);
       if (typeRes.data.length > 0) {
         setSelectedExamName(typeRes.data[0]);
+        // Fetch config for first exam type
+        try {
+          const cfgRes = await api.get(`/exam-config/resolve?examType=${encodeURIComponent(typeRes.data[0])}`);
+          setExamConfig({ passingPercentage: cfgRes.data.passingPercentage, maxMarks: cfgRes.data.maxMarks });
+        } catch {}
       }
     } catch (err: any) {
       console.error('Error fetching exams metadata:', err);
       setErrorMsg('Failed to load class, subject, or exam metadata.');
     }
   };
+
+  // Re-fetch exam config when exam name changes
+  useEffect(() => {
+    if (!selectedExamName) return;
+    api.get(`/exam-config/resolve?examType=${encodeURIComponent(selectedExamName)}`)
+      .then(res => setExamConfig({ passingPercentage: res.data.passingPercentage, maxMarks: res.data.maxMarks }))
+      .catch(() => {});
+  }, [selectedExamName]);
 
   useEffect(() => {
     if (selectedClassSectionId && selectedSubjectId && selectedExamName) {
@@ -234,15 +253,20 @@ export default function ExamsAndMarksPage() {
     }
   };
 
-  // Grade badge calculator
+  // Grade badge – uses configured pass percentage
   const getGradeInfo = (score: number | null) => {
-    if (score === null) return { letter: '—', color: 'bg-slate-50 text-slate-400 border-slate-200' };
-    if (score >= 90) return { letter: 'A+', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
-    if (score >= 80) return { letter: 'A', color: 'bg-emerald-50 text-emerald-500 border-emerald-100' };
-    if (score >= 70) return { letter: 'B', color: 'bg-blue-50 text-[#2E5BFF] border-blue-100' };
-    if (score >= 60) return { letter: 'C', color: 'bg-slate-50 text-slate-600 border-slate-200' };
-    if (score >= 50) return { letter: 'D', color: 'bg-amber-50 text-amber-600 border-amber-100' };
-    return { letter: 'F', color: 'bg-rose-50 text-rose-600 border-rose-100' };
+    if (score === null) return { letter: '—', color: 'bg-slate-50 text-slate-400 border-slate-200', result: null };
+    const passPct = examConfig.passingPercentage;
+    const maxM = examConfig.maxMarks;
+    const pct = maxM > 0 ? (score / maxM) * 100 : score;
+    const pass = pct >= passPct;
+    if (pct >= 90) return { letter: 'A+', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', result: pass };
+    if (pct >= 80) return { letter: 'A',  color: 'bg-emerald-50 text-emerald-500 border-emerald-100', result: pass };
+    if (pct >= 70) return { letter: 'B+', color: 'bg-blue-50 text-[#2E5BFF] border-blue-100',         result: pass };
+    if (pct >= 60) return { letter: 'B',  color: 'bg-slate-50 text-slate-600 border-slate-200',       result: pass };
+    if (pct >= 50) return { letter: 'C',  color: 'bg-amber-50 text-amber-600 border-amber-100',       result: pass };
+    if (pct >= 35) return { letter: 'D',  color: 'bg-orange-50 text-orange-600 border-orange-100',    result: pass };
+    return { letter: 'F', color: 'bg-rose-50 text-rose-600 border-rose-100', result: false };
   };
 
   // Compute stats
@@ -269,6 +293,13 @@ export default function ExamsAndMarksPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => window.open('/dashboard/exams/config', '_blank')}
+            className="px-4 py-2.5 rounded-xl border border-[#2E5BFF]/30 bg-blue-50 hover:bg-blue-100 text-[#2E5BFF] font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+          >
+            <Settings className="w-4 h-4" />
+            Exam Configuration
+          </button>
           <button
             onClick={() => setIsManageTypesOpen(true)}
             className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs cursor-pointer"
@@ -380,6 +411,13 @@ export default function ExamsAndMarksPage() {
             <span className="text-xl font-extrabold text-slate-850 block mt-0.5">{roster.length} Students</span>
           </div>
         </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-extrabold text-sm">{examConfig.passingPercentage}%</div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pass Threshold</span>
+            <span className="text-sm font-extrabold text-slate-850 block mt-0.5">{examConfig.passingPercentage}% of {examConfig.maxMarks}</span>
+          </div>
+        </div>
       </div>
 
       {/* Matrix Score table */}
@@ -449,6 +487,15 @@ export default function ExamsAndMarksPage() {
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${gr.color}`}>
                             {gr.letter}
                           </span>
+                          {gr.result !== null && (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              gr.result
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {gr.result ? 'PASS' : 'FAIL'}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma.service';
 import { BillingService } from '../billing/billing.service';
 import { StorageService } from '../common/storage.service';
+import { ExamConfigService } from '../exam-config/exam-config.service';
 import { Role, PaymentStatus } from '@prisma/client';
 import { parseAttendanceDate } from '../attendance/date.utils';
 
@@ -31,6 +32,7 @@ export class ParentPortalService {
     private prisma: PrismaService,
     private billingService: BillingService,
     private storageService: StorageService,
+    private examConfigService: ExamConfigService,
   ) {}
 
   private async verifyOwnership(userId: string, studentId: string): Promise<any> {
@@ -523,10 +525,10 @@ export class ParentPortalService {
   async getExams(userId: string, studentId: string) {
     const student = await this.verifyOwnership(userId, studentId);
     if (!student.classSectionId) {
-      return { schedules: [], marks: [] };
+      return { schedules: [], exams: [], marks: [] };
     }
 
-    const [schedules, marks] = await Promise.all([
+    const [schedules, rawMarks] = await Promise.all([
       this.prisma.examSchedule.findMany({
         where: { classSectionId: student.classSectionId },
         include: { subject: true },
@@ -538,6 +540,118 @@ export class ParentPortalService {
         orderBy: { exam: { date: 'desc' } },
       }),
     ]);
+
+    // ── Group this student's marks by exam ───────────────────────────────
+    const byExam = new Map<string, { exam: any; subjects: any[] }>();
+    for (const m of rawMarks) {
+      const key = m.exam.id;
+      if (!byExam.has(key)) byExam.set(key, { exam: m.exam, subjects: [] });
+      byExam.get(key)!.subjects.push(m);
+    }
+
+    // ── Build exam-wise report cards ─────────────────────────────────────
+    const examCards = await Promise.all(
+      Array.from(byExam.values()).map(async ({ exam, subjects }) => {
+        const examName: string = exam.name;
+        const classSectionId: string = exam.classSectionId;
+
+        // Resolve pass criteria from ExamConfigService
+        const cfg = await this.examConfigService.resolveConfig(examName, exam.tenantId);
+        const passingPct = cfg.passingPercentage;
+        const maxMarksPerSubject = cfg.maxMarks;
+
+        // Fetch ALL marks in this exam+section to compute rank
+        const allMarks = await this.prisma.examMark.findMany({
+          where: { examId: exam.id, tenantId: exam.tenantId },
+          select: { studentId: true, marksObtained: true },
+        });
+
+        // Aggregate total per student
+        const studentTotals = new Map<string, number>();
+        for (const am of allMarks) {
+          const prev = studentTotals.get(am.studentId) ?? 0;
+          studentTotals.set(am.studentId, prev + Number(am.marksObtained));
+        }
+
+        // Sort descending for rank (dense rank: same marks = same rank)
+        const sortedTotals = Array.from(studentTotals.values()).sort((a, b) => b - a);
+        const classSize = studentTotals.size;
+        const myTotal = studentTotals.get(studentId) ?? 0;
+        let rank = 1;
+        for (const t of sortedTotals) {
+          if (t > myTotal) rank++;
+          else break;
+        }
+
+        // Build subject rows
+        const subjectRows = subjects.map(m => {
+          const marks = Number(m.marksObtained);
+          const pct = maxMarksPerSubject > 0 ? (marks / maxMarksPerSubject) * 100 : 0;
+          const gradeInfo = this.examConfigService.calculateGrade(pct, cfg.gradeRanges);
+          const pass = pct >= passingPct;
+          return {
+            id: m.id,
+            subject: m.subject.name,
+            marksObtained: marks,
+            maxMarks: maxMarksPerSubject,
+            percentage: Math.round(pct * 10) / 10,
+            grade: gradeInfo.grade,
+            gpa: gradeInfo.gpa,
+            result: pass ? 'PASS' : 'FAIL',
+            remarks: m.remarks || 'Good performance',
+          };
+        });
+
+        const totalObtained = subjectRows.reduce((s, r) => s + r.marksObtained, 0);
+        const totalMax = subjectRows.length * maxMarksPerSubject;
+        const overallPct = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
+        const overallGradeInfo = this.examConfigService.calculateGrade(overallPct, cfg.gradeRanges);
+        // Any single subject FAIL → overall FAIL
+        const overallResult = subjectRows.some(r => r.result === 'FAIL') ? 'FAIL' : 'PASS';
+
+        return {
+          examName,
+          examDate: exam.date,
+          rank,
+          classSize,
+          totalObtained,
+          totalMax,
+          percentage: Math.round(overallPct * 10) / 10,
+          overallGrade: overallGradeInfo.grade,
+          overallGpa: overallGradeInfo.gpa,
+          overallResult,
+          passingPercentage: passingPct,
+          configSource: cfg.source,
+          subjects: subjectRows,
+        };
+      }),
+    );
+
+    // Sort exam cards newest first
+    examCards.sort((a, b) =>
+      new Date(b.examDate).getTime() - new Date(a.examDate).getTime(),
+    );
+
+    // Legacy marks array (for backward compatibility)
+    const legacyMarks = rawMarks.map(m => {
+      const marksVal = Number(m.marksObtained);
+      const { grade } = this.examConfigService.calculateGrade(marksVal, []);
+      let legacyGrade = 'F';
+      if (marksVal >= 90) legacyGrade = 'A+';
+      else if (marksVal >= 80) legacyGrade = 'A';
+      else if (marksVal >= 70) legacyGrade = 'B';
+      else if (marksVal >= 60) legacyGrade = 'C';
+      else if (marksVal >= 50) legacyGrade = 'D';
+
+      return {
+        id: m.id,
+        examName: m.exam.name,
+        subject: m.subject.name,
+        marksObtained: marksVal,
+        remarks: m.remarks || 'Good performance',
+        grade: legacyGrade,
+      };
+    });
 
     return {
       schedules: schedules.map(s => ({
@@ -551,24 +665,8 @@ export class ParentPortalService {
         examHall: s.examHall || 'Main Hall',
         instructions: s.instructions,
       })),
-      marks: marks.map(m => {
-        const marksVal = Number(m.marksObtained);
-        let grade = 'F';
-        if (marksVal >= 90) grade = 'A+';
-        else if (marksVal >= 80) grade = 'A';
-        else if (marksVal >= 70) grade = 'B';
-        else if (marksVal >= 60) grade = 'C';
-        else if (marksVal >= 50) grade = 'D';
-
-        return {
-          id: m.id,
-          examName: m.exam.name,
-          subject: m.subject.name,
-          marksObtained: marksVal,
-          remarks: m.remarks || 'Good performance',
-          grade,
-        };
-      }),
+      exams: examCards,   // ← new grouped structure
+      marks: legacyMarks, // ← backward compat
     };
   }
 

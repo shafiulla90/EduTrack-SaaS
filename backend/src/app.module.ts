@@ -20,6 +20,7 @@ import { TeacherPortalModule } from './teacher-portal/teacher-portal.module';
 import { HomeworkModule } from './homework/homework.module';
 import { ExamScheduleModule } from './exam-schedule/exam-schedule.module';
 import { ParentPortalModule } from './parent-portal/parent-portal.module';
+import { ExamConfigModule } from './exam-config/exam-config.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ParentPortalModule } from './parent-portal/parent-portal.module';
     HomeworkModule,
     ExamScheduleModule,
     ParentPortalModule,
+    ExamConfigModule,
   ],
   controllers: [],
   providers: [],
