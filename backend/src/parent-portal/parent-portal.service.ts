@@ -662,8 +662,7 @@ export class ParentPortalService {
       };
     });
 
-    // If no unpaid database invoice exists yet, but BillingService reports a pending balance > 0,
-    // read open opportunity line items so parent can select individual fee products for partial payment
+    // Read open opportunity line items and filter out ALREADY PAID items
     const openOppId = billingSummary.account?.opportunities?.[0]?.id;
     const hasUnpaidDbInvoice = mappedInvoices.some(inv => inv.status !== 'PAID' && inv.status !== 'VOIDED');
 
@@ -679,25 +678,65 @@ export class ParentPortalService {
       });
 
       if (activeOpp) {
-        const lineItems = activeOpp.opportunityLineItems.map(oli => {
+        // Query all non-voided paid invoice items to determine item-level paid amounts
+        const existingInvoiceItems = await this.prisma.invoiceItem.findMany({
+          where: {
+            tenantId: student.tenantId,
+            invoice: {
+              studentId: student.id,
+              status: { not: PaymentStatus.VOIDED },
+            },
+          },
+        });
+
+        const oliPaidMap = new Map<string, number>();
+        const namePaidMap = new Map<string, number>();
+
+        for (const item of existingInvoiceItems) {
+          if (item.opportunityLineItemId) {
+            const cur = oliPaidMap.get(item.opportunityLineItemId) || 0;
+            oliPaidMap.set(item.opportunityLineItemId, cur + Number(item.amount));
+          }
+          if (item.name) {
+            const cur = namePaidMap.get(item.name.toLowerCase()) || 0;
+            namePaidMap.set(item.name.toLowerCase(), cur + Number(item.amount));
+          }
+        }
+
+        const unpaidLineItems: any[] = [];
+        let statementPendingTotal = 0;
+
+        for (const oli of activeOpp.opportunityLineItems) {
           const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
           const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
           const netAmount = itemTotal - itemDiscount;
-          return {
-            id: oli.id,
-            name: oli.product?.name || 'Fee Component',
-            amount: netAmount,
-            balance: netAmount,
-            paidAmount: 0,
-            status: 'UNPAID',
-            selectable: true,
-            oliId: oli.id,
-            productId: oli.productId,
-          };
-        });
+
+          const paidByOli = oliPaidMap.get(oli.id) || 0;
+          const paidByName = namePaidMap.get((oli.product?.name || '').toLowerCase()) || 0;
+          const paidAmount = Math.max(paidByOli, paidByName);
+          const balanceDue = Math.max(0, netAmount - paidAmount);
+
+          // ONLY include fee components that have remaining unpaid balance > 0
+          if (balanceDue > 0) {
+            statementPendingTotal += balanceDue;
+            unpaidLineItems.push({
+              id: oli.id,
+              name: oli.product?.name || 'Fee Component',
+              amount: balanceDue,
+              fullAmount: netAmount,
+              balance: balanceDue,
+              paidAmount,
+              status: paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+              selectable: true,
+              oliId: oli.id,
+              productId: oli.productId,
+            });
+          }
+        }
 
         if (billingSummary.previousYearPending > 0) {
-          lineItems.push({
+          statementPendingTotal += billingSummary.previousYearPending;
+          unpaidLineItems.push({
             id: 'PREV_YEAR_DUE_CF',
             name: 'Previous Years Carried Forward Dues',
             amount: billingSummary.previousYearPending,
@@ -710,29 +749,32 @@ export class ParentPortalService {
           });
         }
 
-        mappedInvoices.unshift({
-          id: `OPP-${activeOpp.id}`,
-          opportunityId: activeOpp.id,
-          invoiceNo: `STMT-${student.rollNo || student.id.substring(0, 5).toUpperCase()}`,
-          receiptNo: 'REC-PENDING',
-          invoiceDate: new Date(),
-          dueDate: activeOpp.closeDate || new Date(),
-          totalAmount: billingSummary.totalPendingBalance + billingSummary.paidAmount,
-          paidAmount: billingSummary.paidAmount,
-          remainingBalance: billingSummary.totalPendingBalance,
-          status: billingSummary.paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
-          paymentMethod: 'UPI',
-          transactionId: 'N/A',
-          description: `Academic Fee Statement ${activeOpp.academicYear?.name || '2026-2027'}`,
-          academicYear: activeOpp.academicYear?.name || '2026-2027',
-          className: student.classSection?.class.name || 'N/A',
-          sectionName: student.classSection?.section.name || 'N/A',
-          studentName: student.user.name,
-          rollNo: student.rollNo || 'N/A',
-          fatherName: student.fatherName || 'N/A',
-          motherName: student.motherName || 'N/A',
-          items: lineItems,
-        } as any);
+        // Include open fee statement ONLY if there are unpaid items remaining
+        if (unpaidLineItems.length > 0 && statementPendingTotal > 0) {
+          mappedInvoices.unshift({
+            id: `OPP-${activeOpp.id}`,
+            opportunityId: activeOpp.id,
+            invoiceNo: `STMT-${student.rollNo || student.id.substring(0, 5).toUpperCase()}`,
+            receiptNo: 'REC-PENDING',
+            invoiceDate: new Date(),
+            dueDate: activeOpp.closeDate || new Date(),
+            totalAmount: statementPendingTotal,
+            paidAmount: billingSummary.paidAmount,
+            remainingBalance: statementPendingTotal,
+            status: billingSummary.paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+            paymentMethod: 'UPI',
+            transactionId: 'N/A',
+            description: `Academic Fee Statement ${activeOpp.academicYear?.name || '2026-2027'}`,
+            academicYear: activeOpp.academicYear?.name || '2026-2027',
+            className: student.classSection?.class.name || 'N/A',
+            sectionName: student.classSection?.section.name || 'N/A',
+            studentName: student.user.name,
+            rollNo: student.rollNo || 'N/A',
+            fatherName: student.fatherName || 'N/A',
+            motherName: student.motherName || 'N/A',
+            items: unpaidLineItems,
+          } as any);
+        }
       }
     }
 
@@ -764,20 +806,54 @@ export class ParentPortalService {
 
       const billingSummary = await this.billingService.getStudentById(studentId);
 
-      // Filter to include ONLY selected fee products
-      let allItems = activeOpp.opportunityLineItems.map(oli => {
-        const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
-        const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
-        return {
-          id: oli.id,
-          oliId: oli.id,
-          productId: oli.productId,
-          amount: itemTotal - itemDiscount,
-        };
+      // Query existing paid invoice items for duplicate payment validation
+      const existingInvoiceItems = await this.prisma.invoiceItem.findMany({
+        where: {
+          tenantId: student.tenantId,
+          invoice: {
+            studentId: student.id,
+            status: { not: PaymentStatus.VOIDED },
+          },
+        },
       });
 
+      const oliPaidMap = new Map<string, number>();
+      const namePaidMap = new Map<string, number>();
+      for (const item of existingInvoiceItems) {
+        if (item.opportunityLineItemId) {
+          const cur = oliPaidMap.get(item.opportunityLineItemId) || 0;
+          oliPaidMap.set(item.opportunityLineItemId, cur + Number(item.amount));
+        }
+        if (item.name) {
+          const cur = namePaidMap.get(item.name.toLowerCase()) || 0;
+          namePaidMap.set(item.name.toLowerCase(), cur + Number(item.amount));
+        }
+      }
+
+      // Filter to include ONLY selected & UNPAID fee products
+      let allUnpaidItems: any[] = [];
+      for (const oli of activeOpp.opportunityLineItems) {
+        const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+        const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+        const netAmount = itemTotal - itemDiscount;
+
+        const paidByOli = oliPaidMap.get(oli.id) || 0;
+        const paidByName = namePaidMap.get((oli.product?.name || '').toLowerCase()) || 0;
+        const paidAmount = Math.max(paidByOli, paidByName);
+        const balanceDue = Math.max(0, netAmount - paidAmount);
+
+        if (balanceDue > 0) {
+          allUnpaidItems.push({
+            id: oli.id,
+            oliId: oli.id,
+            productId: oli.productId,
+            amount: balanceDue,
+          });
+        }
+      }
+
       if (billingSummary.previousYearPending > 0) {
-        allItems.push({
+        allUnpaidItems.push({
           id: 'PREV_YEAR_DUE_CF',
           oliId: 'PREV_YEAR_DUE_CF',
           productId: 'PREV_YEAR_DUE_CF',
@@ -785,13 +861,13 @@ export class ParentPortalService {
         });
       }
 
-      let selectedItems = allItems;
+      let selectedItems = allUnpaidItems;
       if (selectedItemIds && selectedItemIds.length > 0) {
-        selectedItems = allItems.filter(item => selectedItemIds.includes(item.id));
+        selectedItems = allUnpaidItems.filter(item => selectedItemIds.includes(item.id));
       }
 
       if (selectedItems.length === 0) {
-        throw new BadRequestException('At least one fee product must be selected for payment.');
+        throw new BadRequestException('This fee item has already been paid.');
       }
 
       // Delegate directly to BillingService.createInvoice() to handle full ledger & database persistence for selected items
@@ -841,7 +917,7 @@ export class ParentPortalService {
     }
 
     if (invoice.status === PaymentStatus.PAID || Number(invoice.remainingBalance) === 0) {
-      throw new BadRequestException('This invoice has already been paid.');
+      throw new BadRequestException('This fee item has already been paid.');
     }
 
     const amount = Number(invoice.remainingBalance);

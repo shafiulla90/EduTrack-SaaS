@@ -18,7 +18,6 @@ import {
   CheckSquare,
   Square,
   Building2,
-  QrCode,
   AlertCircle
 } from 'lucide-react';
 
@@ -45,7 +44,7 @@ export default function FeesPage() {
       const res = await api.get(`/parent-portal/children/${childId}/fees`);
       setFeesData(res.data);
 
-      // Default select all items in unpaid fee statements
+      // Default select all unpaid items in fee statement
       const invoices = res.data?.invoices || [];
       const unpaid = invoices.find((inv: any) => inv.status !== 'PAID');
       if (unpaid && unpaid.items) {
@@ -126,7 +125,7 @@ export default function FeesPage() {
       }, 1800);
     } catch (err: any) {
       console.error('Payment processing failed:', err);
-      setMessage(err.response?.data?.message || 'Failed to process payment. Please try again.');
+      setMessage(err.response?.data?.message || 'This fee item has already been paid.');
     } finally {
       setPayLoading(false);
     }
@@ -214,10 +213,15 @@ export default function FeesPage() {
               )}
             </div>
             
-            {unpaidInvoices.length === 0 ? (
-              <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center text-slate-500 shadow-sm flex items-center justify-center gap-3">
-                <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0" />
-                <span className="text-xs font-semibold text-slate-700">No outstanding dues! All fee statements for this child are fully paid.</span>
+            {unpaidInvoices.length === 0 || items.length === 0 ? (
+              <div className="bg-white border border-[#2E5BFF]/20 p-8 rounded-3xl text-center shadow-sm space-y-2">
+                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto text-emerald-600 text-xl font-bold">
+                  🎉
+                </div>
+                <h4 className="text-base font-extrabold text-slate-800">All fee products have been paid successfully!</h4>
+                <p className="text-xs text-slate-500 font-light max-w-md mx-auto">
+                  There are no outstanding fee items remaining. All past payment receipts are stored securely in your Invoice History below.
+                </p>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -244,7 +248,7 @@ export default function FeesPage() {
                     {/* Selectable Particulars Breakdown */}
                     <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
                       <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-                        Select Fee Components to Pay:
+                        Select Unpaid Fee Components to Pay:
                       </span>
                       {inv.items.map((item: any) => {
                         const isChecked = selectedItemIds.has(item.id);
