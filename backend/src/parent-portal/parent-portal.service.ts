@@ -661,12 +661,11 @@ export class ParentPortalService {
         })),
       };
     });
-
-    // Read open opportunity line items and filter out ALREADY PAID items
+    // Read open opportunity line items and return both PAID and UNPAID fee products
     const openOppId = billingSummary.account?.opportunities?.[0]?.id;
     const hasUnpaidDbInvoice = mappedInvoices.some(inv => inv.status !== 'PAID' && inv.status !== 'VOIDED');
 
-    if (!hasUnpaidDbInvoice && billingSummary.totalPendingBalance > 0 && openOppId) {
+    if (!hasUnpaidDbInvoice && openOppId) {
       const activeOpp = await this.prisma.opportunity.findUnique({
         where: { id: openOppId },
         include: {
@@ -703,7 +702,7 @@ export class ParentPortalService {
           }
         }
 
-        const unpaidLineItems: any[] = [];
+        const allFeeProducts: any[] = [];
         let statementPendingTotal = 0;
 
         for (const oli of activeOpp.opportunityLineItems) {
@@ -716,41 +715,40 @@ export class ParentPortalService {
           const paidAmount = Math.max(paidByOli, paidByName);
           const balanceDue = Math.max(0, netAmount - paidAmount);
 
-          // ONLY include fee components that have remaining unpaid balance > 0
           if (balanceDue > 0) {
             statementPendingTotal += balanceDue;
-            unpaidLineItems.push({
-              id: oli.id,
-              name: oli.product?.name || 'Fee Component',
-              amount: balanceDue,
-              fullAmount: netAmount,
-              balance: balanceDue,
-              paidAmount,
-              status: paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
-              selectable: true,
-              oliId: oli.id,
-              productId: oli.productId,
-            });
           }
+
+          allFeeProducts.push({
+            id: oli.id,
+            name: oli.product?.name || 'Fee Component',
+            amount: netAmount,
+            balance: balanceDue,
+            paidAmount,
+            status: balanceDue === 0 ? 'PAID' : (paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID'),
+            isSelectable: balanceDue > 0,
+            oliId: oli.id,
+            productId: oli.productId,
+          });
         }
 
         if (billingSummary.previousYearPending > 0) {
           statementPendingTotal += billingSummary.previousYearPending;
-          unpaidLineItems.push({
+          allFeeProducts.push({
             id: 'PREV_YEAR_DUE_CF',
             name: 'Previous Years Carried Forward Dues',
             amount: billingSummary.previousYearPending,
             balance: billingSummary.previousYearPending,
             paidAmount: 0,
             status: 'UNPAID',
-            selectable: true,
+            isSelectable: true,
             oliId: 'PREV_YEAR_DUE_CF',
             productId: 'PREV_YEAR_DUE_CF',
           });
         }
 
-        // Include open fee statement ONLY if there are unpaid items remaining
-        if (unpaidLineItems.length > 0 && statementPendingTotal > 0) {
+        // Include open fee statement, keeping paid items visible as read-only/non-selectable
+        if (allFeeProducts.length > 0) {
           mappedInvoices.unshift({
             id: `OPP-${activeOpp.id}`,
             opportunityId: activeOpp.id,
@@ -761,7 +759,7 @@ export class ParentPortalService {
             totalAmount: statementPendingTotal,
             paidAmount: billingSummary.paidAmount,
             remainingBalance: statementPendingTotal,
-            status: billingSummary.paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+            status: statementPendingTotal === 0 ? 'PAID' : (billingSummary.paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID'),
             paymentMethod: 'UPI',
             transactionId: 'N/A',
             description: `Academic Fee Statement ${activeOpp.academicYear?.name || '2026-2027'}`,
@@ -772,7 +770,7 @@ export class ParentPortalService {
             rollNo: student.rollNo || 'N/A',
             fatherName: student.fatherName || 'N/A',
             motherName: student.motherName || 'N/A',
-            items: unpaidLineItems,
+            items: allFeeProducts,
           } as any);
         }
       }

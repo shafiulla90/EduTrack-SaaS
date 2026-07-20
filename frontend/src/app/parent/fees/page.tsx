@@ -26,7 +26,7 @@ export default function FeesPage() {
   const [feesData, setFeesData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Partial fee product selection state
+  // Partial fee product selection state (unchecked by default)
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   // Pay modal states
@@ -44,15 +44,8 @@ export default function FeesPage() {
       const res = await api.get(`/parent-portal/children/${childId}/fees`);
       setFeesData(res.data);
 
-      // Default select all unpaid items in fee statement
-      const invoices = res.data?.invoices || [];
-      const unpaid = invoices.find((inv: any) => inv.status !== 'PAID');
-      if (unpaid && unpaid.items) {
-        const itemIds = new Set<string>(unpaid.items.map((i: any) => i.id));
-        setSelectedItemIds(itemIds);
-      } else {
-        setSelectedItemIds(new Set());
-      }
+      // Default checkboxes to UNCHECKED by default when the page loads
+      setSelectedItemIds(new Set());
     } catch (err) {
       console.error('Failed to fetch fees details:', err);
     } finally {
@@ -75,7 +68,9 @@ export default function FeesPage() {
     return () => window.removeEventListener('parentChildChanged', handleChildChange);
   }, []);
 
-  const toggleItemSelect = (itemId: string) => {
+  const toggleItemSelect = (itemId: string, isSelectable: boolean) => {
+    if (!isSelectable) return; // Block selecting already paid products
+    
     const next = new Set(selectedItemIds);
     if (next.has(itemId)) {
       next.delete(itemId);
@@ -86,8 +81,9 @@ export default function FeesPage() {
   };
 
   const handleSelectAll = (items: any[]) => {
-    const allIds = items.map(i => i.id);
-    setSelectedItemIds(new Set(allIds));
+    // Select all selectable (unpaid) items only
+    const selectableIds = items.filter(i => i.isSelectable).map(i => i.id);
+    setSelectedItemIds(new Set(selectableIds));
   };
 
   const handleDeselectAll = () => {
@@ -153,14 +149,17 @@ export default function FeesPage() {
 
   const invoices = feesData?.invoices || [];
   const paymentDetails = feesData?.paymentDetails;
-  const unpaidInvoices = invoices.filter((inv: any) => inv.status !== 'PAID');
-  const paidInvoices = invoices.filter((inv: any) => inv.status === 'PAID');
+  
+  // An invoice is unpaid/pending if it has a remaining balance > 0
+  const unpaidInvoices = invoices.filter((inv: any) => inv.remainingBalance > 0);
+  const paidInvoices = invoices.filter((inv: any) => inv.remainingBalance === 0);
 
   const activeUnpaidInv = unpaidInvoices[0];
   const items = activeUnpaidInv?.items || [];
+  const selectableItems = items.filter((i: any) => i.isSelectable);
 
-  // Calculate selected total
-  const selectedItemsList = items.filter((item: any) => selectedItemIds.has(item.id));
+  // Calculate selected total based only on selected unpaid items
+  const selectedItemsList = items.filter((item: any) => selectedItemIds.has(item.id) && item.isSelectable);
   const selectedTotal = selectedItemsList.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
 
   const hasBankDetails = paymentDetails && (
@@ -194,7 +193,7 @@ export default function FeesPage() {
                 Outstanding Fee Statements
               </h3>
 
-              {items.length > 0 && (
+              {selectableItems.length > 0 && (
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     onClick={() => handleSelectAll(items)}
@@ -241,38 +240,52 @@ export default function FeesPage() {
 
                       <div className="text-right">
                         <span className="text-sm font-black text-slate-800">₹{inv.remainingBalance.toLocaleString('en-IN')}</span>
-                        <span className="text-[9px] text-slate-400 block font-medium mt-0.5">Total Dues</span>
+                        <span className="text-[9px] text-slate-400 block font-medium mt-0.5">Outstanding Dues</span>
                       </div>
                     </div>
 
                     {/* Selectable Particulars Breakdown */}
                     <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
                       <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
-                        Select Unpaid Fee Components to Pay:
+                        Select Fee Components to Pay (Unpaid components only):
                       </span>
                       {inv.items.map((item: any) => {
-                        const isChecked = selectedItemIds.has(item.id);
+                        const isChecked = selectedItemIds.has(item.id) && item.isSelectable;
+                        const isPaid = !item.isSelectable || item.status === 'PAID';
+
                         return (
                           <div
                             key={item.id}
-                            onClick={() => toggleItemSelect(item.id)}
-                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                              isChecked 
-                                ? 'bg-blue-50/70 border-blue-200 text-slate-800' 
-                                : 'bg-white border-slate-200/60 text-slate-500 hover:border-slate-300'
+                            onClick={() => toggleItemSelect(item.id, item.isSelectable)}
+                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                              isPaid 
+                                ? 'bg-slate-100/50 border-slate-200/40 text-slate-400 opacity-60 cursor-not-allowed' 
+                                : isChecked
+                                  ? 'bg-blue-50/70 border-blue-200 text-slate-800 cursor-pointer'
+                                  : 'bg-white border-slate-200/60 text-slate-500 hover:border-slate-300 cursor-pointer'
                             }`}
                           >
                             <div className="flex items-center gap-2.5">
-                              {isChecked ? (
+                              {isPaid ? (
+                                <CheckSquare className="w-4 h-4 text-emerald-600/80 shrink-0" />
+                              ) : isChecked ? (
                                 <CheckSquare className="w-4 h-4 text-[#2E5BFF] shrink-0" />
                               ) : (
                                 <Square className="w-4 h-4 text-slate-300 shrink-0" />
                               )}
                               <span className="text-xs font-semibold">{item.name}</span>
                             </div>
-                            <span className={`text-xs font-bold ${isChecked ? 'text-[#2E5BFF]' : 'text-slate-600'}`}>
-                              ₹{item.amount.toLocaleString('en-IN')}
-                            </span>
+
+                            <div className="flex items-center gap-2.5">
+                              {isPaid && (
+                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[9px] font-bold">
+                                  ✅ Paid
+                                </span>
+                              )}
+                              <span className={`text-xs font-bold ${isPaid ? 'text-slate-400 line-through' : isChecked ? 'text-[#2E5BFF]' : 'text-slate-600'}`}>
+                                ₹{item.amount.toLocaleString('en-IN')}
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
@@ -281,7 +294,7 @@ export default function FeesPage() {
                     {/* Running Selection Summary & Action */}
                     <div className="border-t border-slate-100 pt-3.5 flex items-center justify-between">
                       <div className="text-xs">
-                        <span className="text-slate-400 font-medium">Selected ({selectedItemIds.size}/{inv.items.length}): </span>
+                        <span className="text-slate-400 font-medium">Selected ({selectedItemIds.size}/{selectableItems.length}): </span>
                         <strong className="text-slate-800 font-bold">₹{selectedTotal.toLocaleString('en-IN')}</strong>
                       </div>
 
