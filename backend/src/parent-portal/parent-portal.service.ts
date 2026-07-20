@@ -608,6 +608,7 @@ export class ParentPortalService {
         bankAccountNo: true,
         googlePayId: true,
         phonePeId: true,
+        upiQrId: true,
       },
     });
 
@@ -656,12 +657,13 @@ export class ParentPortalService {
           amount: Number(item.amount),
           oliId: item.opportunityLineItemId,
           productId: item.productId,
+          selectable: false,
         })),
       };
     });
 
     // If no unpaid database invoice exists yet, but BillingService reports a pending balance > 0,
-    // read the open opportunity line items from BillingService so the parent can initiate payment via BillingService.createInvoice()
+    // read open opportunity line items so parent can select individual fee products for partial payment
     const openOppId = billingSummary.account?.opportunities?.[0]?.id;
     const hasUnpaidDbInvoice = mappedInvoices.some(inv => inv.status !== 'PAID' && inv.status !== 'VOIDED');
 
@@ -680,10 +682,15 @@ export class ParentPortalService {
         const lineItems = activeOpp.opportunityLineItems.map(oli => {
           const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
           const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+          const netAmount = itemTotal - itemDiscount;
           return {
             id: oli.id,
-            name: oli.product?.name || 'Fee Particular',
-            amount: itemTotal - itemDiscount,
+            name: oli.product?.name || 'Fee Component',
+            amount: netAmount,
+            balance: netAmount,
+            paidAmount: 0,
+            status: 'UNPAID',
+            selectable: true,
             oliId: oli.id,
             productId: oli.productId,
           };
@@ -694,6 +701,10 @@ export class ParentPortalService {
             id: 'PREV_YEAR_DUE_CF',
             name: 'Previous Years Carried Forward Dues',
             amount: billingSummary.previousYearPending,
+            balance: billingSummary.previousYearPending,
+            paidAmount: 0,
+            status: 'UNPAID',
+            selectable: true,
             oliId: 'PREV_YEAR_DUE_CF',
             productId: 'PREV_YEAR_DUE_CF',
           });
@@ -728,28 +739,23 @@ export class ParentPortalService {
     return {
       summary: billingSummary,
       invoices: mappedInvoices,
-      paymentDetails: tenantDetails || {
-        name: 'Cambridge International School',
-        bankName: 'Covenant Bank',
-        bankBranch: 'Main Branch',
-        bankIFSC: 'COVB0001234',
-        bankAccountNo: '9876543210',
-        googlePayId: 'gpay@edutrack',
-        phonePeId: 'phonepe@edutrack',
-      },
+      paymentDetails: tenantDetails,
     };
   }
 
   async payInvoice(userId: string, studentId: string, invoiceId: string, paymentData: any) {
     const student = await this.verifyOwnership(userId, studentId);
     const method = paymentData.paymentMethod || 'UPI';
+    const selectedItemIds: string[] = paymentData.selectedItemIds || [];
 
     if (invoiceId.startsWith('OPP-')) {
       const opportunityId = invoiceId.replace('OPP-', '');
       const activeOpp = await this.prisma.opportunity.findUnique({
         where: { id: opportunityId },
         include: {
-          opportunityLineItems: true
+          opportunityLineItems: {
+            include: { product: true }
+          }
         }
       });
       if (!activeOpp) {
@@ -757,10 +763,13 @@ export class ParentPortalService {
       }
 
       const billingSummary = await this.billingService.getStudentById(studentId);
-      const selectedItems = activeOpp.opportunityLineItems.map(oli => {
+
+      // Filter to include ONLY selected fee products
+      let allItems = activeOpp.opportunityLineItems.map(oli => {
         const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
         const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
         return {
+          id: oli.id,
           oliId: oli.id,
           productId: oli.productId,
           amount: itemTotal - itemDiscount,
@@ -768,18 +777,28 @@ export class ParentPortalService {
       });
 
       if (billingSummary.previousYearPending > 0) {
-        selectedItems.push({
+        allItems.push({
+          id: 'PREV_YEAR_DUE_CF',
           oliId: 'PREV_YEAR_DUE_CF',
           productId: 'PREV_YEAR_DUE_CF',
           amount: billingSummary.previousYearPending,
         });
       }
 
-      // Delegate directly to BillingService.createInvoice() to handle full ledger & database persistence
+      let selectedItems = allItems;
+      if (selectedItemIds && selectedItemIds.length > 0) {
+        selectedItems = allItems.filter(item => selectedItemIds.includes(item.id));
+      }
+
+      if (selectedItems.length === 0) {
+        throw new BadRequestException('At least one fee product must be selected for payment.');
+      }
+
+      // Delegate directly to BillingService.createInvoice() to handle full ledger & database persistence for selected items
       const createdInvoiceId = await this.billingService.createInvoice(
         opportunityId,
         studentId,
-        selectedItems,
+        selectedItems.map(item => ({ oliId: item.oliId, productId: item.productId, amount: item.amount })),
         method,
       );
 
@@ -795,18 +814,19 @@ export class ParentPortalService {
         amount: Number(createdInvoice?.totalAmount || 0),
         method,
         transactionId: txnId,
+        selectedItemCount: selectedItems.length,
       });
 
       const parent = await this.getParentProfile(userId);
       await this.createNotification(
         parent.userId,
         'Fee Payment Successful',
-        `Payment of ₹${createdInvoice?.totalAmount || 0} received for ${student.user.name}'s invoice. Txn: ${txnId}`,
+        `Payment of ₹${createdInvoice?.totalAmount || 0} received for ${student.user.name}'s selected fee items. Txn: ${txnId}`,
       );
 
       return {
         success: true,
-        message: 'Payment processed and official invoice created successfully via BillingService.',
+        message: 'Payment processed successfully for selected fee products.',
         invoice: createdInvoice,
         transactionId: txnId,
       };
