@@ -796,22 +796,41 @@ export default function DashboardLayout({
     </ToastProvider>
   );
 }
-
 function parseLeaveRequestMessage(message: string) {
-  const lines = message.split('\n');
   let leaveType = '';
   let fromDate = '';
   let toDate = '';
   let reason = '';
   let leaveRequestId = '';
 
-  lines.forEach(line => {
-    if (line.startsWith('Type:')) leaveType = line.replace('Type:', '').trim();
-    else if (line.startsWith('From:')) fromDate = line.replace('From:', '').trim().split('T')[0];
-    else if (line.startsWith('To:')) toDate = line.replace('To:', '').trim().split('T')[0];
-    else if (line.startsWith('Reason:')) reason = line.replace('Reason:', '').trim();
-    else if (line.startsWith('LeaveRequestId:')) leaveRequestId = line.replace('LeaveRequestId:', '').trim();
-  });
+  if (!message) return { leaveType, fromDate, toDate, reason, leaveRequestId };
+
+  const idMatch = message.match(/LeaveRequestId:\s*([a-zA-Z0-9\-]+)/i);
+  if (idMatch) leaveRequestId = idMatch[1].trim();
+
+  const typeMatch = message.match(/Type:\s*(.*?)(?=\s+From:|\n|$)/i);
+  if (typeMatch) leaveType = typeMatch[1].trim();
+
+  const fromMatch = message.match(/From:\s*([^\s\n]+)/i);
+  if (fromMatch) fromDate = fromMatch[1].trim().split('T')[0];
+
+  const toMatch = message.match(/To:\s*([^\s\n]+)/i);
+  if (toMatch) toDate = toMatch[1].trim().split('T')[0];
+
+  const reasonMatch = message.match(/Reason:\s*(.*?)(?=\s*LeaveRequestId:|\n|$)/i);
+  if (reasonMatch) reason = reasonMatch[1].trim();
+
+  // Fallback for line by line parsing if regex produced empty fields
+  if (!leaveRequestId || !leaveType) {
+    const lines = message.split('\n');
+    lines.forEach(line => {
+      if (line.includes('LeaveRequestId:')) leaveRequestId = line.split('LeaveRequestId:')[1].trim();
+      if (line.includes('Type:')) leaveType = line.split('Type:')[1].trim();
+      if (line.includes('From:')) fromDate = line.split('From:')[1].trim().split('T')[0];
+      if (line.includes('To:')) toDate = line.split('To:')[1].trim().split('T')[0];
+      if (line.includes('Reason:')) reason = line.split('Reason:')[1].trim();
+    });
+  }
 
   return { leaveType, fromDate, toDate, reason, leaveRequestId };
 }
@@ -897,8 +916,10 @@ function NotificationBell() {
               </div>
             ) : (
               notifications.map(n => {
-                if (n.type === 'LEAVE_APPROVAL') {
-                  const details = parseLeaveRequestMessage(n.message);
+                const isLeaveNotification = n.type === 'LEAVE_APPROVAL' || (n.message && n.message.includes('LeaveRequestId:')) || (n.title && n.title.toLowerCase().includes('leave application'));
+                
+                if (isLeaveNotification) {
+                  const details = parseLeaveRequestMessage(n.message || '');
                   return (
                     <div
                       key={n.id}
@@ -911,17 +932,17 @@ function NotificationBell() {
                           {n.title}
                         </span>
                         {!n.isRead && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-blue-650 shrink-0 mt-1" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0 mt-1" />
                         )}
                       </div>
 
                       <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1 text-[11px] font-medium text-slate-600">
-                        <div><strong className="text-slate-500 font-bold">Leave Type:</strong> {details.leaveType}</div>
-                        <div><strong className="text-slate-500 font-bold">Dates:</strong> {details.fromDate} to {details.toDate}</div>
-                        <div className="whitespace-pre-wrap"><strong className="text-slate-500 font-bold">Reason:</strong> {details.reason}</div>
+                        {details.leaveType && <div><strong className="text-slate-500 font-bold">Leave Type:</strong> {details.leaveType}</div>}
+                        {(details.fromDate || details.toDate) && <div><strong className="text-slate-500 font-bold">Dates:</strong> {details.fromDate} to {details.toDate}</div>}
+                        {details.reason && <div className="whitespace-pre-wrap"><strong className="text-slate-500 font-bold">Reason:</strong> {details.reason}</div>}
                       </div>
 
-                      {!n.isRead ? (
+                      {!n.isRead && details.leaveRequestId ? (
                         <div className="flex gap-2 mt-1">
                           <button
                             onClick={async (e) => {
@@ -931,12 +952,13 @@ function NotificationBell() {
                                   status: 'Approved',
                                   comments: 'Approved via Notification Center'
                                 });
+                                await handleMarkAsRead(n.id);
                                 await fetchNotifications();
                               } catch (err) {
                                 console.error('Approval failed:', err);
                               }
                             }}
-                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-xs"
                           >
                             Approve
                           </button>
@@ -948,12 +970,13 @@ function NotificationBell() {
                                   status: 'Rejected',
                                   comments: 'Rejected via Notification Center'
                                 });
+                                await handleMarkAsRead(n.id);
                                 await fetchNotifications();
                               } catch (err) {
                                 console.error('Rejection failed:', err);
                               }
                             }}
-                            className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-xs"
                           >
                             Reject
                           </button>
@@ -961,7 +984,7 @@ function NotificationBell() {
                       ) : (
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mt-0.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                          Processed & Archived
+                          Processed &amp; Archived
                         </div>
                       )}
                       <span className="text-[9px] text-slate-400 font-mono mt-0.5">

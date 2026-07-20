@@ -1361,6 +1361,7 @@ export class ParentPortalService {
         adminUser.id,
         `New Leave Application: ${student.user.name}`,
         `New Leave Application submitted by Parent for Student ${student.user.name}.\nType: ${data.leaveType}\nFrom: ${data.startDate}\nTo: ${data.endDate}\nReason: ${data.reason}\nLeaveRequestId: ${leave.id}`,
+        'LEAVE_APPROVAL',
       ).catch(err => console.error('Failed to notify admin of leave:', err));
     }
 
@@ -1375,6 +1376,7 @@ export class ParentPortalService {
           classSec.teacher.userId,
           `Student Leave Application: ${student.user.name}`,
           `Leave Application submitted for Student ${student.user.name}.\nType: ${data.leaveType}\nFrom: ${data.startDate}\nTo: ${data.endDate}\nReason: ${data.reason}\nLeaveRequestId: ${leave.id}`,
+          'LEAVE_APPROVAL',
         ).catch(err => console.error('Failed to notify teacher of leave:', err));
       }
     }
