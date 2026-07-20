@@ -156,16 +156,16 @@ export class ParentPortalService {
     const studentIds = children.map(c => c.id);
     const classSectionIds = children.map(c => c.classSectionId).filter(Boolean) as string[];
 
-    // 1. Total Outstanding Fees
-    const invoices = await this.prisma.invoice.findMany({
-      where: {
-        studentId: { in: studentIds },
-        tenantId,
-        status: { in: [PaymentStatus.UNPAID, PaymentStatus.PARTIALLY_PAID] },
-      },
-      select: { remainingBalance: true },
-    });
-    const pendingFees = invoices.reduce((sum, inv) => sum + Number(inv.remainingBalance), 0);
+    // 1. Total Outstanding Fees directly from BillingService single source of truth
+    let pendingFees = 0;
+    for (const childId of studentIds) {
+      try {
+        const billingInfo = await this.billingService.getStudentById(childId);
+        pendingFees += Number(billingInfo.totalPendingBalance || 0);
+      } catch (err) {
+        console.error(`Failed to fetch billing info for student ${childId}:`, err);
+      }
+    }
 
     // 2. Pending Homework count
     const homeworkCount = await this.prisma.homework.count({
@@ -210,38 +210,43 @@ export class ParentPortalService {
       take: 10,
     });
 
-    // 6. Today's Attendance Summary
+    // 6. Student-specific Today's Attendance Summary
     const todayUTC = parseAttendanceDate(null);
-    const sessions = await this.prisma.attendanceSession.findMany({
-      where: {
-        classSectionId: { in: classSectionIds },
-        date: todayUTC,
-        tenantId,
-      },
-    });
+    let markedChildrenCount = 0;
+    let presentChildrenCount = 0;
+
+    for (const child of children) {
+      if (!child.classSectionId) continue;
+
+      const session = await this.prisma.attendanceSession.findFirst({
+        where: {
+          classSectionId: child.classSectionId,
+          date: todayUTC,
+          tenantId,
+        },
+        include: {
+          attendances: {
+            where: { studentId: child.id },
+          },
+        },
+      });
+
+      if (session) {
+        markedChildrenCount++;
+        const record = session.attendances[0];
+        const status = record ? record.status : 'PRESENT';
+        if (status === 'PRESENT' || status === 'LATE') {
+          presentChildrenCount++;
+        }
+      }
+    }
 
     let todayAttendanceStr = 'Attendance Not Taken Yet';
-    if (sessions.length > 0) {
-      const submittedClassSectionIds = new Set(sessions.map(s => s.classSectionId));
-      const allChildrenSubmitted = children.every(c => c.classSectionId && submittedClassSectionIds.has(c.classSectionId));
-
-      if (allChildrenSubmitted) {
-        const todayAttendances = await this.prisma.attendance.findMany({
-          where: {
-            studentId: { in: studentIds },
-            attendanceSession: {
-              date: todayUTC,
-            },
-          },
-          select: {
-            status: true,
-            studentId: true,
-          },
-        });
-
-        const absentCount = todayAttendances.filter(a => a.status === 'ABSENT').length;
-        const presentCount = children.length - absentCount;
-        todayAttendanceStr = `${presentCount}/${children.length} Present`;
+    if (markedChildrenCount > 0) {
+      if (children.length === 1) {
+        todayAttendanceStr = `${presentChildrenCount}/${children.length} Present`;
+      } else {
+        todayAttendanceStr = `${presentChildrenCount}/${children.length} Children Present`;
       }
     }
 
@@ -570,7 +575,10 @@ export class ParentPortalService {
   async getFees(userId: string, studentId: string) {
     const student = await this.verifyOwnership(userId, studentId);
 
-    const invoices = await this.prisma.invoice.findMany({
+    // Single source of truth: fetch live billing and ledger balance directly from BillingService
+    const billingSummary = await this.billingService.getStudentById(studentId);
+
+    const dbInvoices = await this.prisma.invoice.findMany({
       where: { studentId: student.id },
       include: {
         invoiceItems: true,
@@ -603,9 +611,6 @@ export class ParentPortalService {
       },
     });
 
-    const billingSummary = await this.billingService.getStudentById(studentId);
-
-    // Fetch activity logs for payments to retrieve exact transaction IDs
     const paymentLogs = await this.prisma.activityLog.findMany({
       where: {
         tenantId: student.tenantId,
@@ -614,48 +619,115 @@ export class ParentPortalService {
       },
     });
 
-    return {
-      summary: billingSummary,
-      invoices: invoices.map(inv => {
-        const log = paymentLogs.find(l => l.entityId === inv.id);
-        let transactionId = `TXN-${inv.id.substring(0, 8).toUpperCase()}`;
-        if (log && log.details) {
-          try {
-            const parsed = JSON.parse(log.details);
-            if (parsed.transactionId) transactionId = parsed.transactionId;
-          } catch {}
+    const mappedInvoices = dbInvoices.map(inv => {
+      const log = paymentLogs.find(l => l.entityId === inv.id);
+      let transactionId = `TXN-${inv.id.substring(0, 8).toUpperCase()}`;
+      if (log && log.details) {
+        try {
+          const parsed = JSON.parse(log.details);
+          if (parsed.transactionId) transactionId = parsed.transactionId;
+        } catch {}
+      }
+
+      return {
+        id: inv.id,
+        opportunityId: inv.opportunityId,
+        invoiceNo: `INV-${inv.id.substring(0, 8).toUpperCase()}`,
+        receiptNo: `REC-${inv.id.substring(0, 8).toUpperCase()}`,
+        invoiceDate: inv.invoiceDate,
+        dueDate: inv.dueDate,
+        totalAmount: Number(inv.totalAmount),
+        paidAmount: Number(inv.paidAmount),
+        remainingBalance: Number(inv.remainingBalance),
+        status: inv.status,
+        paymentMethod: inv.paymentMethod || 'UPI',
+        transactionId,
+        description: inv.description || 'School Fees Statement',
+        academicYear: inv.opportunity?.academicYear?.name || '2026-2027',
+        className: student.classSection?.class.name || inv.opportunity?.class?.name || 'N/A',
+        sectionName: student.classSection?.section.name || inv.opportunity?.section?.name || 'N/A',
+        studentName: student.user.name,
+        rollNo: student.rollNo || 'N/A',
+        fatherName: student.fatherName || 'N/A',
+        motherName: student.motherName || 'N/A',
+        items: inv.invoiceItems.map(item => ({
+          id: item.id,
+          name: item.name,
+          amount: Number(item.amount),
+          oliId: item.opportunityLineItemId,
+          productId: item.productId,
+        })),
+      };
+    });
+
+    // If no unpaid database invoice exists yet, but BillingService reports a pending balance > 0,
+    // read the open opportunity line items from BillingService so the parent can initiate payment via BillingService.createInvoice()
+    const openOppId = billingSummary.account?.opportunities?.[0]?.id;
+    const hasUnpaidDbInvoice = mappedInvoices.some(inv => inv.status !== 'PAID' && inv.status !== 'VOIDED');
+
+    if (!hasUnpaidDbInvoice && billingSummary.totalPendingBalance > 0 && openOppId) {
+      const activeOpp = await this.prisma.opportunity.findUnique({
+        where: { id: openOppId },
+        include: {
+          academicYear: true,
+          opportunityLineItems: {
+            include: { product: true }
+          }
+        }
+      });
+
+      if (activeOpp) {
+        const lineItems = activeOpp.opportunityLineItems.map(oli => {
+          const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+          const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+          return {
+            id: oli.id,
+            name: oli.product?.name || 'Fee Particular',
+            amount: itemTotal - itemDiscount,
+            oliId: oli.id,
+            productId: oli.productId,
+          };
+        });
+
+        if (billingSummary.previousYearPending > 0) {
+          lineItems.push({
+            id: 'PREV_YEAR_DUE_CF',
+            name: 'Previous Years Carried Forward Dues',
+            amount: billingSummary.previousYearPending,
+            oliId: 'PREV_YEAR_DUE_CF',
+            productId: 'PREV_YEAR_DUE_CF',
+          });
         }
 
-        const invNo = `INV-${inv.id.substring(0, 8).toUpperCase()}`;
-        const recNo = `REC-${inv.id.substring(0, 8).toUpperCase()}`;
-
-        return {
-          id: inv.id,
-          invoiceNo: invNo,
-          receiptNo: recNo,
-          invoiceDate: inv.invoiceDate,
-          dueDate: inv.dueDate,
-          totalAmount: Number(inv.totalAmount),
-          paidAmount: Number(inv.paidAmount),
-          remainingBalance: Number(inv.remainingBalance),
-          status: inv.status,
-          paymentMethod: inv.paymentMethod || 'UPI',
-          transactionId,
-          description: inv.description || 'School Fees Statement',
-          academicYear: inv.opportunity?.academicYear?.name || '2026-2027',
-          className: student.classSection?.class.name || inv.opportunity?.class?.name || 'N/A',
-          sectionName: student.classSection?.section.name || inv.opportunity?.section?.name || 'N/A',
+        mappedInvoices.unshift({
+          id: `OPP-${activeOpp.id}`,
+          opportunityId: activeOpp.id,
+          invoiceNo: `STMT-${student.rollNo || student.id.substring(0, 5).toUpperCase()}`,
+          receiptNo: 'REC-PENDING',
+          invoiceDate: new Date(),
+          dueDate: activeOpp.closeDate || new Date(),
+          totalAmount: billingSummary.totalPendingBalance + billingSummary.paidAmount,
+          paidAmount: billingSummary.paidAmount,
+          remainingBalance: billingSummary.totalPendingBalance,
+          status: billingSummary.paidAmount > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+          paymentMethod: 'UPI',
+          transactionId: 'N/A',
+          description: `Academic Fee Statement ${activeOpp.academicYear?.name || '2026-2027'}`,
+          academicYear: activeOpp.academicYear?.name || '2026-2027',
+          className: student.classSection?.class.name || 'N/A',
+          sectionName: student.classSection?.section.name || 'N/A',
           studentName: student.user.name,
           rollNo: student.rollNo || 'N/A',
           fatherName: student.fatherName || 'N/A',
           motherName: student.motherName || 'N/A',
-          items: inv.invoiceItems.map(item => ({
-            id: item.id,
-            name: item.name,
-            amount: Number(item.amount),
-          })),
-        };
-      }),
+          items: lineItems,
+        } as any);
+      }
+    }
+
+    return {
+      summary: billingSummary,
+      invoices: mappedInvoices,
       paymentDetails: tenantDetails || {
         name: 'Cambridge International School',
         bankName: 'Covenant Bank',
@@ -670,6 +742,75 @@ export class ParentPortalService {
 
   async payInvoice(userId: string, studentId: string, invoiceId: string, paymentData: any) {
     const student = await this.verifyOwnership(userId, studentId);
+    const method = paymentData.paymentMethod || 'UPI';
+
+    if (invoiceId.startsWith('OPP-')) {
+      const opportunityId = invoiceId.replace('OPP-', '');
+      const activeOpp = await this.prisma.opportunity.findUnique({
+        where: { id: opportunityId },
+        include: {
+          opportunityLineItems: true
+        }
+      });
+      if (!activeOpp) {
+        throw new NotFoundException('Fee Opportunity not found');
+      }
+
+      const billingSummary = await this.billingService.getStudentById(studentId);
+      const selectedItems = activeOpp.opportunityLineItems.map(oli => {
+        const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+        const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+        return {
+          oliId: oli.id,
+          productId: oli.productId,
+          amount: itemTotal - itemDiscount,
+        };
+      });
+
+      if (billingSummary.previousYearPending > 0) {
+        selectedItems.push({
+          oliId: 'PREV_YEAR_DUE_CF',
+          productId: 'PREV_YEAR_DUE_CF',
+          amount: billingSummary.previousYearPending,
+        });
+      }
+
+      // Delegate directly to BillingService.createInvoice() to handle full ledger & database persistence
+      const createdInvoiceId = await this.billingService.createInvoice(
+        opportunityId,
+        studentId,
+        selectedItems,
+        method,
+      );
+
+      const createdInvoice = await this.prisma.invoice.findUnique({
+        where: { id: createdInvoiceId },
+        include: { invoiceItems: true }
+      });
+
+      const txnId = `TXN-${createdInvoiceId.substring(0, 8).toUpperCase()}`;
+
+      await this.logAction(userId, student.tenantId, 'FEE_PAYMENT', 'Invoice', createdInvoiceId, {
+        studentId,
+        amount: Number(createdInvoice?.totalAmount || 0),
+        method,
+        transactionId: txnId,
+      });
+
+      const parent = await this.getParentProfile(userId);
+      await this.createNotification(
+        parent.userId,
+        'Fee Payment Successful',
+        `Payment of ₹${createdInvoice?.totalAmount || 0} received for ${student.user.name}'s invoice. Txn: ${txnId}`,
+      );
+
+      return {
+        success: true,
+        message: 'Payment processed and official invoice created successfully via BillingService.',
+        invoice: createdInvoice,
+        transactionId: txnId,
+      };
+    }
 
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: invoiceId, studentId },
@@ -683,16 +824,13 @@ export class ParentPortalService {
       throw new BadRequestException('This invoice has already been paid.');
     }
 
-    // Call modular Payment Processor simulating gateway
     const amount = Number(invoice.remainingBalance);
-    const method = paymentData.paymentMethod || 'UPI';
     const txnResult = await this.paymentProcessor.processPayment(amount, method, invoiceId);
 
     if (!txnResult.success) {
       throw new BadRequestException('Payment gateway transaction rejected.');
     }
 
-    // Fully update ledger balances in PostgreSQL database
     const updatedInvoice = await this.prisma.invoice.update({
       where: { id: invoiceId },
       data: {
@@ -704,7 +842,6 @@ export class ParentPortalService {
       },
     });
 
-    // Update Opportunity total paid amount if linked to an opportunity
     if (invoice.opportunityId) {
       const oppInvoices = await this.prisma.invoice.findMany({
         where: {
@@ -726,7 +863,6 @@ export class ParentPortalService {
       }).catch(err => console.error('Failed to update opportunity totalPaidAmount:', err));
     }
 
-    // Write audit trail log
     await this.logAction(userId, student.tenantId, 'FEE_PAYMENT', 'Invoice', invoiceId, {
       studentId,
       amount,
@@ -734,7 +870,6 @@ export class ParentPortalService {
       transactionId: txnResult.transactionId,
     });
 
-    // Trigger Notification alerts
     const parent = await this.getParentProfile(userId);
     await this.createNotification(
       parent.userId,
