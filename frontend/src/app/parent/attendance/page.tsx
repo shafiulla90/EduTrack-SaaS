@@ -68,7 +68,7 @@ export default function AttendancePage() {
     );
   }
 
-  const summary = attendance?.summary || { total: 0, present: 0, absent: 0, late: 0, excused: 0, attendanceRate: 100 };
+  const summary = attendance?.summary || { total: 0, present: 0, absent: 0, late: 0, excused: 0, attendanceRate: null, hasAttendanceData: false, todayAttendanceSubmitted: false };
   const records = attendance?.records || [];
 
   return (
@@ -82,11 +82,23 @@ export default function AttendancePage() {
         </div>
       </div>
 
+      {!summary.todayAttendanceSubmitted && (
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-3 text-amber-800 text-xs font-semibold">
+          <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <span className="font-bold block">Attendance Not Taken Yet</span>
+            <span className="text-[11px] font-normal text-amber-700">Today's attendance has not been submitted by the teacher yet. Waiting for teacher submission.</span>
+          </div>
+        </div>
+      )}
+
       {/* Stats Summary Panel */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
           <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">Attendance Rate</span>
-          <h4 className="text-2xl font-black text-[#2E5BFF] mt-1.5">{summary.attendanceRate}%</h4>
+          <h4 className="text-2xl font-black text-[#2E5BFF] mt-1.5">
+            {summary.hasAttendanceData && summary.attendanceRate !== null ? `${summary.attendanceRate}%` : 'N/A'}
+          </h4>
         </div>
         <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
           <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">Total Session</span>

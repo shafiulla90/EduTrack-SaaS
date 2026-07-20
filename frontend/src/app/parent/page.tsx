@@ -124,7 +124,10 @@ export default function ParentDashboard() {
           </div>
           <div>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Attendance Today</p>
-            <h3 className="text-lg font-black text-slate-800 mt-1">{stats.todayAttendance}</h3>
+            <h3 className="text-base font-black text-slate-800 mt-1">{stats.todayAttendance}</h3>
+            {stats.todayAttendance === 'Attendance Not Taken Yet' && (
+              <span className="text-[9px] font-bold text-amber-600 block mt-0.5">Waiting for Teacher Submission</span>
+            )}
           </div>
         </div>
 
@@ -237,29 +240,57 @@ export default function ParentDashboard() {
                   <div className="text-center">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Attendance Rate</span>
                     <div className="relative w-28 h-28 mx-auto mt-4 flex items-center justify-center">
-                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                        <path
-                          className="text-slate-100"
-                          strokeWidth="2.5"
-                          stroke="currentColor"
-                          fill="transparent"
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        />
-                        <path
-                          className="text-[#2E5BFF]"
-                          strokeDasharray={`${childDashboard.metrics.attendancePercentage}, 100`}
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          stroke="currentColor"
-                          fill="transparent"
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                        />
-                      </svg>
-                      <div className="absolute text-center">
-                        <span className="text-2xl font-black text-slate-800">{childDashboard.metrics.attendancePercentage}%</span>
-                      </div>
+                      {childDashboard.metrics.hasAttendanceData && childDashboard.metrics.attendancePercentage !== null ? (
+                        <>
+                          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                            <path
+                              className="text-slate-100"
+                              strokeWidth="2.5"
+                              stroke="currentColor"
+                              fill="transparent"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                            <path
+                              className="text-[#2E5BFF]"
+                              strokeDasharray={`${childDashboard.metrics.attendancePercentage}, 100`}
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              stroke="currentColor"
+                              fill="transparent"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                          </svg>
+                          <div className="absolute text-center">
+                            <span className="text-2xl font-black text-slate-800">{childDashboard.metrics.attendancePercentage}%</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full h-full rounded-full border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-2">
+                          <span className="text-sm font-bold text-slate-400">N/A</span>
+                          <span className="text-[9px] text-slate-400 font-medium leading-tight">No Records Yet</span>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {childDashboard.metrics.todayAttendanceSubmitted ? (
+                    <div className="text-center pt-1">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Today's Status: </span>
+                      <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                        childDashboard.metrics.todayAttendanceStatus === 'PRESENT' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
+                        childDashboard.metrics.todayAttendanceStatus === 'ABSENT' ? 'bg-rose-50 text-rose-600 border border-rose-200' :
+                        childDashboard.metrics.todayAttendanceStatus === 'LATE' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-blue-50 text-blue-600 border border-blue-200'
+                      }`}>
+                        {childDashboard.metrics.todayAttendanceStatus}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-center pt-1">
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200 inline-block">
+                        Attendance Not Taken Yet
+                      </span>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4 pt-2 text-center text-xs">
                     <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">

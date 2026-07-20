@@ -220,24 +220,29 @@ export class ParentPortalService {
       },
     });
 
-    let todayAttendanceStr = 'Not Marked';
+    let todayAttendanceStr = 'Attendance Not Taken Yet';
     if (sessions.length > 0) {
-      const todayAttendances = await this.prisma.attendance.findMany({
-        where: {
-          studentId: { in: studentIds },
-          attendanceSession: {
-            date: todayUTC,
-          },
-        },
-        select: {
-          status: true,
-          studentId: true,
-        },
-      });
+      const submittedClassSectionIds = new Set(sessions.map(s => s.classSectionId));
+      const allChildrenSubmitted = children.every(c => c.classSectionId && submittedClassSectionIds.has(c.classSectionId));
 
-      const absentCount = todayAttendances.filter(a => a.status === 'ABSENT').length;
-      const presentCount = children.length - absentCount;
-      todayAttendanceStr = `${presentCount}/${children.length} Present`;
+      if (allChildrenSubmitted) {
+        const todayAttendances = await this.prisma.attendance.findMany({
+          where: {
+            studentId: { in: studentIds },
+            attendanceSession: {
+              date: todayUTC,
+            },
+          },
+          select: {
+            status: true,
+            studentId: true,
+          },
+        });
+
+        const absentCount = todayAttendances.filter(a => a.status === 'ABSENT').length;
+        const presentCount = children.length - absentCount;
+        todayAttendanceStr = `${presentCount}/${children.length} Present`;
+      }
     }
 
     return {
@@ -261,7 +266,34 @@ export class ParentPortalService {
     });
     const total = attendances.length;
     const present = attendances.filter(a => a.status === 'PRESENT' || a.status === 'LATE').length;
-    const attendancePercentage = total > 0 ? Math.round((present / total) * 100) : 100;
+    const hasAttendanceData = total > 0;
+    const attendancePercentage = hasAttendanceData ? Math.round((present / total) * 100) : null;
+
+    // Check today's submission status for this child
+    const todayUTC = parseAttendanceDate(null);
+    let todayAttendanceSubmitted = false;
+    let todayAttendanceStatus = 'NOT_TAKEN';
+
+    if (student.classSectionId) {
+      const todaySession = await this.prisma.attendanceSession.findFirst({
+        where: {
+          classSectionId: student.classSectionId,
+          date: todayUTC,
+          tenantId: student.tenantId,
+        },
+        include: {
+          attendances: {
+            where: { studentId },
+          },
+        },
+      });
+
+      if (todaySession) {
+        todayAttendanceSubmitted = true;
+        const record = todaySession.attendances[0];
+        todayAttendanceStatus = record ? record.status : 'PRESENT';
+      }
+    }
 
     // Get pending homework
     let pendingHomework = 0;
@@ -312,6 +344,9 @@ export class ParentPortalService {
       },
       metrics: {
         attendancePercentage,
+        hasAttendanceData,
+        todayAttendanceSubmitted,
+        todayAttendanceStatus,
         pendingHomework,
         pendingFees,
         upcomingExamsCount: upcomingExams.length,
@@ -322,7 +357,7 @@ export class ParentPortalService {
   }
 
   async getAttendance(userId: string, studentId: string) {
-    await this.verifyOwnership(userId, studentId);
+    const student = await this.verifyOwnership(userId, studentId);
 
     const attendances = await this.prisma.attendance.findMany({
       where: { studentId },
@@ -340,7 +375,34 @@ export class ParentPortalService {
     const absent = attendances.filter(a => a.status === 'ABSENT').length;
     const excused = attendances.filter(a => a.status === 'EXCUSED').length;
 
-    const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 100;
+    const hasAttendanceData = total > 0;
+    const rate = hasAttendanceData ? Math.round(((present + late) / total) * 100) : null;
+
+    // Check today's submission state
+    const todayUTC = parseAttendanceDate(null);
+    let todayAttendanceSubmitted = false;
+    let todayAttendanceStatus = 'NOT_TAKEN';
+
+    if (student.classSectionId) {
+      const todaySession = await this.prisma.attendanceSession.findFirst({
+        where: {
+          classSectionId: student.classSectionId,
+          date: todayUTC,
+          tenantId: student.tenantId,
+        },
+        include: {
+          attendances: {
+            where: { studentId },
+          },
+        },
+      });
+
+      if (todaySession) {
+        todayAttendanceSubmitted = true;
+        const record = todaySession.attendances[0];
+        todayAttendanceStatus = record ? record.status : 'PRESENT';
+      }
+    }
 
     return {
       summary: {
@@ -350,6 +412,9 @@ export class ParentPortalService {
         late,
         excused,
         attendanceRate: rate,
+        hasAttendanceData,
+        todayAttendanceSubmitted,
+        todayAttendanceStatus,
       },
       records: attendances.map(a => ({
         id: a.id,
@@ -507,13 +572,28 @@ export class ParentPortalService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: { studentId: student.id },
-      include: { invoiceItems: true },
+      include: {
+        invoiceItems: true,
+        opportunity: {
+          include: {
+            academicYear: true,
+            class: true,
+            section: true,
+          },
+        },
+      },
       orderBy: { invoiceDate: 'desc' },
     });
 
     const tenantDetails = await this.prisma.tenant.findUnique({
       where: { id: student.tenantId },
       select: {
+        name: true,
+        address: true,
+        phone: true,
+        email: true,
+        logoUrl: true,
+        subtitle: true,
         bankName: true,
         bankBranch: true,
         bankIFSC: true,
@@ -523,23 +603,61 @@ export class ParentPortalService {
       },
     });
 
+    const billingSummary = await this.billingService.getStudentById(studentId);
+
+    // Fetch activity logs for payments to retrieve exact transaction IDs
+    const paymentLogs = await this.prisma.activityLog.findMany({
+      where: {
+        tenantId: student.tenantId,
+        action: 'FEE_PAYMENT',
+        entityName: 'Invoice',
+      },
+    });
+
     return {
-      invoices: invoices.map(inv => ({
-        id: inv.id,
-        invoiceDate: inv.invoiceDate,
-        dueDate: inv.dueDate,
-        totalAmount: Number(inv.totalAmount),
-        paidAmount: Number(inv.paidAmount),
-        remainingBalance: Number(inv.remainingBalance),
-        status: inv.status,
-        description: inv.description,
-        items: inv.invoiceItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          amount: Number(item.amount),
-        })),
-      })),
+      summary: billingSummary,
+      invoices: invoices.map(inv => {
+        const log = paymentLogs.find(l => l.entityId === inv.id);
+        let transactionId = `TXN-${inv.id.substring(0, 8).toUpperCase()}`;
+        if (log && log.details) {
+          try {
+            const parsed = JSON.parse(log.details);
+            if (parsed.transactionId) transactionId = parsed.transactionId;
+          } catch {}
+        }
+
+        const invNo = `INV-${inv.id.substring(0, 8).toUpperCase()}`;
+        const recNo = `REC-${inv.id.substring(0, 8).toUpperCase()}`;
+
+        return {
+          id: inv.id,
+          invoiceNo: invNo,
+          receiptNo: recNo,
+          invoiceDate: inv.invoiceDate,
+          dueDate: inv.dueDate,
+          totalAmount: Number(inv.totalAmount),
+          paidAmount: Number(inv.paidAmount),
+          remainingBalance: Number(inv.remainingBalance),
+          status: inv.status,
+          paymentMethod: inv.paymentMethod || 'UPI',
+          transactionId,
+          description: inv.description || 'School Fees Statement',
+          academicYear: inv.opportunity?.academicYear?.name || '2026-2027',
+          className: student.classSection?.class.name || inv.opportunity?.class?.name || 'N/A',
+          sectionName: student.classSection?.section.name || inv.opportunity?.section?.name || 'N/A',
+          studentName: student.user.name,
+          rollNo: student.rollNo || 'N/A',
+          fatherName: student.fatherName || 'N/A',
+          motherName: student.motherName || 'N/A',
+          items: inv.invoiceItems.map(item => ({
+            id: item.id,
+            name: item.name,
+            amount: Number(item.amount),
+          })),
+        };
+      }),
       paymentDetails: tenantDetails || {
+        name: 'Cambridge International School',
         bankName: 'Covenant Bank',
         bankBranch: 'Main Branch',
         bankIFSC: 'COVB0001234',
@@ -559,6 +677,10 @@ export class ParentPortalService {
 
     if (!invoice) {
       throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.status === PaymentStatus.PAID || Number(invoice.remainingBalance) === 0) {
+      throw new BadRequestException('This invoice has already been paid.');
     }
 
     // Call modular Payment Processor simulating gateway
@@ -581,6 +703,28 @@ export class ParentPortalService {
         description: `${invoice.description || ''} (Paid via Parent Portal ${txnResult.transactionId})`.trim(),
       },
     });
+
+    // Update Opportunity total paid amount if linked to an opportunity
+    if (invoice.opportunityId) {
+      const oppInvoices = await this.prisma.invoice.findMany({
+        where: {
+          opportunityId: invoice.opportunityId,
+          tenantId: student.tenantId,
+          status: { not: PaymentStatus.VOIDED },
+        },
+      });
+      const newTotalPaid = oppInvoices.reduce((sum, inv) => {
+        if (inv.id === invoiceId) {
+          return sum + Number(invoice.totalAmount);
+        }
+        return sum + Number(inv.paidAmount);
+      }, 0);
+
+      await this.prisma.opportunity.update({
+        where: { id: invoice.opportunityId },
+        data: { totalPaidAmount: newTotalPaid },
+      }).catch(err => console.error('Failed to update opportunity totalPaidAmount:', err));
+    }
 
     // Write audit trail log
     await this.logAction(userId, student.tenantId, 'FEE_PAYMENT', 'Invoice', invoiceId, {
