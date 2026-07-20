@@ -783,28 +783,57 @@ export class ParentPortalService {
     };
   }
 
-  async payInvoice(userId: string, studentId: string, invoiceId: string, paymentData: any) {
-    const student = await this.verifyOwnership(userId, studentId);
-    const method = paymentData.paymentMethod || 'UPI';
-    const selectedItemIds: string[] = paymentData.selectedItemIds || [];
 
-    if (invoiceId.startsWith('OPP-')) {
-      const opportunityId = invoiceId.replace('OPP-', '');
-      const activeOpp = await this.prisma.opportunity.findUnique({
-        where: { id: opportunityId },
-        include: {
-          opportunityLineItems: {
-            include: { product: true }
-          }
+  /**
+   * Pay an invoice (or open-opportunity fee statement) for a student.
+   *
+   * Accepts `itemAmounts` – an array of { id: oliId, amount: number } – for
+   * per-product partial payments, allowing parents to pay any amount ≤ balance.
+   * Falls back to the legacy full-invoice path when `itemAmounts` is absent.
+   */
+  async payInvoice(userId: string, studentId: string, invoiceId: string, data: any) {
+    const student = await this.verifyOwnership(userId, studentId);
+    const { paymentMethod: method, itemAmounts } = data;
+
+    // ── Per-product partial payment path ────────────────────────────────────
+    if (Array.isArray(itemAmounts) && itemAmounts.length > 0) {
+      // Basic input validation
+      for (const entry of itemAmounts) {
+        if (!entry.id || typeof entry.amount !== 'number' || entry.amount <= 0) {
+          throw new BadRequestException(`Invalid payment data for item ${entry.id || 'unknown'}.`);
         }
-      });
-      if (!activeOpp) {
-        throw new NotFoundException('Fee Opportunity not found');
       }
 
+      // Fetch the active opportunity to resolve OLI details
       const billingSummary = await this.billingService.getStudentById(studentId);
+      const openOppId = billingSummary.account?.opportunities?.[0]?.id;
 
-      // Query existing paid invoice items for duplicate payment validation
+      let activeOpp: any = null;
+      if (openOppId) {
+        activeOpp = await this.prisma.opportunity.findUnique({
+          where: { id: openOppId },
+          include: {
+            academicYear: true,
+            opportunityLineItems: { include: { product: true } },
+          },
+        });
+      }
+
+      // Build a map of oliId → (name, productId, netAmount) for validation and naming
+      const oliMap = new Map<string, { name: string; productId: string; netAmount: number }>();
+      if (activeOpp) {
+        for (const oli of activeOpp.opportunityLineItems) {
+          const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+          const discount = (itemTotal * Number(oli.discount)) / 100;
+          oliMap.set(oli.id, {
+            name: oli.product?.name || 'Fee Component',
+            productId: oli.productId,
+            netAmount: itemTotal - discount,
+          });
+        }
+      }
+
+      // Compute already-paid amounts per OLI from non-voided invoices
       const existingInvoiceItems = await this.prisma.invoiceItem.findMany({
         where: {
           tenantId: student.tenantId,
@@ -816,96 +845,121 @@ export class ParentPortalService {
       });
 
       const oliPaidMap = new Map<string, number>();
-      const namePaidMap = new Map<string, number>();
       for (const item of existingInvoiceItems) {
         if (item.opportunityLineItemId) {
           const cur = oliPaidMap.get(item.opportunityLineItemId) || 0;
           oliPaidMap.set(item.opportunityLineItemId, cur + Number(item.amount));
         }
-        if (item.name) {
-          const cur = namePaidMap.get(item.name.toLowerCase()) || 0;
-          namePaidMap.set(item.name.toLowerCase(), cur + Number(item.amount));
+      }
+
+      // Validate that each requested amount does not exceed the remaining balance
+      for (const entry of itemAmounts) {
+        const oliInfo = oliMap.get(entry.id);
+        if (!oliInfo) {
+          // Allow PREV_YEAR_DUE_CF as a passthrough without OLI validation
+          if (entry.id !== 'PREV_YEAR_DUE_CF') {
+            throw new BadRequestException(`Fee product ${entry.id} not found.`);
+          }
+          continue;
+        }
+        const alreadyPaid = oliPaidMap.get(entry.id) || 0;
+        const balance = Math.max(0, oliInfo.netAmount - alreadyPaid);
+        if (balance === 0) {
+          throw new BadRequestException(`Fee product "${oliInfo.name}" is already fully paid.`);
+        }
+        if (entry.amount > balance) {
+          throw new BadRequestException(
+            `Payment amount ₹${entry.amount} for "${oliInfo.name}" exceeds the remaining balance of ₹${balance}.`,
+          );
         }
       }
 
-      // Filter to include ONLY selected & UNPAID fee products
-      let allUnpaidItems: any[] = [];
-      for (const oli of activeOpp.opportunityLineItems) {
-        const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
-        const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
-        const netAmount = itemTotal - itemDiscount;
-
-        const paidByOli = oliPaidMap.get(oli.id) || 0;
-        const paidByName = namePaidMap.get((oli.product?.name || '').toLowerCase()) || 0;
-        const paidAmount = Math.max(paidByOli, paidByName);
-        const balanceDue = Math.max(0, netAmount - paidAmount);
-
-        if (balanceDue > 0) {
-          allUnpaidItems.push({
-            id: oli.id,
-            oliId: oli.id,
-            productId: oli.productId,
-            amount: balanceDue,
-          });
-        }
-      }
-
-      if (billingSummary.previousYearPending > 0) {
-        allUnpaidItems.push({
-          id: 'PREV_YEAR_DUE_CF',
-          oliId: 'PREV_YEAR_DUE_CF',
-          productId: 'PREV_YEAR_DUE_CF',
-          amount: billingSummary.previousYearPending,
-        });
-      }
-
-      let selectedItems = allUnpaidItems;
-      if (selectedItemIds && selectedItemIds.length > 0) {
-        selectedItems = allUnpaidItems.filter(item => selectedItemIds.includes(item.id));
-      }
-
-      if (selectedItems.length === 0) {
-        throw new BadRequestException('This fee item has already been paid.');
-      }
-
-      // Delegate directly to BillingService.createInvoice() to handle full ledger & database persistence for selected items
-      const createdInvoiceId = await this.billingService.createInvoice(
-        opportunityId,
-        studentId,
-        selectedItems.map(item => ({ oliId: item.oliId, productId: item.productId, amount: item.amount })),
+      // Process payment through gateway
+      const totalPayAmount = itemAmounts.reduce((s: number, e: any) => s + e.amount, 0);
+      const txnResult = await this.paymentProcessor.processPayment(
+        totalPayAmount,
         method,
+        invoiceId,
       );
+      if (!txnResult.success) {
+        throw new BadRequestException('Payment gateway transaction rejected.');
+      }
 
-      const createdInvoice = await this.prisma.invoice.findUnique({
-        where: { id: createdInvoiceId },
-        include: { invoiceItems: true }
+      // Build invoice items payload
+      const invoiceItemsData = itemAmounts.map((entry: any) => {
+        const oliInfo = oliMap.get(entry.id);
+        return {
+          name: oliInfo?.name || (entry.id === 'PREV_YEAR_DUE_CF' ? 'Previous Years Carried Forward Dues' : 'Fee Component'),
+          amount: entry.amount,
+          opportunityLineItemId: entry.id !== 'PREV_YEAR_DUE_CF' ? entry.id : null,
+          productId: oliInfo?.productId || null,
+          tenantId: student.tenantId,
+        };
       });
 
-      const txnId = `TXN-${createdInvoiceId.substring(0, 8).toUpperCase()}`;
+      // Create a new Invoice record for this payment session
+      const createdInvoice = await this.prisma.invoice.create({
+        data: {
+          studentId: student.id,
+          tenantId: student.tenantId,
+          opportunityId: activeOpp?.id || null,
+          totalAmount: totalPayAmount,
+          paidAmount: totalPayAmount,
+          remainingBalance: 0,
+          status: PaymentStatus.PAID,
+          paymentMethod: method === 'BANK' ? 'BANK_TRANSFER' : 'UPI',
+          invoiceDate: new Date(),
+          dueDate: activeOpp?.closeDate || new Date(),
+          description: `Partial Fee Payment – ${student.user.name} (${new Date().toLocaleDateString()})`,
+          invoiceItems: { create: invoiceItemsData },
+        },
+        include: { invoiceItems: true },
+      });
 
-      await this.logAction(userId, student.tenantId, 'FEE_PAYMENT', 'Invoice', createdInvoiceId, {
+      // Update opportunity totalPaidAmount
+      if (activeOpp?.id) {
+        const allOppInvoices = await this.prisma.invoice.findMany({
+          where: {
+            opportunityId: activeOpp.id,
+            tenantId: student.tenantId,
+            status: { not: PaymentStatus.VOIDED },
+          },
+        });
+        const newTotalPaid = allOppInvoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+        await this.prisma.opportunity.update({
+          where: { id: activeOpp.id },
+          data: { totalPaidAmount: newTotalPaid },
+        }).catch(err => console.error('Failed to update opportunity totalPaidAmount:', err));
+      }
+
+      // Audit log
+      const txnId = txnResult.transactionId;
+      await this.logAction(userId, student.tenantId, 'FEE_PAYMENT', 'Invoice', createdInvoice.id, {
         studentId,
-        amount: Number(createdInvoice?.totalAmount || 0),
+        amount: totalPayAmount,
         method,
         transactionId: txnId,
-        selectedItemCount: selectedItems.length,
+        selectedItemCount: itemAmounts.length,
+        items: itemAmounts,
       });
 
+      // Notification
       const parent = await this.getParentProfile(userId);
       await this.createNotification(
         parent.userId,
         'Fee Payment Successful',
-        `Payment of ₹${createdInvoice?.totalAmount || 0} received for ${student.user.name}'s selected fee items. Txn: ${txnId}`,
+        `Payment of ₹${totalPayAmount} received for ${student.user.name}'s selected fee items. Txn: ${txnId}`,
       );
 
       return {
         success: true,
-        message: 'Payment processed successfully for selected fee products.',
+        message: `Payment of ₹${totalPayAmount.toLocaleString('en-IN')} processed successfully.`,
         invoice: createdInvoice,
         transactionId: txnId,
       };
     }
 
+    // ── Legacy full-invoice payment path (unchanged) ─────────────────────────
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: invoiceId, studentId },
     });
@@ -945,9 +999,7 @@ export class ParentPortalService {
         },
       });
       const newTotalPaid = oppInvoices.reduce((sum, inv) => {
-        if (inv.id === invoiceId) {
-          return sum + Number(invoice.totalAmount);
-        }
+        if (inv.id === invoiceId) return sum + Number(invoice.totalAmount);
         return sum + Number(inv.paidAmount);
       }, 0);
 

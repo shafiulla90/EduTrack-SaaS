@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParent } from '../ParentContext';
 import { api } from '@/lib/api';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
@@ -18,78 +18,163 @@ import {
   CheckSquare,
   Square,
   Building2,
-  AlertCircle
+  AlertCircle,
+  IndianRupee,
 } from 'lucide-react';
 
+// ─── Helper ────────────────────────────────────────────────────────────────────
+function inr(n: number) {
+  return n.toLocaleString('en-IN');
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 export default function FeesPage() {
   const { selectedChild } = useParent();
   const [feesData, setFeesData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Partial fee product selection state (unchecked by default)
-  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  /**
+   * itemPayAmounts: Map<itemId, customAmount>
+   * An item is "selected" if and only if it has an entry in this map.
+   * The value is the amount the parent wants to pay for that item.
+   */
+  const [itemPayAmounts, setItemPayAmounts] = useState<Map<string, number>>(new Map());
 
-  // Pay modal states
+  /** Per-item validation error messages */
+  const [itemErrors, setItemErrors] = useState<Map<string, string>>(new Map());
+
+  // Pay modal
   const [activeInvoice, setActiveInvoice] = useState<any>(null);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'GPAY' | 'PHONEPE' | 'BANK'>('GPAY');
   const [payLoading, setPayLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // View Receipt Modal state
+  // Receipt viewer
   const [viewingReceipt, setViewingReceipt] = useState<any>(null);
 
-  const fetchFees = async (childId: string) => {
+  // ── Data fetching ─────────────────────────────────────────────────────────
+  const fetchFees = useCallback(async (childId: string) => {
     try {
       setLoading(true);
       const res = await api.get(`/parent-portal/children/${childId}/fees`);
       setFeesData(res.data);
-
-      // Default checkboxes to UNCHECKED by default when the page loads
-      setSelectedItemIds(new Set());
+      setItemPayAmounts(new Map());
+      setItemErrors(new Map());
     } catch (err) {
       console.error('Failed to fetch fees details:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (selectedChild) {
-      fetchFees(selectedChild.id);
-    }
-  }, [selectedChild]);
-
-  // Listen to switcher events
-  useEffect(() => {
-    const handleChildChange = (e: any) => {
-      fetchFees(e.detail);
-    };
-    window.addEventListener('parentChildChanged', handleChildChange);
-    return () => window.removeEventListener('parentChildChanged', handleChildChange);
   }, []);
 
-  const toggleItemSelect = (itemId: string, isSelectable: boolean) => {
-    if (!isSelectable) return; // Block selecting already paid products
-    
-    const next = new Set(selectedItemIds);
-    if (next.has(itemId)) {
-      next.delete(itemId);
+  useEffect(() => {
+    if (selectedChild) fetchFees(selectedChild.id);
+  }, [selectedChild, fetchFees]);
+
+  useEffect(() => {
+    const handleChildChange = (e: any) => fetchFees(e.detail);
+    window.addEventListener('parentChildChanged', handleChildChange);
+    return () => window.removeEventListener('parentChildChanged', handleChildChange);
+  }, [fetchFees]);
+
+  // ── Item selection helpers ────────────────────────────────────────────────
+  const toggleItem = (item: any) => {
+    if (!item.isSelectable) return;
+
+    const next = new Map(itemPayAmounts);
+    const errNext = new Map(itemErrors);
+
+    if (next.has(item.id)) {
+      next.delete(item.id);
+      errNext.delete(item.id);
     } else {
-      next.add(itemId);
+      // Seed with remaining balance
+      next.set(item.id, item.balance ?? item.amount);
     }
-    setSelectedItemIds(next);
+    setItemPayAmounts(next);
+    setItemErrors(errNext);
   };
 
   const handleSelectAll = (items: any[]) => {
-    // Select all selectable (unpaid) items only
-    const selectableIds = items.filter(i => i.isSelectable).map(i => i.id);
-    setSelectedItemIds(new Set(selectableIds));
+    const next = new Map(itemPayAmounts);
+    const errNext = new Map(itemErrors);
+    for (const item of items) {
+      if (item.isSelectable && !next.has(item.id)) {
+        next.set(item.id, item.balance ?? item.amount);
+        errNext.delete(item.id);
+      }
+    }
+    setItemPayAmounts(next);
+    setItemErrors(errNext);
   };
 
   const handleDeselectAll = () => {
-    setSelectedItemIds(new Set());
+    setItemPayAmounts(new Map());
+    setItemErrors(new Map());
   };
 
+  /** Update the editable amount for a specific item with inline validation */
+  const handleAmountChange = (item: any, raw: string) => {
+    const next = new Map(itemPayAmounts);
+    const errNext = new Map(itemErrors);
+    const balance = item.balance ?? item.amount;
+
+    const parsed = parseFloat(raw);
+
+    if (raw === '' || isNaN(parsed)) {
+      errNext.set(item.id, 'Please enter a valid amount.');
+      next.set(item.id, 0);
+    } else if (parsed <= 0) {
+      errNext.set(item.id, 'Amount must be greater than ₹0.');
+      next.set(item.id, parsed);
+    } else if (parsed > balance) {
+      errNext.set(item.id, `Amount cannot exceed the balance of ₹${inr(balance)}.`);
+      next.set(item.id, parsed);
+    } else {
+      errNext.delete(item.id);
+      next.set(item.id, parsed);
+    }
+
+    setItemPayAmounts(next);
+    setItemErrors(errNext);
+  };
+
+  // ── Derived values ────────────────────────────────────────────────────────
+  const invoices = feesData?.invoices || [];
+  const paymentDetails = feesData?.paymentDetails;
+
+  const unpaidInvoices = invoices.filter((inv: any) => inv.remainingBalance > 0);
+  const paidInvoices = invoices.filter((inv: any) => inv.remainingBalance === 0);
+
+  const activeUnpaidInv = unpaidInvoices[0];
+  const allItems: any[] = activeUnpaidInv?.items || [];
+  const selectableItems = allItems.filter((i: any) => i.isSelectable);
+
+  const hasValidationErrors = Array.from(itemErrors.values()).some(e => !!e);
+
+  // Running total from custom amounts (only for valid selected items)
+  const selectedTotal = Array.from(itemPayAmounts.entries()).reduce((sum, [id, amt]) => {
+    if (!itemErrors.has(id) && amt > 0) return sum + amt;
+    return sum;
+  }, 0);
+
+  const selectedItemIds = new Set(itemPayAmounts.keys());
+
+  // Build the list to display in modal
+  const selectedItemsList = allItems.filter(
+    (item: any) => itemPayAmounts.has(item.id) && !itemErrors.get(item.id),
+  );
+
+  const hasBankDetails = paymentDetails && (
+    paymentDetails.bankName ||
+    paymentDetails.bankAccountNo ||
+    paymentDetails.bankIFSC ||
+    paymentDetails.googlePayId ||
+    paymentDetails.phonePeId ||
+    paymentDetails.upiQrId
+  );
+
+  // ── Payment submit ────────────────────────────────────────────────────────
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedChild || !activeInvoice || payLoading) return;
@@ -99,20 +184,26 @@ export default function FeesPage() {
       return;
     }
 
+    if (hasValidationErrors) {
+      setMessage('Please fix the amount errors before proceeding.');
+      return;
+    }
+
+    // Build itemAmounts payload
+    const itemAmounts = Array.from(itemPayAmounts.entries())
+      .filter(([, amt]) => amt > 0)
+      .map(([id, amount]) => ({ id, amount }));
+
     setPayLoading(true);
     setMessage('');
     try {
-      const res = await api.post(`/parent-portal/children/${selectedChild.id}/invoices/${activeInvoice.id}/pay`, {
-        paymentMethod,
-        selectedItemIds: Array.from(selectedItemIds),
-      });
+      const res = await api.post(
+        `/parent-portal/children/${selectedChild.id}/invoices/${activeInvoice.id}/pay`,
+        { paymentMethod, itemAmounts },
+      );
 
-      setMessage(res.data?.message || 'Payment processed successfully! Invoice updated.');
-      
-      // Dispatch real-time update event for School Admin Fee Management synchronization
+      setMessage(res.data?.message || 'Payment processed successfully!');
       dispatchSchoolSetupUpdated();
-
-      // Refresh latest fees and invoice history
       await fetchFees(selectedChild.id);
 
       setTimeout(() => {
@@ -121,7 +212,7 @@ export default function FeesPage() {
       }, 1800);
     } catch (err: any) {
       console.error('Payment processing failed:', err);
-      setMessage(err.response?.data?.message || 'This fee item has already been paid.');
+      setMessage(err.response?.data?.message || 'Payment failed. Please try again.');
     } finally {
       setPayLoading(false);
     }
@@ -131,6 +222,7 @@ export default function FeesPage() {
     window.open(`/dashboard/billing/invoices/${invId}`, '_blank');
   };
 
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (!selectedChild) {
     return (
       <div className="text-slate-500 text-sm text-center py-12">
@@ -147,45 +239,24 @@ export default function FeesPage() {
     );
   }
 
-  const invoices = feesData?.invoices || [];
-  const paymentDetails = feesData?.paymentDetails;
-  
-  // An invoice is unpaid/pending if it has a remaining balance > 0
-  const unpaidInvoices = invoices.filter((inv: any) => inv.remainingBalance > 0);
-  const paidInvoices = invoices.filter((inv: any) => inv.remainingBalance === 0);
-
-  const activeUnpaidInv = unpaidInvoices[0];
-  const items = activeUnpaidInv?.items || [];
-  const selectableItems = items.filter((i: any) => i.isSelectable);
-
-  // Calculate selected total based only on selected unpaid items
-  const selectedItemsList = items.filter((item: any) => selectedItemIds.has(item.id) && item.isSelectable);
-  const selectedTotal = selectedItemsList.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
-
-  const hasBankDetails = paymentDetails && (
-    paymentDetails.bankName ||
-    paymentDetails.bankAccountNo ||
-    paymentDetails.bankIFSC ||
-    paymentDetails.googlePayId ||
-    paymentDetails.phonePeId ||
-    paymentDetails.upiQrId
-  );
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-4xl mx-auto animate-fade-in relative">
       <div>
         <h2 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
           Billing Ledger: <span className="text-[#2E5BFF] font-extrabold">{selectedChild.name}</span>
         </h2>
-        <p className="text-slate-500 text-xs mt-1 font-light">Select individual fee components to make partial or full online payments, view detailed statements, and access past receipts.</p>
+        <p className="text-slate-500 text-xs mt-1 font-light">
+          Select individual fee components to make partial or full online payments, view detailed statements, and access past receipts.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Main Section */}
+
+        {/* ── Main section ──────────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* Unpaid Invoices & Selectable Fee Products */}
+
+          {/* Outstanding Fee Statements */}
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-sm text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -196,7 +267,7 @@ export default function FeesPage() {
               {selectableItems.length > 0 && (
                 <div className="flex items-center gap-2 text-xs">
                   <button
-                    onClick={() => handleSelectAll(items)}
+                    onClick={() => handleSelectAll(allItems)}
                     className="text-[#2E5BFF] hover:underline font-semibold text-[11px]"
                   >
                     Select All
@@ -211,10 +282,10 @@ export default function FeesPage() {
                 </div>
               )}
             </div>
-            
-            {unpaidInvoices.length === 0 || items.length === 0 ? (
+
+            {unpaidInvoices.length === 0 || allItems.length === 0 ? (
               <div className="bg-white border border-[#2E5BFF]/20 p-8 rounded-3xl text-center shadow-sm space-y-2">
-                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto text-emerald-600 text-xl font-bold">
+                <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto text-xl font-bold">
                   🎉
                 </div>
                 <h4 className="text-base font-extrabold text-slate-800">All fee products have been paid successfully!</h4>
@@ -229,85 +300,164 @@ export default function FeesPage() {
                     key={inv.id}
                     className="bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col justify-between hover:border-slate-300 transition-all space-y-4"
                   >
+                    {/* Invoice header */}
                     <div className="flex justify-between items-start gap-4">
                       <div className="min-w-0 flex-1">
                         <span className="px-2.5 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border bg-rose-50 border-rose-100 text-rose-700">
                           {inv.status}
                         </span>
                         <h4 className="text-sm font-bold text-slate-700 mt-2 truncate">{inv.description}</h4>
-                        <p className="text-[10px] text-slate-400 font-light mt-0.5">Due date: {new Date(inv.dueDate).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-slate-400 font-light mt-0.5">
+                          Due date: {new Date(inv.dueDate).toLocaleDateString()}
+                        </p>
                       </div>
-
                       <div className="text-right">
-                        <span className="text-sm font-black text-slate-800">₹{inv.remainingBalance.toLocaleString('en-IN')}</span>
+                        <span className="text-sm font-black text-slate-800">₹{inr(inv.remainingBalance)}</span>
                         <span className="text-[9px] text-slate-400 block font-medium mt-0.5">Outstanding Dues</span>
                       </div>
                     </div>
 
-                    {/* Selectable Particulars Breakdown */}
-                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
+                    {/* Fee items with editable amount inputs */}
+                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
                       <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
                         Select Fee Components to Pay (Unpaid components only):
                       </span>
+
                       {inv.items.map((item: any) => {
-                        const isChecked = selectedItemIds.has(item.id) && item.isSelectable;
                         const isPaid = !item.isSelectable || item.status === 'PAID';
+                        const isPartial = item.status === 'PARTIALLY_PAID';
+                        const isChecked = itemPayAmounts.has(item.id);
+                        const balance = item.balance ?? item.amount;
+                        const paidAmt = item.paidAmount ?? 0;
+                        const customAmt = itemPayAmounts.get(item.id);
+                        const errMsg = itemErrors.get(item.id);
 
                         return (
-                          <div
-                            key={item.id}
-                            onClick={() => toggleItemSelect(item.id, item.isSelectable)}
-                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                              isPaid 
-                                ? 'bg-slate-100/50 border-slate-200/40 text-slate-400 opacity-60 cursor-not-allowed' 
-                                : isChecked
-                                  ? 'bg-blue-50/70 border-blue-200 text-slate-800 cursor-pointer'
-                                  : 'bg-white border-slate-200/60 text-slate-500 hover:border-slate-300 cursor-pointer'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              {isPaid ? (
-                                <CheckSquare className="w-4 h-4 text-emerald-600/80 shrink-0" />
-                              ) : isChecked ? (
-                                <CheckSquare className="w-4 h-4 text-[#2E5BFF] shrink-0" />
-                              ) : (
-                                <Square className="w-4 h-4 text-slate-300 shrink-0" />
-                              )}
-                              <span className="text-xs font-semibold">{item.name}</span>
+                          <div key={item.id} className="space-y-1.5">
+                            {/* Row: checkbox + name + status badge + (for paid items) amount */}
+                            <div
+                              onClick={() => toggleItem(item)}
+                              className={`flex items-start justify-between p-3 rounded-xl border transition-all ${
+                                isPaid
+                                  ? 'bg-slate-50 border-slate-100 cursor-not-allowed opacity-60'
+                                  : isChecked
+                                    ? 'bg-blue-50/70 border-blue-200 cursor-pointer'
+                                    : 'bg-white border-slate-200/60 hover:border-slate-300 cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                {/* Checkbox icon */}
+                                {isPaid ? (
+                                  <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                ) : isChecked ? (
+                                  <CheckSquare className="w-4 h-4 text-[#2E5BFF] shrink-0 mt-0.5" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-slate-300 shrink-0 mt-0.5" />
+                                )}
+
+                                <div className="flex-1 min-w-0">
+                                  <span className={`text-xs font-semibold block ${isPaid ? 'text-slate-400' : 'text-slate-700'}`}>
+                                    {item.name}
+                                  </span>
+
+                                  {/* Amount breakdown for all items */}
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                                    <span className="text-[10px] text-slate-400">
+                                      Original: <strong className="text-slate-600">₹{inr(item.amount)}</strong>
+                                    </span>
+                                    {(paidAmt > 0 || isPaid) && (
+                                      <span className="text-[10px] text-emerald-600">
+                                        Paid: <strong>₹{inr(paidAmt)}</strong>
+                                      </span>
+                                    )}
+                                    {!isPaid && (
+                                      <span className="text-[10px] text-amber-600">
+                                        Balance: <strong>₹{inr(balance)}</strong>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Status badge */}
+                              <div className="shrink-0 ml-2">
+                                {isPaid ? (
+                                  <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-emerald-50 border border-emerald-100 text-emerald-700 whitespace-nowrap">
+                                    ✅ PAID
+                                  </span>
+                                ) : isPartial ? (
+                                  <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-amber-50 border border-amber-100 text-amber-700 whitespace-nowrap">
+                                    ◑ PARTIAL
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-bold text-slate-600">
+                                    ₹{inr(balance)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-2.5">
-                              {isPaid && (
-                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[9px] font-bold">
-                                  ✅ Paid
-                                </span>
-                              )}
-                              <span className={`text-xs font-bold ${isPaid ? 'text-slate-400 line-through' : isChecked ? 'text-[#2E5BFF]' : 'text-slate-600'}`}>
-                                ₹{item.amount.toLocaleString('en-IN')}
-                              </span>
-                            </div>
+                            {/* Editable amount input – shown only when item is checked and unpaid */}
+                            {isChecked && !isPaid && (
+                              <div
+                                className="ml-6 space-y-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  Payment Amount
+                                </label>
+                                <div className={`flex items-center gap-1.5 border rounded-xl px-3 py-2 bg-white transition-all ${
+                                  errMsg
+                                    ? 'border-rose-300 ring-1 ring-rose-200'
+                                    : 'border-[#2E5BFF]/40 ring-1 ring-[#2E5BFF]/20'
+                                }`}>
+                                  <IndianRupee className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={balance}
+                                    step={1}
+                                    value={customAmt !== undefined ? customAmt : balance}
+                                    onChange={(e) => handleAmountChange(item, e.target.value)}
+                                    className="flex-1 text-sm font-bold text-slate-800 outline-none bg-transparent min-w-0"
+                                    placeholder={`Max ₹${inr(balance)}`}
+                                  />
+                                  <span className="text-[10px] text-slate-400 shrink-0">
+                                    / ₹{inr(balance)}
+                                  </span>
+                                </div>
+                                {errMsg && (
+                                  <p className="text-[10px] text-rose-600 font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3 shrink-0" />
+                                    {errMsg}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Running Selection Summary & Action */}
+                    {/* Running total + Pay button */}
                     <div className="border-t border-slate-100 pt-3.5 flex items-center justify-between">
                       <div className="text-xs">
-                        <span className="text-slate-400 font-medium">Selected ({selectedItemIds.size}/{selectableItems.length}): </span>
-                        <strong className="text-slate-800 font-bold">₹{selectedTotal.toLocaleString('en-IN')}</strong>
+                        <span className="text-slate-400 font-medium">
+                          Selected ({selectedItemIds.size}/{selectableItems.length}):{' '}
+                        </span>
+                        <strong className="text-slate-800 font-bold">₹{inr(selectedTotal)}</strong>
                       </div>
 
                       <button
                         onClick={() => setActiveInvoice(inv)}
-                        disabled={selectedItemIds.size === 0}
+                        disabled={selectedItemIds.size === 0 || hasValidationErrors || selectedTotal === 0}
                         className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm flex items-center gap-1.5 ${
-                          selectedItemIds.size > 0
+                          selectedItemIds.size > 0 && !hasValidationErrors && selectedTotal > 0
                             ? 'bg-[#2E5BFF] hover:bg-blue-600 text-white cursor-pointer'
                             : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         }`}
                       >
-                        <span>Pay Selected Fees (₹{selectedTotal.toLocaleString('en-IN')})</span>
+                        <span>Pay Selected Fees (₹{inr(selectedTotal)})</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -317,11 +467,11 @@ export default function FeesPage() {
             )}
           </div>
 
-          {/* Invoice History & Paid Receipts */}
+          {/* Invoice History */}
           <div className="space-y-4 pt-2">
             <h3 className="font-bold text-sm text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <History className="w-4 h-4 text-emerald-600" />
-              Invoice History & Paid Receipts
+              Invoice History &amp; Paid Receipts
             </h3>
 
             {paidInvoices.length === 0 ? (
@@ -345,12 +495,12 @@ export default function FeesPage() {
                         </div>
                         <h4 className="text-xs font-bold text-slate-700 mt-2">{inv.description}</h4>
                         <p className="text-[10px] text-slate-400 font-light mt-0.5">
-                          Paid on {new Date(inv.invoiceDate).toLocaleDateString()} • Txn: <code className="font-mono text-slate-600">{inv.transactionId}</code>
+                          Paid on {new Date(inv.invoiceDate).toLocaleDateString()} • Txn:{' '}
+                          <code className="font-mono text-slate-600">{inv.transactionId}</code>
                         </p>
                       </div>
-
                       <div className="text-right">
-                        <span className="text-sm font-black text-emerald-700">₹{inv.totalAmount.toLocaleString('en-IN')}</span>
+                        <span className="text-sm font-black text-emerald-700">₹{inr(inv.totalAmount)}</span>
                         <span className="text-[10px] text-slate-400 block font-semibold mt-0.5">{inv.paymentMethod}</span>
                       </div>
                     </div>
@@ -386,16 +536,15 @@ export default function FeesPage() {
               </div>
             )}
           </div>
-
         </div>
 
-        {/* Dynamic School Bank & UPI Info Panel */}
+        {/* ── School Bank & UPI panel ───────────────────────────────────── */}
         <div className="space-y-4">
           <h3 className="font-bold text-sm text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Building2 className="w-4 h-4 text-blue-600" />
-            School Bank & UPI
+            School Bank &amp; UPI
           </h3>
-          
+
           <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-5">
             {!hasBankDetails ? (
               <div className="text-center py-6 space-y-2 text-slate-400">
@@ -405,7 +554,6 @@ export default function FeesPage() {
               </div>
             ) : (
               <>
-                {/* Bank Account Section */}
                 {(paymentDetails.bankName || paymentDetails.bankAccountNo) && (
                   <div className="space-y-3.5">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Direct Bank Transfer</span>
@@ -444,7 +592,6 @@ export default function FeesPage() {
                   </div>
                 )}
 
-                {/* UPI Handles Section */}
                 {(paymentDetails.googlePayId || paymentDetails.phonePeId || paymentDetails.upiQrId) && (
                   <div className="border-t border-slate-100 pt-5 space-y-3.5">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">UPI Merchant Handles</span>
@@ -474,20 +621,14 @@ export default function FeesPage() {
             )}
           </div>
         </div>
-
       </div>
 
-      {/* Pay Invoice Checkout Modal */}
+      {/* ── Pay Checkout Modal ────────────────────────────────────────────── */}
       {activeInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-xl p-6 relative animate-scale-up space-y-5">
             <button
-              onClick={() => {
-                if (!payLoading) {
-                  setActiveInvoice(null);
-                  setMessage('');
-                }
-              }}
+              onClick={() => { if (!payLoading) { setActiveInvoice(null); setMessage(''); } }}
               className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -500,32 +641,51 @@ export default function FeesPage() {
 
             {message && (
               <div className={`p-3.5 border rounded-2xl text-xs font-semibold leading-relaxed flex items-center gap-2 ${
-                message.includes('success') 
-                  ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+                message.toLowerCase().includes('success')
+                  ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
                   : 'bg-rose-50 border-rose-100 text-rose-700'
               }`}>
-                {message.includes('success') ? <ShieldCheck className="w-4.5 h-4.5 shrink-0" /> : <HelpCircle className="w-4.5 h-4.5 shrink-0" />}
+                {message.toLowerCase().includes('success')
+                  ? <ShieldCheck className="w-4 h-4 shrink-0" />
+                  : <HelpCircle className="w-4 h-4 shrink-0" />}
                 <span>{message}</span>
               </div>
             )}
 
-            {/* Selected items summary */}
+            {/* Selected items summary with custom amounts */}
             <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-2">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 font-medium">Selected Components ({selectedItemIds.size})</span>
-                <strong className="text-base font-black text-[#2E5BFF]">₹{selectedTotal.toLocaleString('en-IN')}</strong>
+                <span className="text-slate-500 font-medium">Selected Components ({selectedItemsList.length})</span>
+                <strong className="text-base font-black text-[#2E5BFF]">₹{inr(selectedTotal)}</strong>
               </div>
               <div className="text-[11px] text-slate-500 space-y-1 pt-1 border-t border-slate-200/60">
-                {selectedItemsList.map((item: any) => (
-                  <div key={item.id} className="flex justify-between">
-                    <span>• {item.name}</span>
-                    <span>₹{item.amount.toLocaleString('en-IN')}</span>
-                  </div>
-                ))}
+                {selectedItemsList.map((item: any) => {
+                  const amt = itemPayAmounts.get(item.id) ?? 0;
+                  const balance = item.balance ?? item.amount;
+                  const isPartial = amt < balance;
+                  return (
+                    <div key={item.id} className="flex justify-between items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <span>• {item.name}</span>
+                        {isPartial && (
+                          <span className="ml-2 text-[9px] bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded-md font-bold">
+                            PARTIAL
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-semibold">₹{inr(amt)}</span>
+                        {isPartial && (
+                          <span className="block text-[9px] text-slate-400">of ₹{inr(balance)}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Payment Method Selector */}
+            {/* Payment Method */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-700">Select Payment Method</label>
               <div className="grid grid-cols-2 gap-2">
@@ -534,19 +694,19 @@ export default function FeesPage() {
                   { id: 'PHONEPE', label: 'PhonePe UPI', icon: '📱' },
                   { id: 'UPI', label: 'Any UPI App', icon: '⚡' },
                   { id: 'BANK', label: 'Net Banking', icon: '🏦' },
-                ].map(method => (
+                ].map(m => (
                   <button
-                    key={method.id}
+                    key={m.id}
                     type="button"
-                    onClick={() => setPaymentMethod(method.id as any)}
+                    onClick={() => setPaymentMethod(m.id as any)}
                     className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                      paymentMethod === method.id 
-                        ? 'border-[#2E5BFF] bg-blue-50/60 text-[#2E5BFF]' 
+                      paymentMethod === m.id
+                        ? 'border-[#2E5BFF] bg-blue-50/60 text-[#2E5BFF]'
                         : 'border-slate-200 hover:border-slate-300 text-slate-600'
                     }`}
                   >
-                    <span>{method.icon}</span>
-                    <span>{method.label}</span>
+                    <span>{m.icon}</span>
+                    <span>{m.label}</span>
                   </button>
                 ))}
               </div>
@@ -555,7 +715,7 @@ export default function FeesPage() {
             <form onSubmit={handlePaymentSubmit} className="pt-2">
               <button
                 type="submit"
-                disabled={payLoading || selectedItemIds.size === 0}
+                disabled={payLoading || selectedItemIds.size === 0 || hasValidationErrors || selectedTotal === 0}
                 className="w-full py-3.5 rounded-2xl bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {payLoading ? (
@@ -565,7 +725,7 @@ export default function FeesPage() {
                   </>
                 ) : (
                   <>
-                    <span>Confirm & Pay ₹{selectedTotal.toLocaleString('en-IN')}</span>
+                    <span>Confirm &amp; Pay ₹{inr(selectedTotal)}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -575,7 +735,7 @@ export default function FeesPage() {
         </div>
       )}
 
-      {/* View Receipt Details Modal */}
+      {/* ── View Receipt Modal ───────────────────────────────────────────── */}
       {viewingReceipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl shadow-xl p-6 relative animate-scale-up space-y-5">
@@ -604,7 +764,7 @@ export default function FeesPage() {
                 <strong className="text-slate-800">{viewingReceipt.rollNo}</strong>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span className="text-slate-400">Class & Section:</span>
+                <span className="text-slate-400">Class &amp; Section:</span>
                 <strong className="text-slate-800">{viewingReceipt.className} - {viewingReceipt.sectionName}</strong>
               </div>
               <div className="flex justify-between text-slate-600">
@@ -617,18 +777,17 @@ export default function FeesPage() {
               </div>
             </div>
 
-            {/* Paid items breakdown */}
             <div className="space-y-1.5 bg-slate-50 border border-slate-100 p-3 rounded-2xl text-xs">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Fee Particulars Paid</span>
               {viewingReceipt.items.map((item: any) => (
                 <div key={item.id} className="flex justify-between text-slate-600 font-medium">
                   <span>{item.name}</span>
-                  <span>₹{item.amount.toLocaleString('en-IN')}</span>
+                  <span>₹{inr(item.amount)}</span>
                 </div>
               ))}
               <div className="border-t border-slate-200 pt-2 flex justify-between font-black text-sm text-emerald-800">
                 <span>Total Paid:</span>
-                <span>₹{viewingReceipt.totalAmount.toLocaleString('en-IN')}</span>
+                <span>₹{inr(viewingReceipt.totalAmount)}</span>
               </div>
             </div>
 
