@@ -1263,6 +1263,7 @@ export class ParentPortalService {
         adminUser.id,
         `New Complaint Submitted`,
         `Parent ${parent.user.name} submitted a complaint: "${data.title}" (Category: ${data.category || 'General'}).\nComplaintId: ${complaint.id}`,
+        'COMPLAINT_UPDATE',
       ).catch(err => console.error('Failed to notify admin of complaint:', err));
     }
 

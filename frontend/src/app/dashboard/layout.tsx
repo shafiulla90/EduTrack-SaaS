@@ -835,6 +835,106 @@ function parseLeaveRequestMessage(message: string) {
   return { leaveType, fromDate, toDate, reason, leaveRequestId };
 }
 
+function parseComplaintMessage(message: string) {
+  let complaintId = '';
+  let parentName = '';
+  let title = '';
+  let category = '';
+
+  if (!message) return { complaintId, parentName, title, category };
+
+  const idMatch = message.match(/ComplaintId:\s*([a-zA-Z0-9\-]+)/i);
+  if (idMatch) complaintId = idMatch[1].trim();
+
+  const parentMatch = message.match(/Parent\s+(.*?)\s+submitted/i);
+  if (parentMatch) parentName = parentMatch[1].trim();
+
+  const categoryMatch = message.match(/\(Category:\s*(.*?)\)/i);
+  if (categoryMatch) category = categoryMatch[1].trim();
+
+  const titleMatch = message.match(/complaint:\s*["']?(.*?)["']?\s*\(/i) || message.match(/submitted a complaint:\s*["']?(.*?)["']?/i);
+  if (titleMatch) title = titleMatch[1].trim();
+
+  return { complaintId, parentName, title, category };
+}
+
+function NotificationComplaintItem({ notification, details, onRead, onRefresh }: { notification: any, details: any, onRead: () => void, onRefresh: () => void }) {
+  const [reply, setReply] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleAction = async (status: 'IN_PROGRESS' | 'RESOLVED', defaultReply: string) => {
+    if (!details.complaintId) return;
+    setLoading(true);
+    try {
+      await api.patch(`/complaint-box/parent-complaints/${details.complaintId}/status`, {
+        status,
+        adminReply: reply || defaultReply,
+      });
+      await onRead();
+      await onRefresh();
+    } catch (err) {
+      console.error('Failed to update complaint status:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={`p-4 hover:bg-slate-50 transition-colors flex flex-col gap-2 ${!notification.isRead ? 'bg-amber-50/20 font-semibold' : ''}`}>
+      <div className="flex justify-between items-start gap-2">
+        <span className="text-slate-800 font-extrabold text-xs">
+          {notification.title}
+        </span>
+        {!notification.isRead && (
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 mt-1" />
+        )}
+      </div>
+
+      <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1 text-[11px] font-medium text-slate-600">
+        {details.parentName && <div><strong className="text-slate-500 font-bold">Parent:</strong> {details.parentName}</div>}
+        {details.category && <div><strong className="text-slate-500 font-bold">Category:</strong> {details.category}</div>}
+        {details.title && <div><strong className="text-slate-500 font-bold">Concern:</strong> "{details.title}"</div>}
+      </div>
+
+      {!notification.isRead && details.complaintId ? (
+        <div className="space-y-2 mt-1">
+          <input
+            type="text"
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            placeholder="Type positive response to parent..."
+            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-normal text-slate-800 outline-none focus:border-blue-500"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleAction('IN_PROGRESS', 'Acknowledged. We are actively investigating your concern.')}
+              disabled={loading}
+              className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-extrabold cursor-pointer transition-colors shadow-xs"
+            >
+              Acknowledge &amp; Investigate
+            </button>
+            <button
+              onClick={() => handleAction('RESOLVED', 'Thank you for your feedback! The issue has been resolved.')}
+              disabled={loading}
+              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold cursor-pointer transition-colors shadow-xs"
+            >
+              Resolve &amp; Send Feedback
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mt-0.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+          Processed &amp; Archived
+        </div>
+      )}
+      <span className="text-[9px] text-slate-400 font-mono mt-0.5">
+        {new Date(notification.createdAt).toLocaleDateString()}
+      </span>
+    </div>
+  );
+}
+
 function NotificationBell() {
   const { currentUser } = useTenant();
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -991,6 +1091,21 @@ function NotificationBell() {
                         {new Date(n.createdAt).toLocaleDateString()}
                       </span>
                     </div>
+                  );
+                }
+
+                const isComplaintNotification = n.type === 'COMPLAINT_UPDATE' || (n.message && n.message.includes('ComplaintId:')) || (n.title && n.title.toLowerCase().includes('complaint'));
+
+                if (isComplaintNotification) {
+                  const details = parseComplaintMessage(n.message || '');
+                  return (
+                    <NotificationComplaintItem
+                      key={n.id}
+                      notification={n}
+                      details={details}
+                      onRead={() => handleMarkAsRead(n.id)}
+                      onRefresh={fetchNotifications}
+                    />
                   );
                 }
 
