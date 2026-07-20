@@ -473,4 +473,94 @@ export class ComplaintBoxService {
     });
     return { studentId, totalCases: total, complaintCount, praiseCount, resolvedCount };
   }
+
+  /** Returns parent complaints for the tenant (Admin view). */
+  async getParentComplaints(statusFilter?: string) {
+    const tenantId = this.getTenantId();
+    const filter: any = { tenantId };
+    if (statusFilter && statusFilter !== 'All') {
+      filter.status = statusFilter;
+    }
+
+    const complaints = await this.prisma.complaint.findMany({
+      where: filter,
+      include: {
+        submittedBy: { select: { id: true, name: true, email: true, phone: true } },
+        assignedTo: { select: { id: true, name: true } },
+        academicYear: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const complaintIds = complaints.map(c => c.id);
+    const histories = await this.prisma.statusHistory.findMany({
+      where: { entityType: 'COMPLAINT', entityId: { in: complaintIds } },
+      include: { updatedBy: { select: { id: true, name: true, role: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const historyMap = new Map<string, any[]>();
+    for (const h of histories) {
+      if (!historyMap.has(h.entityId)) historyMap.set(h.entityId, []);
+      historyMap.get(h.entityId)!.push(h);
+    }
+
+    return complaints.map(c => ({
+      ...c,
+      statusHistories: historyMap.get(c.id) || [],
+    }));
+  }
+
+  /** Updates status, admin reply, resolution notes for a parent complaint. */
+  async updateParentComplaintStatus(complaintId: string, data: any) {
+    const tenantId = this.getTenantId();
+    const user = (this.request as any).user;
+
+    const existing = await this.prisma.complaint.findUnique({
+      where: { id: complaintId },
+      include: { submittedBy: true }
+    });
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new NotFoundException('Complaint not found');
+    }
+
+    const newStatus = data.status || existing.status;
+    const updated = await this.prisma.complaint.update({
+      where: { id: complaintId },
+      data: {
+        status: newStatus,
+        adminReply: data.adminReply !== undefined ? data.adminReply : existing.adminReply,
+        resolutionNotes: data.resolutionNotes !== undefined ? data.resolutionNotes : existing.resolutionNotes,
+        assignedToId: data.assignedToId !== undefined ? data.assignedToId : existing.assignedToId,
+      },
+    });
+
+    // Create StatusHistory record
+    await this.prisma.statusHistory.create({
+      data: {
+        entityType: 'COMPLAINT',
+        entityId: complaintId,
+        previousStatus: existing.status,
+        currentStatus: newStatus,
+        remarks: data.adminReply || data.resolutionNotes || `Status updated to ${newStatus}`,
+        updatedById: user.id,
+        tenantId,
+      }
+    }).catch(err => console.error('Failed to create status history for complaint:', err));
+
+    // Send real-time notification to Parent
+    if (existing.submittedById) {
+      await this.prisma.notification.create({
+        data: {
+          title: `Complaint Ticket Updated`,
+          message: `Your complaint "${existing.title}" is now ${newStatus}.${data.adminReply ? ' Admin Reply: ' + data.adminReply : ''}`,
+          type: 'COMPLAINT_UPDATE',
+          recipientId: existing.submittedById,
+        }
+      }).catch(err => console.error('Failed to notify parent of complaint update:', err));
+    }
+
+    return updated;
+  }
 }
+

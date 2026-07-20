@@ -95,7 +95,33 @@ interface ComplaintBoxProps {
 
 export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) {
   const { currentUser } = useTenant();
-  const [activeTab, setActiveTab] = useState<'submit' | 'pending' | 'history'>('submit');
+  const [activeTab, setActiveTab] = useState<'submit' | 'pending' | 'history' | 'parent-complaints'>('parent-complaints');
+
+  // Parent complaints states
+  const [parentComplaints, setParentComplaints] = useState<any[]>([]);
+  const [parentFilterStatus, setParentFilterStatus] = useState<string>('All');
+  const [selectedParentComplaint, setSelectedParentComplaint] = useState<any | null>(null);
+  const [parentReplyText, setParentReplyText] = useState<string>('');
+  const [parentNewStatus, setParentNewStatus] = useState<string>('OPEN');
+  const [parentResolutionNotes, setParentResolutionNotes] = useState<string>('');
+  const [isSavingParentComplaint, setIsSavingParentComplaint] = useState<boolean>(false);
+
+  const fetchParentComplaints = async () => {
+    try {
+      const res = await api.get('/complaint-box/parent-complaints', {
+        params: parentFilterStatus !== 'All' ? { status: parentFilterStatus } : {}
+      });
+      setParentComplaints(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch parent complaints:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'parent-complaints') {
+      fetchParentComplaints();
+    }
+  }, [activeTab, parentFilterStatus]);
 
   // Backend configuration states
   const [classOptions, setClassOptions] = useState<ClassSectionOption[]>([]);
@@ -508,6 +534,16 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
         {/* Salesforce SLDS Style Navigation Tabs */}
         <div className="flex border-b border-slate-200 bg-slate-50/50 px-6 overflow-x-auto scrollbar-none">
           <button
+            onClick={() => { setActiveTab('parent-complaints'); fetchParentComplaints(); }}
+            className={`px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'parent-complaints'
+                ? 'border-blue-600 text-blue-600 bg-white font-extrabold'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Parent Complaints &amp; Tickets
+          </button>
+          <button
             onClick={() => setActiveTab('submit')}
             className={`px-6 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'submit'
@@ -525,7 +561,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
                 : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
-            Pending Cases
+            Pending Behavior Cases
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -535,7 +571,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
                 : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
-            Student Ledger & Stats
+            Student Ledger &amp; Stats
           </button>
         </div>
 
@@ -547,6 +583,110 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
             <div className="flex flex-col items-center justify-center p-12 text-center">
               <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
               <p className="text-xs text-slate-500 font-semibold mt-3">Loading records...</p>
+            </div>
+          )}
+
+          {/* TAB 0: PARENT COMPLAINTS & TICKETS MANAGEMENT */}
+          {!isLoading && activeTab === 'parent-complaints' && (
+            <div className="space-y-6">
+              {/* Filter Bar */}
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-wrap gap-4 items-center justify-between shadow-xs">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Filter className="w-4 h-4 text-blue-600" />
+                  <span className="font-bold text-xs uppercase tracking-wider text-slate-700">Parent Grievance Tickets</span>
+                </div>
+
+                <div className="flex flex-wrap gap-2 items-center">
+                  {(['All', 'OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'] as const).map(st => (
+                    <button
+                      key={st}
+                      onClick={() => setParentFilterStatus(st)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        parentFilterStatus === st
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {st === 'All' ? 'All Tickets' : st.replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Complaints Table */}
+              {parentComplaints.length === 0 ? (
+                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-16 text-center text-slate-400">
+                  <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <h3 className="text-base font-bold text-slate-700">No Parent Complaints Registered</h3>
+                  <p className="text-xs text-slate-400 mt-1">Complaints submitted via Parent Portal will appear here in real time.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm bg-white">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-4">Ticket Ref</th>
+                        <th className="px-6 py-4">Submitted By</th>
+                        <th className="px-6 py-4">Category &amp; Title</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">Last Updated</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-150">
+                      {parentComplaints.map(c => {
+                        const st = (c.status || 'OPEN').toUpperCase();
+                        return (
+                          <tr key={c.id} className="hover:bg-slate-50/50 text-[13px] text-slate-700 transition-all">
+                            <td className="px-6 py-4 font-mono text-xs font-bold text-blue-600">
+                              #{c.id.substring(0, 8).toUpperCase()}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="font-bold text-slate-900">{c.submittedBy?.name || 'Parent'}</div>
+                              <div className="text-[11px] text-slate-450 mt-0.5 font-medium">
+                                {c.submittedBy?.email || c.submittedBy?.phone || ''}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 max-w-xs">
+                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-wider mb-1">
+                                {c.category}
+                              </span>
+                              <p className="font-bold text-slate-800 text-xs truncate" title={c.title}>{c.title}</p>
+                              <p className="text-slate-500 text-[11px] truncate mt-0.5" title={c.description}>{c.description}</p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-block text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider border ${
+                                st === 'OPEN' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                st === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                st === 'RESOLVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}>
+                                {c.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                              {new Date(c.updatedAt || c.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                onClick={() => {
+                                  setSelectedParentComplaint(c);
+                                  setParentNewStatus(c.status || 'OPEN');
+                                  setParentReplyText(c.adminReply || '');
+                                  setParentResolutionNotes(c.resolutionNotes || '');
+                                }}
+                                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-all"
+                              >
+                                View &amp; Reply
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -1479,6 +1619,140 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
               >
                 Close View
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PARENT COMPLAINT ACTION MODAL */}
+      {selectedParentComplaint && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[999] p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl space-y-0">
+            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Parent Grievance Ticket</span>
+                <h3 className="text-lg font-black leading-tight mt-0.5">{selectedParentComplaint.title}</h3>
+              </div>
+              <button
+                onClick={() => setSelectedParentComplaint(null)}
+                className="text-slate-400 hover:text-white p-1.5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-150">
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Submitted By</span>
+                  <p className="font-extrabold text-slate-800 mt-0.5">{selectedParentComplaint.submittedBy?.name || 'Parent'}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Category</span>
+                  <p className="font-extrabold text-blue-600 mt-0.5">{selectedParentComplaint.category}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Date Filed</span>
+                  <p className="font-bold text-slate-700 mt-0.5">{new Date(selectedParentComplaint.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] block mb-1">Elaborated Concern</span>
+                <p className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 leading-relaxed whitespace-pre-wrap">
+                  {selectedParentComplaint.description}
+                </p>
+              </div>
+
+              {/* Status & Reply Form */}
+              <div className="border-t border-slate-200 pt-4 space-y-4">
+                <h4 className="font-extrabold text-sm text-slate-900">Update Complaint Status &amp; Admin Reply</h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Status *</label>
+                    <select
+                      value={parentNewStatus}
+                      onChange={(e) => setParentNewStatus(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                    >
+                      <option value="OPEN">OPEN (Registered)</option>
+                      <option value="IN_PROGRESS">IN_PROGRESS (Investigating)</option>
+                      <option value="RESOLVED">RESOLVED (Solution Provided)</option>
+                      <option value="CLOSED">CLOSED (Archived)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Admin Reply / Message to Parent
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={parentReplyText}
+                    onChange={(e) => setParentReplyText(e.target.value)}
+                    placeholder="Enter official reply to the parent..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Audit Trail Timeline */}
+                {selectedParentComplaint.statusHistories && selectedParentComplaint.statusHistories.length > 0 && (
+                  <div className="border-t border-slate-100 pt-3 space-y-2">
+                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] block">Audit Trail History</span>
+                    <div className="space-y-2 max-h-36 overflow-y-auto">
+                      {selectedParentComplaint.statusHistories.map((h: any, i: number) => (
+                        <div key={i} className="flex items-start gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-150">
+                          <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-800 text-[11px]">
+                              Status: <strong className="text-blue-600">{h.currentStatus}</strong> by {h.updatedBy?.name || 'Admin'}
+                            </p>
+                            {h.remarks && <p className="text-slate-500 text-[10px] italic mt-0.5 font-medium">"{h.remarks}"</p>}
+                            <span className="text-[9px] text-slate-400 font-mono block mt-0.5">{new Date(h.createdAt).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 justify-end pt-2 border-t border-slate-150">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedParentComplaint(null)}
+                    className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSavingParentComplaint}
+                    onClick={async () => {
+                      setIsSavingParentComplaint(true);
+                      try {
+                        await api.patch(`/complaint-box/parent-complaints/${selectedParentComplaint.id}/status`, {
+                          status: parentNewStatus,
+                          adminReply: parentReplyText,
+                          resolutionNotes: parentResolutionNotes,
+                        });
+                        setSelectedParentComplaint(null);
+                        await fetchParentComplaints();
+                        showAlert('Complaint ticket updated & parent notified successfully!', 'success');
+                      } catch (err) {
+                        console.error('Failed to update parent complaint:', err);
+                        showAlert('Failed to update complaint ticket.', 'error');
+                      } finally {
+                        setIsSavingParentComplaint(false);
+                      }
+                    }}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingParentComplaint ? 'Saving...' : 'Save & Notify Parent'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

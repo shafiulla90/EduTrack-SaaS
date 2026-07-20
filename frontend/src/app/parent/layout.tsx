@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ParentProvider, useParent } from './ParentContext';
 import { useTenant } from '../providers/TenantContext';
 import { useTheme } from '../providers/ThemeContext';
 import ToastProvider from '@/components/Toast';
-import { clearStoredAuth } from '@/lib/api';
+import { api, clearStoredAuth } from '@/lib/api';
 import {
   Home,
   User,
@@ -184,12 +184,16 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
+          {/* Parent Notification Bell */}
+          <ParentNotificationBell />
+
           {/* Theme Toggle Button */}
           <button
             onClick={toggleTheme}
             className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center border border-slate-200 dark:border-slate-700"
             title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
+
             {theme === 'dark' ? (
               <svg className="w-4 h-4 stroke-current fill-none" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="5" strokeWidth="2"></circle>
@@ -288,6 +292,125 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ParentNotificationBell() {
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get('/communications/user-notifications');
+      setNotifications(res.data || []);
+    } catch {
+      // Fallback
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await api.post(`/communications/${id}/read`);
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+      );
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center border border-slate-200"
+        title="View Notifications"
+      >
+        <Bell className="w-4 h-4 text-slate-600" />
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-[9px] font-extrabold leading-none text-white transform translate-x-1/3 -translate-y-1/3 bg-rose-600 rounded-full shadow-xs">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-20 sm:top-auto sm:mt-2 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden text-slate-800 animate-in fade-in slide-in-from-top-1 max-h-[calc(100vh-90px)] sm:max-h-[80vh]">
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-150 flex justify-between items-center">
+            <span className="font-extrabold text-xs text-slate-700 uppercase tracking-wide">Notifications</span>
+            {unreadCount > 0 && (
+              <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded">
+                {unreadCount} Unread
+              </span>
+            )}
+          </div>
+          
+          <div className="overflow-y-auto divide-y divide-slate-100 max-h-[calc(100vh-160px)] sm:max-h-80">
+            {notifications.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-slate-400 font-medium">
+                No notifications yet.
+              </div>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={async () => {
+                    if (!n.isRead) {
+                      await handleMarkAsRead(n.id);
+                    }
+                    setIsOpen(false);
+                    if (n.type === 'LEAVE_APPROVAL') {
+                      window.location.href = '/parent/leave';
+                    } else if (n.type === 'COMPLAINT_UPDATE') {
+                      window.location.href = '/parent/complaints';
+                    } else {
+                      window.location.href = '/parent/announcements';
+                    }
+                  }}
+                  className={`p-3.5 hover:bg-slate-50 cursor-pointer text-xs transition-colors flex flex-col gap-1 ${
+                    !n.isRead ? 'bg-blue-50/20 font-semibold' : ''
+                  }`}
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <span className={`text-slate-800 font-bold ${!n.isRead ? 'text-blue-700' : ''}`}>
+                      {n.title}
+                    </span>
+                    {!n.isRead && (
+                      <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1" />
+                    )}
+                  </div>
+                  <p className="text-slate-500 font-normal leading-relaxed whitespace-pre-wrap">
+                    {n.message}
+                  </p>
+                  <span className="text-[9px] text-slate-400 mt-1 font-mono">
+                    {new Date(n.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ParentLayout({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
@@ -297,3 +420,4 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
     </ToastProvider>
   );
 }
+

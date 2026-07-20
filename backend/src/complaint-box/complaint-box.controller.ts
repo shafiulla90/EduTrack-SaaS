@@ -78,5 +78,16 @@ export class ComplaintBoxController {
   deleteBehavior(@Param('caseId') caseId: string) {
     return this.complaintBoxService.deleteBehavior(caseId);
   }
+
+  @Get('parent-complaints')
+  getParentComplaints(@Query('status') status?: string) {
+    return this.complaintBoxService.getParentComplaints(status);
+  }
+
+  @Patch('parent-complaints/:id/status')
+  updateParentComplaintStatus(@Param('id') id: string, @Body() data: any) {
+    return this.complaintBoxService.updateParentComplaintStatus(id, data);
+  }
 }
+
 

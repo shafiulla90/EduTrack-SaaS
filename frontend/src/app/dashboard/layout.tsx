@@ -979,7 +979,13 @@ function NotificationBell() {
                         await handleMarkAsRead(n.id);
                       }
                       setIsOpen(false);
-                      window.location.href = '/dashboard/exams/schedule';
+                      if (n.type === 'LEAVE_APPROVAL' || n.title?.toLowerCase().includes('leave')) {
+                        window.location.href = '/dashboard/leave-mgmt';
+                      } else if (n.type === 'COMPLAINT_UPDATE' || n.title?.toLowerCase().includes('complaint')) {
+                        window.location.href = '/dashboard/complaints';
+                      } else {
+                        window.location.href = '/dashboard/announcements-mgmt';
+                      }
                     }}
                     className={`p-3.5 hover:bg-slate-50 cursor-pointer text-xs transition-colors flex flex-col gap-1 ${
                       !n.isRead ? 'bg-blue-50/20 font-semibold' : ''

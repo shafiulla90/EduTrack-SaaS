@@ -1014,68 +1014,162 @@ export class TeacherPortalService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) return [];
 
-    if (user.role === Role.SCHOOL_ADMIN) {
-      return this.prisma.leaveRequest.findMany({
+    let leaves = [];
+    if (user.role === Role.SCHOOL_ADMIN || user.role === Role.SUPER_ADMIN) {
+      leaves = await this.prisma.leaveRequest.findMany({
         where: { tenantId },
         include: {
           teacher: {
             include: {
               user: { select: { id: true, name: true, email: true } }
             }
-          }
+          },
+          student: {
+            include: {
+              user: { select: { id: true, name: true, email: true } },
+              classSection: { include: { class: true, section: true } }
+            }
+          },
+          submittedBy: { select: { id: true, name: true, email: true } },
+          approvedBy: { select: { id: true, name: true, role: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } else {
+      const staff = await this.getStaffProfile(userId, tenantId);
+      const teacherAssignments = await this.prisma.teacherAssignment.findMany({
+        where: { teacherId: staff.id, tenantId },
+        select: { classSectionId: true },
+      });
+      const advisorClasses = await this.prisma.classSection.findMany({
+        where: { teacherId: staff.id, tenantId },
+        select: { id: true },
+      });
+      const assignedSectionIds = Array.from(new Set([
+        ...teacherAssignments.map(a => a.classSectionId),
+        ...advisorClasses.map(c => c.id),
+      ]));
+
+      leaves = await this.prisma.leaveRequest.findMany({
+        where: {
+          tenantId,
+          OR: [
+            { teacherId: staff.id },
+            { classSectionId: { in: assignedSectionIds } },
+          ]
+        },
+        include: {
+          teacher: {
+            include: {
+              user: { select: { id: true, name: true, email: true } }
+            }
+          },
+          student: {
+            include: {
+              user: { select: { id: true, name: true, email: true } },
+              classSection: { include: { class: true, section: true } }
+            }
+          },
+          submittedBy: { select: { id: true, name: true, email: true } },
+          approvedBy: { select: { id: true, name: true, role: true } },
         },
         orderBy: { createdAt: 'desc' },
       });
     }
 
-    const staff = await this.getStaffProfile(userId, tenantId);
-    return this.prisma.leaveRequest.findMany({
-      where: { tenantId, teacherId: staff.id },
-      orderBy: { createdAt: 'desc' },
+    const leaveIds = leaves.map(l => l.id);
+    const histories = await this.prisma.statusHistory.findMany({
+      where: { entityType: 'LEAVE_REQUEST', entityId: { in: leaveIds } },
+      include: { updatedBy: { select: { id: true, name: true, role: true } } },
+      orderBy: { createdAt: 'asc' },
     });
+
+    const historyMap = new Map<string, any[]>();
+    for (const h of histories) {
+      if (!historyMap.has(h.entityId)) historyMap.set(h.entityId, []);
+      historyMap.get(h.entityId)!.push(h);
+    }
+
+    return leaves.map(l => ({
+      ...l,
+      statusHistories: historyMap.get(l.id) || [],
+    }));
   }
 
   async updateLeaveStatus(userId: string, tenantId: string, id: string, data: any) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || user.role !== Role.SCHOOL_ADMIN) {
-      throw new UnauthorizedException('Only administrators can approve/reject leaves.');
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
     }
 
     const leave = await this.prisma.leaveRequest.findFirst({
       where: { id, tenantId },
       include: {
-        teacher: {
-          include: { user: true }
-        }
+        teacher: { include: { user: true } },
+        student: { include: { user: true } },
+        submittedBy: true,
       }
     });
     if (!leave) {
       throw new NotFoundException('Leave request not found.');
     }
 
-    const updatedStatus = data.status; // e.g. 'Approved', 'Rejected'
-    const statusUpper = updatedStatus.toUpperCase();
+    if (user.role !== Role.SCHOOL_ADMIN && user.role !== Role.SUPER_ADMIN && user.role !== Role.TEACHER) {
+      throw new UnauthorizedException('Insufficient permissions to change leave status.');
+    }
+
+    const rawStatus = data.status || 'Approved';
+    const statusUpper = rawStatus.toUpperCase();
+    const finalStatus = statusUpper === 'APPROVED' ? 'APPROVED' : statusUpper === 'REJECTED' ? 'REJECTED' : rawStatus;
 
     const updated = await this.prisma.leaveRequest.update({
       where: { id },
       data: {
-        status: updatedStatus,
+        status: finalStatus,
         comments: data.comments || null,
         approver: user.name,
-        approvedDate: statusUpper === 'APPROVED' ? new Date() : null,
-        rejectedDate: statusUpper === 'REJECTED' ? new Date() : null,
+        approvedById: user.id,
+        approvedRole: user.role === Role.SCHOOL_ADMIN ? 'ADMIN' : 'TEACHER',
+        approvedDate: finalStatus === 'APPROVED' ? new Date() : null,
+        rejectedDate: finalStatus === 'REJECTED' ? new Date() : null,
       }
     });
 
-    // Notify the teacher about their leave request status update
-    await this.prisma.notification.create({
+    // Create status history record
+    await this.prisma.statusHistory.create({
       data: {
-        title: `Leave Request ${updatedStatus}`,
-        message: `Your ${leave.leaveType} leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${updatedStatus.toLowerCase()}.${data.comments ? ' Remarks: ' + data.comments : ''}`,
-        type: 'IN_APP',
-        recipientId: leave.teacher.userId,
+        entityType: 'LEAVE_REQUEST',
+        entityId: id,
+        previousStatus: leave.status,
+        currentStatus: finalStatus,
+        remarks: data.comments || null,
+        updatedById: user.id,
+        tenantId,
       }
-    });
+    }).catch(err => console.error('Failed to create status history:', err));
+
+    // Send Real-time Notification
+    if (leave.applicantType === 'STUDENT' && leave.submittedById) {
+      const displayStatus = finalStatus === 'APPROVED' ? 'Approved' : finalStatus === 'REJECTED' ? 'Rejected' : finalStatus;
+      await this.prisma.notification.create({
+        data: {
+          title: `Student Leave Application ${displayStatus}`,
+          message: `The leave application for student ${leave.student?.user?.name || ''} (${leave.startDate ? leave.startDate.toISOString().split('T')[0] : ''} to ${leave.endDate ? leave.endDate.toISOString().split('T')[0] : ''}) has been ${displayStatus.toLowerCase()}.${data.comments ? ' Remarks: ' + data.comments : ''}`,
+          type: 'LEAVE_APPROVAL',
+          recipientId: leave.submittedById,
+        }
+      }).catch(err => console.error('Failed to send leave notification to parent:', err));
+    } else if (leave.teacher?.userId) {
+      const displayStatus = finalStatus === 'APPROVED' ? 'Approved' : finalStatus === 'REJECTED' ? 'Rejected' : finalStatus;
+      await this.prisma.notification.create({
+        data: {
+          title: `Leave Request ${displayStatus}`,
+          message: `Your ${leave.leaveType} leave request from ${leave.startDate ? leave.startDate.toISOString().split('T')[0] : ''} to ${leave.endDate ? leave.endDate.toISOString().split('T')[0] : ''} has been ${displayStatus.toLowerCase()}.${data.comments ? ' Remarks: ' + data.comments : ''}`,
+          type: 'IN_APP',
+          recipientId: leave.teacher.userId,
+        }
+      }).catch(err => console.error('Failed to send leave notification to teacher:', err));
+    }
 
     // Mark all leave approval notifications for this leave request as completed (read)
     await this.prisma.notification.updateMany({
@@ -1086,7 +1180,7 @@ export class TeacherPortalService {
       data: {
         isRead: true
       }
-    });
+    }).catch(() => {});
 
     await this.logAction(userId, tenantId, 'RECORD_UPDATE', 'LeaveRequest', id, data);
     return updated;

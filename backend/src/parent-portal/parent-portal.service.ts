@@ -1176,10 +1176,32 @@ export class ParentPortalService {
 
   async getComplaints(userId: string) {
     const parent = await this.getParentProfile(userId);
-    return this.prisma.complaint.findMany({
+    const complaints = await this.prisma.complaint.findMany({
       where: { submittedById: parent.userId },
+      include: {
+        assignedTo: { select: { id: true, name: true } },
+        submittedBy: { select: { id: true, name: true, email: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
+
+    const complaintIds = complaints.map(c => c.id);
+    const histories = await this.prisma.statusHistory.findMany({
+      where: { entityType: 'COMPLAINT', entityId: { in: complaintIds } },
+      include: { updatedBy: { select: { id: true, name: true, role: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const historyMap = new Map<string, any[]>();
+    for (const h of histories) {
+      if (!historyMap.has(h.entityId)) historyMap.set(h.entityId, []);
+      historyMap.get(h.entityId)!.push(h);
+    }
+
+    return complaints.map(c => ({
+      ...c,
+      statusHistories: historyMap.get(c.id) || [],
+    }));
   }
 
   async submitComplaint(userId: string, tenantId: string, data: any) {
@@ -1204,18 +1226,45 @@ export class ParentPortalService {
       },
     });
 
-    // Write audit trail log
+    // Create initial audit trail history
+    await this.prisma.statusHistory.create({
+      data: {
+        entityType: 'COMPLAINT',
+        entityId: complaint.id,
+        previousStatus: null,
+        currentStatus: 'OPEN',
+        remarks: 'Ticket Opened',
+        updatedById: parent.userId,
+        tenantId,
+      },
+    }).catch(err => console.error('Failed to create status history:', err));
+
+    // Audit log
     await this.logAction(userId, tenantId, 'SUBMIT_COMPLAINT', 'Complaint', complaint.id, {
       title: data.title,
       category: data.category,
     });
 
-    // Send confirmation notification
+    // Confirmation notification to Parent
     await this.createNotification(
       parent.userId,
       'Complaint Ticket Opened',
-      `Your complaint "${data.title}" has been registered. Reference: ${complaint.id.substring(0, 8).toUpperCase()}`,
+      `Your complaint "${data.title}" has been registered. Ref: ${complaint.id.substring(0, 8).toUpperCase()}`,
     );
+
+    // Real-time Notification to all School Admins for tenant
+    const schoolAdmins = await this.prisma.user.findMany({
+      where: { tenantId, role: Role.SCHOOL_ADMIN, isActive: true },
+      select: { id: true },
+    });
+
+    for (const adminUser of schoolAdmins) {
+      await this.createNotification(
+        adminUser.id,
+        `New Complaint Submitted`,
+        `Parent ${parent.user.name} submitted a complaint: "${data.title}" (Category: ${data.category || 'General'}).\nComplaintId: ${complaint.id}`,
+      ).catch(err => console.error('Failed to notify admin of complaint:', err));
+    }
 
     return complaint;
   }
@@ -1240,6 +1289,7 @@ export class ParentPortalService {
 
   async submitLeaveRequest(userId: string, studentId: string, data: any) {
     const student = await this.verifyOwnership(userId, studentId);
+    const parent = await this.getParentProfile(userId);
 
     // Upload medical certificate attachment if present
     let attachmentUrl = null;
@@ -1252,10 +1302,39 @@ export class ParentPortalService {
       );
     }
 
-    // Persistent storage of leave request in ActivityLog
-    const requestId = `LEV-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    // Persistent storage of leave request in LeaveRequest DB table
+    const leave = await this.prisma.leaveRequest.create({
+      data: {
+        applicantType: 'STUDENT',
+        studentId: student.id,
+        classSectionId: student.classSectionId,
+        submittedById: parent.userId,
+        leaveType: data.leaveType || 'Medical',
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        reason: data.reason,
+        attachment: attachmentUrl,
+        status: 'PENDING',
+        tenantId: student.tenantId,
+      },
+    });
+
+    // Create initial audit trail history
+    await this.prisma.statusHistory.create({
+      data: {
+        entityType: 'LEAVE_REQUEST',
+        entityId: leave.id,
+        previousStatus: null,
+        currentStatus: 'PENDING',
+        remarks: 'Submitted by Parent',
+        updatedById: parent.userId,
+        tenantId: student.tenantId,
+      },
+    }).catch(err => console.error('Failed to create status history for leave:', err));
+
+    // Audit log
     await this.logAction(userId, student.tenantId, 'SUBMIT_LEAVE', 'Student', studentId, {
-      requestId,
+      leaveId: leave.id,
       leaveType: data.leaveType,
       startDate: data.startDate,
       endDate: data.endDate,
@@ -1264,50 +1343,98 @@ export class ParentPortalService {
       status: 'PENDING',
     });
 
-    // Create notifications for both parent and student
-    const parent = await this.getParentProfile(userId);
+    // Confirmation notification to Parent
     await this.createNotification(
       parent.userId,
       'Leave Application Received',
       `Leave request submitted for ${student.user.name} from ${data.startDate} to ${data.endDate}.`,
     );
 
+    // Real-time Notification to School Admins
+    const schoolAdmins = await this.prisma.user.findMany({
+      where: { tenantId: student.tenantId, role: Role.SCHOOL_ADMIN, isActive: true },
+      select: { id: true },
+    });
+
+    for (const adminUser of schoolAdmins) {
+      await this.createNotification(
+        adminUser.id,
+        `New Leave Application: ${student.user.name}`,
+        `New Leave Application submitted by Parent for Student ${student.user.name}.\nType: ${data.leaveType}\nFrom: ${data.startDate}\nTo: ${data.endDate}\nReason: ${data.reason}\nLeaveRequestId: ${leave.id}`,
+      ).catch(err => console.error('Failed to notify admin of leave:', err));
+    }
+
+    // Real-time Notification to Class Teacher (if assigned)
+    if (student.classSectionId) {
+      const classSec = await this.prisma.classSection.findUnique({
+        where: { id: student.classSectionId },
+        include: { teacher: { select: { userId: true } } },
+      });
+      if (classSec?.teacher?.userId) {
+        await this.createNotification(
+          classSec.teacher.userId,
+          `Student Leave Application: ${student.user.name}`,
+          `Leave Application submitted for Student ${student.user.name}.\nType: ${data.leaveType}\nFrom: ${data.startDate}\nTo: ${data.endDate}\nReason: ${data.reason}\nLeaveRequestId: ${leave.id}`,
+        ).catch(err => console.error('Failed to notify teacher of leave:', err));
+      }
+    }
+
     return {
       success: true,
       message: 'Leave application submitted successfully.',
-      requestId,
+      requestId: leave.id,
       attachmentUrl,
+      leave,
     };
   }
 
   async getLeavesHistory(userId: string, studentId: string) {
     const student = await this.verifyOwnership(userId, studentId);
+    const parent = await this.getParentProfile(userId);
 
-    // Retrieve persistent leave requests logged in audit logs
-    const logs = await this.prisma.activityLog.findMany({
+    // Query LeaveRequest DB records for this student or submitted by parent
+    const leaves = await this.prisma.leaveRequest.findMany({
       where: {
-        userId,
         tenantId: student.tenantId,
-        action: 'SUBMIT_LEAVE',
+        OR: [
+          { studentId: student.id },
+          { submittedById: parent.userId },
+        ],
+      },
+      include: {
+        approvedBy: { select: { id: true, name: true, role: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return logs.map(log => {
-      try {
-        const details = JSON.parse(log.details || '{}');
-        return {
-          id: details.requestId || log.id,
-          leaveType: details.leaveType,
-          startDate: details.startDate,
-          endDate: details.endDate,
-          reason: details.reason,
-          status: details.status || 'PENDING',
-          attachmentUrl: details.attachmentUrl,
-        };
-      } catch {
-        return null;
-      }
-    }).filter(Boolean);
+    const leaveIds = leaves.map(l => l.id);
+    const histories = await this.prisma.statusHistory.findMany({
+      where: { entityType: 'LEAVE_REQUEST', entityId: { in: leaveIds } },
+      include: { updatedBy: { select: { id: true, name: true, role: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const historyMap = new Map<string, any[]>();
+    for (const h of histories) {
+      if (!historyMap.has(h.entityId)) historyMap.set(h.entityId, []);
+      historyMap.get(h.entityId)!.push(h);
+    }
+
+    return leaves.map(l => ({
+      id: l.id,
+      leaveType: l.leaveType,
+      startDate: l.startDate ? l.startDate.toISOString().split('T')[0] : '',
+      endDate: l.endDate ? l.endDate.toISOString().split('T')[0] : '',
+      reason: l.reason,
+      status: l.status,
+      attachmentUrl: l.attachment,
+      comments: l.comments,
+      approvedBy: l.approvedBy ? l.approvedBy.name : l.approver,
+      approvedRole: l.approvedRole || (l.approvedBy ? (l.approvedBy.role === Role.SCHOOL_ADMIN ? 'Admin' : 'Teacher') : null),
+      approvedDate: l.approvedDate ? l.approvedDate.toISOString().split('T')[0] : (l.rejectedDate ? l.rejectedDate.toISOString().split('T')[0] : null),
+      createdAt: l.createdAt,
+      updatedAt: l.updatedAt,
+      statusHistories: historyMap.get(l.id) || [],
+    }));
   }
 }

@@ -142,6 +142,7 @@ model Tenant {
   examConfigs     ExamConfig[]
   homeworks       Homework[]
   leaveRequests   LeaveRequest[]
+  statusHistories StatusHistory[]
   announcements   Announcement[]
 
   createdAt DateTime @default(now())
@@ -166,10 +167,14 @@ model User {
   parentProfile  ParentProfile?
 
   complaints            Complaint[]
+  assignedComplaints    Complaint[]              @relation("AssignedComplaints")
+  submittedLeaves       LeaveRequest[]           @relation("SubmittedLeaves")
+  approvedLeaves        LeaveRequest[]           @relation("ApprovedLeaves")
+  statusHistories       StatusHistory[]
   activityLogs          ActivityLog[]
   bookIssues            BookIssue[]
   notifications         Notification[]
-  createdCommunications Communication[] @relation("CreatedCommunications")
+  createdCommunications Communication[]          @relation("CreatedCommunications")
 
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
@@ -244,6 +249,7 @@ model StudentProfile {
   examMarks     ExamMark[]
   invoices      Invoice[]
   opportunities Opportunity[]
+  leaveRequests LeaveRequest[]
 
   // New relation for BehaviorCase
   behaviorCases BehaviorCase[]
@@ -323,6 +329,7 @@ model ClassSection {
   periods            Period[]
   exams              Exam[]
   complaints         Complaint[]
+  leaveRequests      LeaveRequest[]
   homeworks          Homework[]
   announcements      Announcement[]
   examSchedules      ExamSchedule[]
@@ -581,11 +588,17 @@ model Complaint {
   id          String @id @default(uuid())
   title       String
   description String @db.Text
-  status      String @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED
+  status      String @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
   category    String
 
   submittedById String
   submittedBy   User   @relation(fields: [submittedById], references: [id], onDelete: Cascade)
+
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedComplaints", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  adminReply      String? @db.Text
+  resolutionNotes String? @db.Text
 
   academicYearId String
   academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
@@ -878,19 +891,30 @@ model Homework {
 }
 
 model LeaveRequest {
-  id           String       @id @default(uuid())
-  teacherId    String
-  teacher      StaffProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  leaveType    String // Casual, Medical, Emergency, Half Day, Maternity, Paternity
-  startDate    DateTime     @db.Date
-  endDate      DateTime     @db.Date
-  reason       String       @db.Text
-  status       String       @default("PENDING") // PENDING, APPROVED, REJECTED
-  attachment   String?
-  approver     String?
-  comments     String?      @db.Text
-  approvedDate DateTime?
-  rejectedDate DateTime?
+  id           String          @id @default(uuid())
+  teacherId    String?
+  teacher      StaffProfile?   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  studentId    String?
+  student      StudentProfile? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classSectionId String?
+  classSection   ClassSection?   @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  submittedById  String?
+  submittedBy    User?           @relation("SubmittedLeaves", fields: [submittedById], references: [id], onDelete: SetNull)
+
+  applicantType String        @default("STAFF") // STAFF, STUDENT
+  leaveType     String        // Casual, Medical, Emergency, Half Day, Maternity, Paternity
+  startDate     DateTime      @db.Date
+  endDate       DateTime      @db.Date
+  reason        String        @db.Text
+  status        String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  attachment    String?
+  approver      String?
+  approvedById  String?
+  approvedBy    User?         @relation("ApprovedLeaves", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedRole  String?       // ADMIN, TEACHER
+  comments      String?       @db.Text
+  approvedDate  DateTime?
+  rejectedDate  DateTime?
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -900,7 +924,26 @@ model LeaveRequest {
 
   @@index([tenantId])
   @@index([teacherId])
+  @@index([studentId])
+  @@index([classSectionId])
   @@index([startDate])
+}
+
+model StatusHistory {
+  id             String   @id @default(uuid())
+  entityType     String   // LEAVE_REQUEST, COMPLAINT
+  entityId       String
+  previousStatus String?
+  currentStatus  String
+  remarks        String?  @db.Text
+  updatedById    String
+  updatedBy      User     @relation(fields: [updatedById], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
 }
 
 model Announcement {
