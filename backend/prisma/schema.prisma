@@ -14,6 +14,7 @@ enum Role {
   STUDENT
   PARENT
   STAFF
+  DRIVER
 }
 
 enum AttendanceStatus {
@@ -145,6 +146,11 @@ model Tenant {
   statusHistories StatusHistory[]
   announcements   Announcement[]
 
+  buses      Bus[]
+  busRoutes  BusRoute[]
+  busTrips   BusTrip[]
+  busGpsLogs BusGpsLog[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -198,6 +204,21 @@ model StaffProfile {
   qualification  String?
   subjectsTaught String[]
 
+  // Non-Teaching & Driver specific fields
+  staffCategory    String?   @default("TEACHING") // TEACHING, NON_TEACHING
+  staffRole        String?   // Driver, Accountant, Librarian, Security, Peon, Clerk
+  licenseNumber    String?
+  licenseExpiry    DateTime?
+  experienceYears  Int?
+  bloodGroup       String?
+  aadhaarNo        String?
+  whatsappNumber   String?
+  address          String?
+  emergencyContact String?
+
+  assignedBus      Bus?      @relation("AssignedDriver")
+  busTrips         BusTrip[]
+
   classSections      ClassSection[] // Classes where they are the class teacher (Advisor)
   teacherAssignments TeacherAssignment[]
   attendanceSessions AttendanceSession[]
@@ -244,6 +265,11 @@ model StudentProfile {
 
   classSectionId String?
   classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+
+  busId     String?
+  bus       Bus?     @relation(fields: [busId], references: [id], onDelete: SetNull)
+  busStopId String?
+  busStop   BusStop? @relation(fields: [busStopId], references: [id], onDelete: SetNull)
 
   attendances   Attendance[]
   examMarks     ExamMark[]
@@ -1087,3 +1113,134 @@ model ParentStudent {
 
   @@unique([parentId, studentId])
 }
+
+model Bus {
+  id             String   @id @default(uuid())
+  busNumber      String   // e.g. "BUS-01" / "MH-12-FE-4321"
+  registrationNo String   // e.g. "MH-12-FE-4321"
+  vehicleModel   String?  // e.g. "Tata Starbus 40-Seater"
+  capacity       Int      @default(40)
+  busPhotoUrl    String?
+  pickupTime     String?  // e.g. "07:30 AM"
+  dropTime       String?  // e.g. "02:30 PM"
+  status         String   @default("ACTIVE") // ACTIVE, INACTIVE, MAINTENANCE
+  dutyStatus     String   @default("OFF_DUTY") // OFF_DUTY, STARTING_ROUTE, EN_ROUTE, REACHED_STOP, SCHOOL_REACHED, ROUTE_COMPLETED
+
+  driverId String?       @unique
+  driver   StaffProfile? @relation("AssignedDriver", fields: [driverId], references: [id], onDelete: SetNull)
+
+  routeId String?
+  route   BusRoute?    @relation(fields: [routeId], references: [id], onDelete: SetNull)
+
+  currentLat     Float?
+  currentLng     Float?
+  currentSpeed   Float?
+  currentHeading Float?
+  lastGpsUpdate  DateTime?
+  batteryLevel   Int?
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  students StudentProfile[]
+  gpsLogs  BusGpsLog[]
+  trips    BusTrip[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model BusRoute {
+  id          String   @id @default(uuid())
+  routeName   String   // e.g. "Route A - Kharadi to Viman Nagar"
+  startPoint  String?
+  endPoint    String?
+  description String?
+
+  buses Bus[]
+  stops BusStop[]
+  trips BusTrip[]
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model BusStop {
+  id            String  @id @default(uuid())
+  stopName      String  // e.g. "Kharadi Bypass Stop"
+  sequenceOrder Int     @default(1)
+  pickupTime    String?
+  dropTime      String?
+  lat           Float   @default(0.0)
+  lng           Float   @default(0.0)
+
+  routeId String
+  route   BusRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  students StudentProfile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([routeId])
+}
+
+model BusTrip {
+  id               String    @id @default(uuid())
+  busId            String
+  bus              Bus       @relation(fields: [busId], references: [id], onDelete: Cascade)
+  driverId         String?
+  driver           StaffProfile? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  routeId          String?
+  route            BusRoute? @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  tripType         String    @default("PICKUP") // PICKUP, DROP
+  startTime        DateTime  @default(now())
+  endTime          DateTime?
+  status           String    @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, CANCELLED
+  totalDistanceKm  Float     @default(0)
+  avgSpeedKmh      Float     @default(0)
+  maxSpeedKmh      Float     @default(0)
+  arrivalTimestamp DateTime?
+
+  gpsLogs BusGpsLog[]
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([busId])
+}
+
+model BusGpsLog {
+  id           String   @id @default(uuid())
+  busId        String
+  bus          Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+  tripId       String?
+  trip         BusTrip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  driverId     String?
+  latitude     Float
+  longitude    Float
+  speed        Float?
+  heading      Float?
+  dutyStatus   String?
+  batteryLevel Int?
+
+  recordedAt DateTime @default(now())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([busId])
+  @@index([tripId])
+}
+

@@ -250,6 +250,18 @@ export default function DashboardLayout({
           ),
         },
         {
+          name: 'Transport Tracking',
+          href: '/dashboard/transport',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="1" y="3" width="22" height="13" rx="2" ry="2"></rect>
+              <line x1="16" y1="8" x2="20" y2="8"></line>
+              <circle cx="5.5" cy="18.5" r="2.5"></circle>
+              <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
+          ),
+        },
+        {
           name: 'School Setup',
           href: '/dashboard/settings',
           svg: (

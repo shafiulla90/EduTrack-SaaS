@@ -1,180 +1,230 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useParent } from '../ParentContext';
 import { api } from '@/lib/api';
-import { Bus, Phone, MapPin, Clock, Info, Loader2 } from 'lucide-react';
 
-export default function TransportPage() {
+// Dynamically import Leaflet Map to avoid SSR hydration issues
+const LiveBusMap = dynamic(() => import('@/components/LiveBusMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[400px] w-full bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 font-medium text-xs animate-pulse">
+      Loading Live Interactive Bus Map...
+    </div>
+  ),
+});
+
+export default function ParentTransportPage() {
   const { selectedChild } = useParent();
-  const [transport, setTransport] = useState<any>(null);
+  const [transportData, setTransportData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [simulatedEta, setSimulatedEta] = useState(8);
-  const [simulatedCoords, setSimulatedCoords] = useState({ lat: 18.5529, lng: 73.9312 });
+  const [error, setError] = useState('');
 
-  const fetchTransport = async (childId: string) => {
+  const fetchTransportData = async () => {
+    if (!selectedChild?.id) return;
     try {
-      setLoading(true);
-      const res = await api.get(`/parent-portal/children/${childId}/transport`);
-      setTransport(res.data);
-      if (res.data?.liveGPS) {
-        setSimulatedEta(res.data.liveGPS.etaMinutes);
-        setSimulatedCoords({ lat: res.data.liveGPS.latitude, lng: res.data.liveGPS.longitude });
-      }
-    } catch (err) {
-      console.error('Failed to fetch transport:', err);
+      const res = await api.get(`/transport/parent-portal/children/${selectedChild.id}`);
+      setTransportData(res.data);
+      setError('');
+    } catch (err: any) {
+      console.error('Failed to fetch transport data:', err);
+      setError('Failed to load real-time transport data.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (selectedChild) {
-      fetchTransport(selectedChild.id);
-    }
-  }, [selectedChild]);
-
-  // Listen to switcher events
-  useEffect(() => {
-    const handleChildChange = (e: any) => {
-      fetchTransport(e.detail);
-    };
-    window.addEventListener('parentChildChanged', handleChildChange);
-    return () => window.removeEventListener('parentChildChanged', handleChildChange);
-  }, []);
-
-  // Simulate active movement of school bus every 6 seconds
-  useEffect(() => {
-    if (!transport) return;
-    const interval = setInterval(() => {
-      setSimulatedEta(prev => {
-        if (prev <= 1) return 10; // reset loop
-        return prev - 1;
-      });
-      setSimulatedCoords(prev => ({
-        lat: prev.lat + (Math.random() - 0.5) * 0.001,
-        lng: prev.lng + (Math.random() - 0.5) * 0.001,
-      }));
-    }, 6000);
-
+    fetchTransportData();
+    const interval = setInterval(fetchTransportData, 5000); // 5s live polling
     return () => clearInterval(interval);
-  }, [transport]);
-
-  if (!selectedChild) {
-    return (
-      <div className="text-slate-500 text-sm text-center py-12">
-        Please select a child to track transport.
-      </div>
-    );
-  }
+  }, [selectedChild?.id]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[300px]">
-        <div className="w-8 h-8 border-4 border-t-[#2E5BFF] border-r-[#2E5BFF] border-b-transparent border-l-transparent rounded-full animate-spin"></div>
+      <div className="p-8 max-w-6xl mx-auto space-y-6 animate-pulse">
+        <div className="h-8 bg-slate-200 rounded-lg w-1/3" />
+        <div className="h-64 bg-slate-200 rounded-2xl w-full" />
       </div>
     );
   }
 
+  if (!transportData?.hasBusAssigned) {
+    return (
+      <div className="p-8 max-w-4xl mx-auto">
+        <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-3xl mx-auto font-black">
+            🚌
+          </div>
+          <h2 className="text-xl font-black text-slate-900">No Bus Allocated</h2>
+          <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
+            {selectedChild?.name || 'Student'} is currently not assigned to any active school transport bus route. Please contact the school administration to assign a bus and pickup stop.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const { bus, driver, route, assignedStop, telemetry } = transportData;
+  const isOnline = bus?.isOnline;
+
+  const busLocations = [
+    {
+      id: bus.id,
+      busNumber: bus.busNumber,
+      registrationNo: bus.registrationNo,
+      driverName: driver?.name,
+      status: bus.status,
+      dutyStatus: bus.dutyStatus,
+      lat: bus.currentLat || 18.5204,
+      lng: bus.currentLng || 73.8567,
+      speed: bus.currentSpeed || 0,
+      isOnline,
+    },
+  ];
+
+  const stops = route?.stops ? route.stops.map((s: any) => ({ name: s.stopName, lat: s.lat, lng: s.lng })) : [];
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto animate-fade-in relative">
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-          Live Transport GPS: <span className="text-[#2E5BFF] font-extrabold">{selectedChild.name}</span>
-        </h2>
-        <p className="text-slate-500 text-xs mt-1 font-light">Monitor school bus pickup/drop timings and track real-time locations.</p>
+    <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6">
+      {/* Top Title Banner */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <span>🚌</span> Live Transport GPS: {transportData.studentName}
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Real-time school bus location, speed telemetry, dynamic ETA, and driver details.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-150">
+          <span className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`} />
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            {isOnline ? 'GPS Live' : 'GPS Offline'}
+          </span>
+        </div>
       </div>
 
+      {/* Main Grid: Bus Details + Live Telemetry & Map */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Driver/Route details */}
-        <div className="space-y-6">
-          <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
-            <h3 className="font-bold text-sm text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
-              <Bus className="w-4.5 h-4.5 text-[#2E5BFF]" />
-              Bus Details
-            </h3>
-            
-            <div className="space-y-3 text-xs text-slate-650">
-              <div>
-                <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Bus Number</span>
-                <strong className="text-slate-700 text-sm">{transport?.busNumber}</strong>
+        {/* Left Column: Bus & Driver Details */}
+        <div className="space-y-6 lg:col-span-1">
+          {/* Bus Info Card */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <h2 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+              <span>🚍</span> Bus Details
+            </h2>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-400 font-medium">Bus Number</span>
+                <strong className="text-slate-900 font-bold">{bus.busNumber}</strong>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Assigned Route</span>
-                <strong className="text-slate-700">{transport?.route}</strong>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-400 font-medium">Registration</span>
+                <strong className="text-slate-900 font-bold">{bus.registrationNo}</strong>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Pickup Scheduled</span>
-                  <strong className="text-slate-700">{transport?.pickupTime}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Drop Scheduled</span>
-                  <strong className="text-slate-700">{transport?.dropTime}</strong>
-                </div>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-400 font-medium">Assigned Route</span>
+                <strong className="text-blue-600 font-bold">{route?.routeName || 'Standard Route'}</strong>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-400 font-medium">Pickup Stop</span>
+                <strong className="text-slate-900 font-bold">{assignedStop?.stopName || 'Default Stop'}</strong>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400 font-medium">Scheduled Pickup / Drop</span>
+                <strong className="text-slate-900 font-mono">{bus.pickupTime} / {bus.dropTime}</strong>
               </div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
-            <h3 className="font-bold text-sm text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
-              <Phone className="w-4.5 h-4.5 text-emerald-600" />
-              Driver Profile
-            </h3>
-            
-            <div className="flex justify-between items-center gap-4">
-              <div>
-                <h4 className="text-xs font-bold text-slate-700">{transport?.driverName}</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Primary Driver Contact</p>
+          {/* Driver Profile Card */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <h2 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+              <span>👤</span> Driver Profile
+            </h2>
+
+            {driver ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 font-black flex items-center justify-center text-lg shadow-inner">
+                    {driver.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900">{driver.name}</h3>
+                    <p className="text-[11px] text-slate-400 font-medium">License: {driver.licenseNumber}</p>
+                  </div>
+                </div>
+
+                <a
+                  href={`tel:${driver.phone}`}
+                  className="w-full py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-2xl font-extrabold text-xs flex items-center justify-center gap-2 border border-blue-200 transition-colors cursor-pointer"
+                >
+                  📞 Call Driver ({driver.phone})
+                </a>
               </div>
-              <a
-                href={`tel:${transport?.driverPhone}`}
-                className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-[#2E5BFF] transition-all cursor-pointer flex items-center gap-1.5 font-semibold text-xs animate-pulse"
-              >
-                <Phone className="w-4 h-4" />
-                Call
-              </a>
-            </div>
+            ) : (
+              <p className="text-xs text-slate-400">No driver assigned to this bus.</p>
+            )}
           </div>
         </div>
 
-        {/* Live GPS Map Area */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-[360px] lg:h-auto relative overflow-hidden">
-          {/* Mock Map Background Grids */}
-          <div className="absolute inset-0 bg-slate-100/50 opacity-40 select-none pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)', backgroundSize: '16px 16px' }} />
-          
-          <div className="z-10 bg-white/95 border border-slate-200 rounded-2xl p-4 flex justify-between items-center text-xs gap-4 shadow-sm relative">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-rose-500 animate-bounce" />
-              <div>
-                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Live Status</span>
-                <strong className="text-slate-700">En route to destination stop</strong>
-              </div>
+        {/* Right Column: Dynamic Telemetry Cards & Live Leaflet Map */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Live Telemetry Banner */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">LIVE STATUS</span>
+              <strong className="text-xs font-black text-blue-600 mt-1 block uppercase">
+                {bus.dutyStatus || 'OFF_DUTY'}
+              </strong>
             </div>
-            <div className="text-right">
-              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Estimated ETA</span>
-              <strong className="text-[#2E5BFF] font-black text-sm">{simulatedEta} mins away</strong>
+
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">ESTIMATED ETA</span>
+              <strong className="text-sm font-black text-emerald-600 mt-1 block">
+                {isOnline ? `${telemetry.etaMinutes} Mins Away` : 'Standby'}
+              </strong>
+            </div>
+
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">SPEED</span>
+              <strong className="text-sm font-black text-slate-900 mt-1 block">
+                {bus.currentSpeed || 0} km/h
+              </strong>
+            </div>
+
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">NEXT STOP</span>
+              <strong className="text-xs font-black text-slate-800 mt-1 block truncate">
+                {telemetry.nextStop}
+              </strong>
             </div>
           </div>
 
-          {/* Visual GPS Plot */}
-          <div className="z-10 flex-1 flex items-center justify-center p-6 relative">
-            <div className="w-40 h-40 rounded-full border border-blue-500/10 flex items-center justify-center relative bg-blue-500/5 animate-pulse">
-              <div className="w-24 h-24 rounded-full border border-blue-500/20 flex items-center justify-center relative">
-                <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-[#2E5BFF]">
-                  <Bus className="w-4.5 h-4.5 animate-bounce" />
-                </div>
-              </div>
+          {/* Leaflet Interactive Moving Map */}
+          <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex justify-between items-center px-2">
+              <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <span>🗺️</span> Real-Time GPS Route Map
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                Auto-updates every 5s • Last ping: {bus.lastGpsUpdate ? new Date(bus.lastGpsUpdate).toLocaleTimeString() : 'N/A'}
+              </span>
             </div>
-          </div>
 
-          <div className="z-10 bg-slate-50 border border-slate-200 rounded-xl p-3 text-[10px] text-slate-500 leading-normal flex items-center gap-2 select-none relative">
-            <Info className="w-4 h-4 text-slate-400 shrink-0" />
-            <span>Simulating active GPS broadcast. Coordinates: Lat {simulatedCoords.lat.toFixed(4)}, Lng {simulatedCoords.lng.toFixed(4)}.</span>
+            <LiveBusMap
+              buses={busLocations}
+              height="420px"
+              zoom={14}
+              center={[bus.currentLat || 18.5204, bus.currentLng || 73.8567]}
+              stops={stops}
+            />
           </div>
         </div>
-
       </div>
     </div>
   );
