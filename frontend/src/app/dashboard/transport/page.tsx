@@ -41,6 +41,18 @@ export default function SchoolAdminTransportPage() {
     status: 'ACTIVE',
   });
 
+  const [showEditBusModal, setShowEditBusModal] = useState(false);
+  const [editingBusId, setEditingBusId] = useState<string | null>(null);
+  const [editBusForm, setEditBusForm] = useState({
+    busNumber: '',
+    registrationNo: '',
+    vehicleModel: '',
+    capacity: 40,
+    driverId: '',
+    routeId: '',
+    status: 'ACTIVE',
+  });
+
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [driverForm, setDriverForm] = useState({
     name: '',
@@ -124,6 +136,43 @@ export default function SchoolAdminTransportPage() {
       await fetchAllData();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to create bus');
+    }
+  };
+
+  const openEditBusModal = (bus: any) => {
+    setEditingBusId(bus.id);
+    setEditBusForm({
+      busNumber: bus.busNumber || '',
+      registrationNo: bus.registrationNo || '',
+      vehicleModel: bus.vehicleModel || '',
+      capacity: bus.capacity || 40,
+      driverId: bus.driverId || '',
+      routeId: bus.routeId || '',
+      status: bus.status || 'ACTIVE',
+    });
+    setShowEditBusModal(true);
+  };
+
+  const handleUpdateBus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBusId) return;
+    try {
+      await api.patch(`/transport/buses/${editingBusId}`, editBusForm);
+      setShowEditBusModal(false);
+      setEditingBusId(null);
+      await fetchAllData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update bus');
+    }
+  };
+
+  const handleDeleteBus = async (busId: string, busNumber: string) => {
+    if (!confirm(`Are you sure you want to delete bus ${busNumber}?`)) return;
+    try {
+      await api.delete(`/transport/buses/${busId}`);
+      await fetchAllData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete bus');
     }
   };
 
@@ -391,12 +440,13 @@ export default function SchoolAdminTransportPage() {
                   <th className="p-3">Assigned Route</th>
                   <th className="p-3">Duty Status</th>
                   <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                 {buses.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       No buses created yet. Click "+ Add Bus" above.
                     </td>
                   </tr>
@@ -417,6 +467,20 @@ export default function SchoolAdminTransportPage() {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${b.status === 'ACTIVE' ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800'}`}>
                           {b.status}
                         </span>
+                      </td>
+                      <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                        <button
+                          onClick={() => openEditBusModal(b)}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold rounded-lg text-[11px] transition-colors cursor-pointer"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBus(b.id, b.busNumber)}
+                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold rounded-lg text-[11px] transition-colors cursor-pointer"
+                        >
+                          🗑️ Delete
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -940,6 +1004,130 @@ export default function SchoolAdminTransportPage() {
                 <button
                   type="button"
                   onClick={() => setShowEditDriverModal(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT BUS */}
+      {showEditBusModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h2 className="text-base font-black text-slate-900">✏️ Edit Bus Details</h2>
+              <button
+                onClick={() => setShowEditBusModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleUpdateBus} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Bus Number (e.g. BUS-01)</label>
+                <input
+                  type="text"
+                  required
+                  value={editBusForm.busNumber}
+                  onChange={(e) => setEditBusForm({ ...editBusForm, busNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Registration Number (e.g. MH-12-FE-4321)</label>
+                <input
+                  type="text"
+                  required
+                  value={editBusForm.registrationNo}
+                  onChange={(e) => setEditBusForm({ ...editBusForm, registrationNo: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Vehicle Model</label>
+                <input
+                  type="text"
+                  value={editBusForm.vehicleModel}
+                  onChange={(e) => setEditBusForm({ ...editBusForm, vehicleModel: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                  placeholder="e.g. Standard School Bus"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">Seating Capacity</label>
+                  <input
+                    type="number"
+                    required
+                    value={editBusForm.capacity}
+                    onChange={(e) => setEditBusForm({ ...editBusForm, capacity: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700">Bus Status</label>
+                  <select
+                    value={editBusForm.status}
+                    onChange={(e) => setEditBusForm({ ...editBusForm, status: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                  >
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="MAINTENANCE">MAINTENANCE</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Assigned Driver</label>
+                <select
+                  value={editBusForm.driverId}
+                  onChange={(e) => setEditBusForm({ ...editBusForm, driverId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                >
+                  <option value="">Unassigned</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.user?.name} ({d.employeeId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Assigned Route</label>
+                <select
+                  value={editBusForm.routeId}
+                  onChange={(e) => setEditBusForm({ ...editBusForm, routeId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                >
+                  <option value="">Unassigned</option>
+                  {routes.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.routeName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditBusModal(false)}
                   className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
                 >
                   Cancel
