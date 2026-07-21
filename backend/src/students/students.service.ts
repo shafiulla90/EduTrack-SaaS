@@ -266,31 +266,279 @@ export class StudentsService implements OnModuleInit {
     });
   }
 
-  async searchStudents(searchTerm?: string, classId?: string, sectionId?: string, page = 1, limit = 10000) {
-    const tenantId = this.getTenantId();
-    const skip = (page - 1) * limit;
+  async getStudentsBillingInfoBatch(studentIds: string[], tenantId: string, academicYearId?: string) {
+    if (studentIds.length === 0) return {};
 
-    const students = await this.prisma.studentProfile.findMany({
+    // 1. Fetch all opportunities for all matching students
+    const allOpps = await this.prisma.opportunity.findMany({
       where: {
-        user: {
-          tenantId,
-          isActive: true,
-          ...(searchTerm ? {
-            OR: [
-              { name: { contains: searchTerm, mode: 'insensitive' } },
-              { email: { contains: searchTerm, mode: 'insensitive' } },
-              { phone: { contains: searchTerm, mode: 'insensitive' } },
-            ]
-          } : {})
-        },
-        ...(classId || sectionId ? {
-          classSection: {
-            classId: classId || undefined,
-            sectionId: sectionId || undefined,
-          }
-        } : {})
+        studentId: { in: studentIds },
+        tenantId,
       },
       include: {
+        academicYear: true,
+        opportunityLineItems: {
+          include: { product: true }
+        },
+        invoices: {
+          where: {
+            tenantId,
+            status: { not: 'VOIDED' }
+          },
+          include: { invoiceItems: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // 2. Fetch all standalone/orphan invoices for these students
+    const allOrphanInvoices = await this.prisma.invoice.findMany({
+      where: {
+        studentId: { in: studentIds },
+        tenantId,
+        opportunityId: null,
+        status: { in: ['UNPAID', 'PARTIALLY_PAID'] }
+      }
+    });
+
+    // Map to group opportunities by studentId
+    const oppsByStudent = new Map<string, typeof allOpps>();
+    for (const opp of allOpps) {
+      if (!oppsByStudent.has(opp.studentId)) {
+        oppsByStudent.set(opp.studentId, []);
+      }
+      oppsByStudent.get(opp.studentId).push(opp);
+    }
+
+    // Map to group orphan invoices by studentId
+    const orphansByStudent = new Map<string, typeof allOrphanInvoices>();
+    for (const inv of allOrphanInvoices) {
+      if (!orphansByStudent.has(inv.studentId)) {
+        orphansByStudent.set(inv.studentId, []);
+      }
+      orphansByStudent.get(inv.studentId).push(inv);
+    }
+
+    const billingMap: Record<string, any> = {};
+    const activeProductsCache = new Map<string, any[]>();
+    const getActiveProductsCached = async (classId: string, ayId?: string) => {
+      const cacheKey = `${classId}-${ayId || 'default'}`;
+      if (activeProductsCache.has(cacheKey)) {
+        return activeProductsCache.get(cacheKey);
+      }
+      const products = await this.billingService.getActiveProducts(classId, ayId);
+      activeProductsCache.set(cacheKey, products);
+      return products;
+    };
+
+    for (const studentId of studentIds) {
+      const studentOpps = oppsByStudent.get(studentId) || [];
+      const studentOrphans = orphansByStudent.get(studentId) || [];
+
+      // Find open/active opportunity
+      let openOpp: any = null;
+      if (academicYearId) {
+        openOpp = studentOpps.find(opp => opp.academicYearId === academicYearId);
+      } else {
+        openOpp = studentOpps.find(opp => !['Closed Won', 'Closed Lost'].includes(opp.stageName));
+      }
+
+      // Fallback to the latest opportunity overall if not found
+      if (!openOpp) {
+        openOpp = studentOpps[0] || null; // studentOpps is already ordered by createdAt desc
+      }
+
+      let totalFee = 0;
+      let totalPaid = 0;
+
+      if (openOpp) {
+        totalFee = openOpp.opportunityLineItems.reduce((sum, oli) => {
+          const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+          const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+          return sum + (itemTotal - itemDiscount);
+        }, 0);
+
+        totalPaid = openOpp.invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+
+        // Fallback: If no line items, compute from class pricebook
+        if (totalFee === 0 && openOpp.classId) {
+          const pricebookProducts = await getActiveProductsCached(
+            openOpp.classId,
+            openOpp.academicYearId || undefined,
+          );
+          totalFee = pricebookProducts.reduce((sum, p) => sum + p.unitPrice, 0);
+        }
+      }
+
+      // Determine currentYearStart
+      let currentYearStart = new Date(0);
+      if (academicYearId) {
+        const cy = openOpp?.academicYearId === academicYearId ? openOpp.academicYear : allOpps.find(opp => opp.academicYearId === academicYearId)?.academicYear;
+        if (cy) {
+          currentYearStart = cy.startDate;
+        } else {
+          const academicYearRecord = await this.prisma.academicYear.findUnique({
+            where: { id: academicYearId }
+          });
+          if (academicYearRecord) {
+            currentYearStart = academicYearRecord.startDate;
+          }
+        }
+      } else if (openOpp && openOpp.academicYear) {
+        currentYearStart = openOpp.academicYear.startDate;
+      }
+
+      // Previous opportunities (lt currentYearStart)
+      const prevOpps = studentOpps.filter(opp => opp.academicYear && new Date(opp.academicYear.startDate) < currentYearStart);
+
+      const prevYearDuesMap = new Map<string, number>();
+      for (const opp of prevOpps) {
+        const yearName = opp.academicYear?.name || 'Previous Years';
+        const oppFee = opp.opportunityLineItems.reduce((sum, oli) => {
+          const itemTotal = Number(oli.unitPrice) * Number(oli.quantity);
+          const itemDiscount = (itemTotal * Number(oli.discount)) / 100;
+          return sum + (itemTotal - itemDiscount);
+        }, 0);
+        const oppPaid = opp.invoices.reduce((sum, inv) => sum + Number(inv.paidAmount), 0);
+        const balance = Math.max(0, oppFee - oppPaid);
+        if (balance > 0) {
+          prevYearDuesMap.set(yearName, (prevYearDuesMap.get(yearName) || 0) + balance);
+        }
+      }
+
+      // Standalone invoices before currentYearStart
+      const prevOrphanInvoices = studentOrphans.filter(inv => new Date(inv.invoiceDate) < currentYearStart);
+      for (const inv of prevOrphanInvoices) {
+        const yearName = 'Previous Years';
+        const balance = Number(inv.remainingBalance);
+        if (balance > 0) {
+          prevYearDuesMap.set(yearName, (prevYearDuesMap.get(yearName) || 0) + balance);
+        }
+      }
+
+      const previousYears = Array.from(prevYearDuesMap.entries()).map(([academicYearName, outstandingBalance]) => ({
+        academicYearName,
+        outstandingBalance
+      }));
+
+      const totalPreviousYearDue = previousYears.reduce((sum, item) => sum + item.outstandingBalance, 0);
+      const currentYearPending = Math.max(0, totalFee - totalPaid);
+      const grandTotalBalanceDue = currentYearPending + totalPreviousYearDue;
+      const totalFees = totalPaid + grandTotalBalanceDue;
+
+      const pendingPercentage = totalFees > 0
+        ? Math.round((grandTotalBalanceDue / totalFees) * 100)
+        : 0;
+
+      const paidPercentage = totalFees > 0
+        ? Math.round((totalPaid / totalFees) * 100)
+        : 100;
+
+      const financialStatus = grandTotalBalanceDue > 0
+        ? `Pending Due (${pendingPercentage}%)`
+        : 'Fully Paid (100%)';
+
+      const feeSummary = {
+        currentYear: {
+          feeProductsAmount: totalFee,
+          paidAmount: totalPaid,
+          pendingAmount: currentYearPending
+        },
+        previousYears,
+        overall: {
+          totalCurrentYearDue: currentYearPending,
+          totalPreviousYearDue,
+          grandTotalBalanceDue
+        }
+      };
+
+      billingMap[studentId] = {
+        totalFees,
+        paidAmount: totalPaid,
+        currentYearPending,
+        previousYearPending: totalPreviousYearDue,
+        totalPendingBalance: grandTotalBalanceDue,
+        pendingPercentage,
+        paidPercentage,
+        financialStatus,
+        totalPaidAmount: totalPaid,
+        feeSummary
+      };
+    }
+
+    return billingMap;
+  }
+
+  async searchStudents(
+    searchTerm?: string,
+    classId?: string,
+    sectionId?: string,
+    academicYearId?: string,
+    page?: number,
+    limit?: number,
+  ) {
+    const tenantId = this.getTenantId();
+
+    const where: any = {
+      tenantId,
+      user: {
+        isActive: true
+      },
+      ...(searchTerm ? {
+        OR: [
+          { rollNo: { contains: searchTerm, mode: 'insensitive' } },
+          {
+            user: {
+              OR: [
+                { name: { contains: searchTerm, mode: 'insensitive' } },
+                { email: { contains: searchTerm, mode: 'insensitive' } },
+                { phone: { contains: searchTerm, mode: 'insensitive' } },
+              ]
+            }
+          }
+        ]
+      } : {}),
+      ...(classId || sectionId ? {
+        classSection: {
+          classId: classId || undefined,
+          sectionId: sectionId || undefined,
+        }
+      } : {})
+    };
+
+    if (academicYearId) {
+      if (where.classSection) {
+        where.classSection.class = {
+          academicYearId
+        };
+      } else {
+        where.classSection = {
+          class: {
+            academicYearId
+          }
+        };
+      }
+    }
+
+    const isPaginated = page !== undefined && limit !== undefined;
+    const skip = isPaginated ? (page - 1) * limit : undefined;
+    const take = isPaginated ? limit : undefined;
+
+    const total = isPaginated
+      ? await this.prisma.studentProfile.count({ where })
+      : 0;
+
+    const students = await this.prisma.studentProfile.findMany({
+      where,
+      select: {
+        id: true,
+        rollNo: true,
+        fatherName: true,
+        motherName: true,
+        aadharNo: true,
+        profilePhotoUrl: true,
+        classSectionId: true,
+        tenantId: true,
         user: {
           select: {
             id: true,
@@ -300,22 +548,23 @@ export class StudentsService implements OnModuleInit {
           }
         },
         classSection: {
-          include: {
-            class: true,
-            section: true,
-          }
-        },
-        invoices: {
-          where: { tenantId },
-          select: { id: true, remainingBalance: true, paidAmount: true, opportunityId: true, status: true }
-        },
-        opportunities: {
-          where: {
-            tenantId,
-            stageName: { notIn: ['Closed Won', 'Closed Lost'] }
-          },
-          include: {
-            opportunityLineItems: true
+          select: {
+            id: true,
+            classId: true,
+            sectionId: true,
+            class: {
+              select: {
+                id: true,
+                name: true,
+                academicYearId: true,
+              }
+            },
+            section: {
+              select: {
+                id: true,
+                name: true,
+              }
+            }
           }
         }
       },
@@ -325,11 +574,22 @@ export class StudentsService implements OnModuleInit {
         }
       },
       skip,
-      take: limit,
+      take,
     });
 
-    return Promise.all(students.map(async s => {
-      const billingInfo = await this.billingService.getStudentById(s.id);
+    const studentIds = students.map(s => s.id);
+    const billingMap = await this.getStudentsBillingInfoBatch(studentIds, tenantId, academicYearId);
+
+    const data = students.map(s => {
+      const billingInfo = billingMap[s.id] || {
+        paidAmount: 0,
+        balanceDue: 0,
+        totalFees: 0,
+        pendingPercentage: 0,
+        paidPercentage: 100,
+        financialStatus: 'Fully Paid (100%)',
+        feeSummary: null
+      };
 
       return {
         ...s,
@@ -341,7 +601,19 @@ export class StudentsService implements OnModuleInit {
         financialStatus: billingInfo.financialStatus,
         feeSummary: billingInfo.feeSummary
       };
-    }));
+    });
+
+    if (isPaginated) {
+      return {
+        data,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      };
+    }
+
+    return data;
   }
 
   async getStudentDetails(studentId: string, academicYearId?: string) {

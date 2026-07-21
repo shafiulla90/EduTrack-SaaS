@@ -187,6 +187,8 @@ model User {
   CommunicationRecipient CommunicationRecipient[]
 
   @@index([tenantId])
+  @@index([name])
+  @@index([phone])
 }
 
 model StaffProfile {
@@ -283,6 +285,8 @@ model StudentProfile {
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([classSectionId])
+  @@index([rollNo])
 }
 
 model AcademicYear {
@@ -363,6 +367,8 @@ model ClassSection {
   @@unique([classId, sectionId])
   @@index([tenantId])
   @@index([teacherId])
+  @@index([classId])
+  @@index([sectionId])
 }
 
 model Subject {

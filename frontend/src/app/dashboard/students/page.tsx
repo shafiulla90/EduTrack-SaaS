@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Search, ArrowLeft, Plus, X, Phone, Mail, Award, Receipt, 
   CheckCircle, AlertTriangle, ChevronDown, ChevronUp, User, 
@@ -12,6 +12,7 @@ import EditStudentModal from '@/components/EditStudentModal';
 import { useSchoolSetupUpdate } from '@/lib/events';
 import { useToast } from '@/components/Toast';
 import StudentAvatar from '@/components/StudentAvatar';
+import axios from 'axios';
 
 interface Student {
   id: string;
@@ -34,9 +35,12 @@ interface Student {
   profilePhotoUrl?: string | null;
 }
 
+let cacheFilterOptions: { academicYears: any[]; classes: any[]; sections: any[] } | null = null;
+
 export default function StudentsDirectory() {
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
+  const [searchVal, setSearchVal] = useState('');
   const [selectedClass, setSelectedClass] = useState('All');
   const [selectedSection, setSelectedSection] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
@@ -45,7 +49,7 @@ export default function StudentsDirectory() {
   const [sections, setSections] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
-const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     show: boolean;
     studentIds: string[];
@@ -61,6 +65,14 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   });
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // Pagination States
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleToggleSelect = (id: string) => {
     setSelectedIds(prev =>
@@ -83,11 +95,12 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
       // Reset filters and checkboxes
       setSearch('');
+      setSearchVal('');
       setSelectedClass('All');
       setSelectedSection('All');
       setSelectedYear('All');
 
-      loadStudents();
+      loadStudents(1);
     } catch (err: any) {
       console.error('Error deleting student:', err);
       showToast(err.response?.data?.message || 'Failed to delete student.', 'error');
@@ -104,12 +117,23 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [appliedDiscountPercent, setAppliedDiscountPercent] = useState<number>(0);
 
   const loadFilterOptions = async () => {
+    if (cacheFilterOptions) {
+      setAcademicYears(cacheFilterOptions.academicYears);
+      setClasses(cacheFilterOptions.classes);
+      setSections(cacheFilterOptions.sections);
+      return;
+    }
     try {
       const [ayRes, classRes, secRes] = await Promise.all([
         api.get('/academics/academic-years'),
         api.get('/academics/classes'),
         api.get('/academics/sections')
       ]);
+      cacheFilterOptions = {
+        academicYears: ayRes.data,
+        classes: classRes.data,
+        sections: secRes.data
+      };
       setAcademicYears(ayRes.data);
       setClasses(classRes.data);
       setSections(secRes.data);
@@ -118,11 +142,35 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
     }
   };
 
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async (pageNumber = 1) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setLoading(true);
-      const res = await api.get('/students');
-      setStudents(res.data.map((s: any) => {
+
+      const classId = selectedClass === 'All' ? undefined : classes.find(c => c.name === selectedClass)?.id;
+      const sectionId = selectedSection === 'All' ? undefined : sections.find(s => s.name === selectedSection)?.id;
+      const academicYearId = selectedYear === 'All' || !selectedYear ? undefined : selectedYear;
+
+      const res = await api.get('/students', {
+        params: {
+          page: pageNumber,
+          limit,
+          search: search || undefined,
+          classId,
+          sectionId,
+          academicYearId
+        },
+        signal: controller.signal
+      });
+
+      const { data, total: serverTotal, totalPages: serverTotalPages } = res.data;
+
+      setStudents(data.map((s: any) => {
         const paid = s.paidAmount !== undefined ? Number(s.paidAmount) : (s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.paidAmount), 0) || 0);
         const due = s.balanceDue !== undefined ? Number(s.balanceDue) : (s.invoices?.reduce((sum: number, inv: any) => sum + Number(inv.remainingBalance), 0) || 0);
         return {
@@ -146,38 +194,51 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
           profilePhotoUrl: s.profilePhotoUrl || null,
         };
       }));
-    } catch (err) {
+
+      setTotal(serverTotal);
+      setTotalPages(serverTotalPages);
+      setPage(pageNumber);
+    } catch (err: any) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError' || axios.isCancel?.(err)) {
+        return;
+      }
       console.error('Failed to load students:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, selectedClass, selectedSection, selectedYear, classes, sections, limit]);
 
   useEffect(() => {
     loadFilterOptions();
-    loadStudents();
   }, []);
+
+  // 300ms Search Debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearch(searchVal);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchVal]);
+
+  // Reset page to 1 when filters or search change
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedClass, selectedSection, selectedYear]);
+
+  // Load students when page or filters change
+  useEffect(() => {
+    loadStudents(page);
+  }, [page, search, selectedClass, selectedSection, selectedYear, loadStudents]);
 
   useEffect(() => {
     setSelectedIds([]);
   }, [search, selectedClass, selectedSection, selectedYear]);
 
-  useSchoolSetupUpdate(loadStudents);
+  useSchoolSetupUpdate(() => loadStudents(1));
 
   const filteredStudents = useMemo(() => {
-    return students.filter((student) => {
-      const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase()) || 
-                            student.rollNo.toLowerCase().includes(search.toLowerCase()) ||
-                            student.phone.includes(search) ||
-                            student.email.toLowerCase().includes(search.toLowerCase());
-      
-      const matchesClass = selectedClass === 'All' || student.class === selectedClass;
-      const matchesSection = selectedSection === 'All' || student.section === selectedSection;
-      const matchesYear = selectedYear === 'All' || !selectedYear || student.academicYearId === selectedYear;
-
-      return matchesSearch && matchesClass && matchesSection && matchesYear;
-    });
-  }, [students, search, selectedClass, selectedSection, selectedYear]);
+    return students;
+  }, [students]);
 
   const isAllSelected = useMemo(() => {
     return filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.includes(s.id));
@@ -446,10 +507,10 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
               </p>
             </div>
             <div className="text-slate-500 text-[12px] font-bold bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs">
-              Total Records Staged: <span className="text-[#2E5BFF] font-extrabold">{students.length}</span>
+              Total Records Staged: <span className="text-[#2E5BFF] font-extrabold">{total}</span>
             </div>
           </div>
-
+ 
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="md:col-span-2 relative flex items-center bg-white border border-slate-200 rounded-xl px-4 py-2 focus-within:border-[#2E5BFF] focus-within:ring-2 focus-within:ring-blue-100 transition-all">
@@ -457,8 +518,8 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
               <input
                 type="text"
                 placeholder="Search by Name, roll number, or phone..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchVal}
+                onChange={(e) => setSearchVal(e.target.value)}
                 className="bg-transparent border-none text-[13px] font-medium text-slate-800 outline-none w-full placeholder-slate-400"
               />
             </div>
@@ -521,90 +582,122 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
-                  {filteredStudents.slice(0, 30).map((student) => {
-                    const hasDue = student.balanceDue > 0;
-                    const totalFees = student.totalFees ?? (student.paidAmount + student.balanceDue);
-                    const pendingPercentage = student.pendingPercentage ?? (totalFees > 0 ? Math.round((student.balanceDue / totalFees) * 100) : 0);
-                    const financialStatus = student.financialStatus || (hasDue ? `Pending Due (${pendingPercentage}%)` : 'Fully Paid (100%)');
-                    return (
-                      <tr key={student.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedIds.includes(student.id)} 
-                            onChange={() => handleToggleSelect(student.id)} 
-                            className="rounded border-slate-300 text-[#2E5BFF] focus:ring-blue-500 cursor-pointer w-4 h-4"
-                          />
-                        </td>
-                        <td className="px-6 py-4 font-mono text-xs text-blue-600 font-bold">{student.rollNo}</td>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, idx) => (
+                      <tr key={idx} className="animate-pulse">
+                        <td className="px-6 py-4"><div className="h-4 w-4 bg-slate-200 rounded" /></td>
+                        <td className="px-6 py-4"><div className="h-4 w-12 bg-slate-200 rounded" /></td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <StudentAvatar studentName={student.name} profilePhotoUrl={student.profilePhotoUrl} size="sm" />
-                            <div>
-                              <div className="font-bold text-slate-800">{student.name}</div>
-                              <div className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</div>
+                            <div className="w-8 h-8 rounded-full bg-slate-200" />
+                            <div className="space-y-2">
+                              <div className="h-4 w-28 bg-slate-200 rounded" />
+                              <div className="h-3 w-36 bg-slate-200 rounded" />
                             </div>
                           </div>
                         </td>
+                        <td className="px-6 py-4"><div className="h-5 w-20 bg-slate-200 rounded-full" /></td>
                         <td className="px-6 py-4">
-                          <span className="px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 text-xs font-semibold">
-                            {student.class} - {student.section.replace('Section ', '')}
-                          </span>
+                          <div className="space-y-2">
+                            <div className="h-4 w-20 bg-slate-200 rounded" />
+                            <div className="h-3 w-24 bg-slate-200 rounded" />
+                          </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="text-slate-800 font-semibold">{student.fatherName}</div>
-                          <div className="text-xs text-slate-400 font-medium mt-0.5">{student.phone}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
-                            hasDue 
-                              ? 'bg-amber-50 text-amber-600 border border-amber-200' 
-                              : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                            {financialStatus}
-                          </span>
-                        </td>
+                        <td className="px-6 py-4"><div className="h-5 w-28 bg-slate-200 rounded-full" /></td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleViewDetails(student)}
-                              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px]"
-                            >
-                              View Profile
-                            </button>
-                            <button
-                              onClick={() => setEditingStudent(student)}
-                              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-green-600 hover:border-green-200 hover:bg-green-50/30 transition-all text-xs font-bold min-h-[44px]"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm({
-                                show: true,
-                                studentIds: [student.id],
-                                count: 1,
-                                singleName: student.name,
-                                yearName: selectedYear !== 'All' ? academicYears.find(ay => ay.id === selectedYear)?.name : undefined,
-                                className: student.class !== 'N/A' ? student.class : undefined,
-                                sectionName: student.section !== 'N/A' ? student.section : undefined
-                              })}
-                              className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-150 hover:border-rose-300 text-rose-600 transition-all flex items-center justify-center cursor-pointer min-h-[44px]"
-                              title="Delete Student"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="h-8 w-20 bg-slate-200 rounded-lg animate-pulse" />
+                            <div className="h-8 w-12 bg-slate-200 rounded-lg animate-pulse" />
+                            <div className="h-8 w-10 bg-slate-200 rounded-lg animate-pulse" />
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                  {filteredStudents.length === 0 && (
+                    ))
+                  ) : filteredStudents.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-light">
                         No matching student records found.
                       </td>
                     </tr>
+                  ) : (
+                    filteredStudents.map((student) => {
+                      const hasDue = student.balanceDue > 0;
+                      const totalFees = student.totalFees ?? (student.paidAmount + student.balanceDue);
+                      const pendingPercentage = student.pendingPercentage ?? (totalFees > 0 ? Math.round((student.balanceDue / totalFees) * 100) : 0);
+                      const financialStatus = student.financialStatus || (hasDue ? `Pending Due (${pendingPercentage}%)` : 'Fully Paid (100%)');
+                      return (
+                        <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(student.id)} 
+                              onChange={() => handleToggleSelect(student.id)} 
+                              className="rounded border-slate-300 text-[#2E5BFF] focus:ring-blue-500 cursor-pointer w-4 h-4"
+                            />
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-blue-600 font-bold">{student.rollNo}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <StudentAvatar studentName={student.name} profilePhotoUrl={student.profilePhotoUrl} size="sm" />
+                              <div>
+                                <div className="font-bold text-slate-800">{student.name}</div>
+                                <div className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200 text-xs font-semibold">
+                              {student.class} - {student.section.replace('Section ', '')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-slate-800 font-semibold">{student.fatherName}</div>
+                            <div className="text-xs text-slate-400 font-medium mt-0.5">{student.phone}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
+                              hasDue 
+                                ? 'bg-amber-50 text-amber-600 border border-amber-200' 
+                                : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                              {financialStatus}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleViewDetails(student)}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px]"
+                              >
+                                View Profile
+                              </button>
+                              <button
+                                onClick={() => setEditingStudent(student)}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-green-600 hover:border-green-200 hover:bg-green-50/30 transition-all text-xs font-bold min-h-[44px]"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirm({
+                                  show: true,
+                                  studentIds: [student.id],
+                                  count: 1,
+                                  singleName: student.name,
+                                  yearName: selectedYear !== 'All' ? academicYears.find(ay => ay.id === selectedYear)?.name : undefined,
+                                  className: student.class !== 'N/A' ? student.class : undefined,
+                                  sectionName: student.section !== 'N/A' ? student.section : undefined
+                                })}
+                                className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-150 hover:border-rose-300 text-rose-600 transition-all flex items-center justify-center cursor-pointer min-h-[44px]"
+                                title="Delete Student"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -612,76 +705,168 @@ const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
             {/* Mobile Card View */}
             <div className="block md:hidden divide-y divide-slate-100">
-              {filteredStudents.slice(0, 30).map((student) => {
-                const hasDue = student.balanceDue > 0;
-                const totalFees = student.totalFees ?? (student.paidAmount + student.balanceDue);
-                const pendingPercentage = student.pendingPercentage ?? (totalFees > 0 ? Math.round((student.balanceDue / totalFees) * 100) : 0);
-                const financialStatus = student.financialStatus || (hasDue ? `Pending Due (${pendingPercentage}%)` : 'Fully Paid (100%)');
-                return (
-                  <div key={student.id} className="p-4 space-y-3">
+              {loading ? (
+                Array.from({ length: 3 }).map((_, idx) => (
+                  <div key={idx} className="p-4 space-y-3 animate-pulse">
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
-                        <StudentAvatar studentName={student.name} profilePhotoUrl={student.profilePhotoUrl} size="sm" />
-                        <div>
-                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-bold font-mono">
-                            Roll: {student.rollNo}
-                          </span>
-                          <h4 className="text-sm font-bold text-slate-800 mt-1">{student.name}</h4>
-                          <p className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</p>
+                        <div className="w-8 h-8 rounded-full bg-slate-200" />
+                        <div className="space-y-2">
+                          <div className="h-3 w-16 bg-slate-200 rounded" />
+                          <div className="h-4 w-24 bg-slate-200 rounded" />
+                          <div className="h-3 w-32 bg-slate-200 rounded" />
                         </div>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
-                        hasDue 
-                          ? 'bg-amber-50 text-amber-600 border border-amber-200' 
-                          : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                        {financialStatus}
-                      </span>
+                      <div className="h-5 w-24 bg-slate-200 rounded-full" />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-250/10">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Class & Section</span>
-                        <span className="font-bold text-slate-700 block mt-0.5">
-                          {student.class} - {student.section.replace('Section ', '')}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block font-semibold uppercase">Parent / Guardian</span>
-                        <span className="font-bold text-slate-700 block mt-0.5">{student.fatherName}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2">
-                      <a href={`tel:${student.phone}`} className="flex items-center gap-1 text-slate-500 text-xs font-semibold hover:text-blue-600 min-h-[44px]">
-                        <Phone className="w-3.5 h-3.5" />
-                        {student.phone}
-                      </a>
+                    <div className="h-10 bg-slate-100 rounded-xl" />
+                    <div className="flex justify-between pt-2">
+                      <div className="h-4 w-24 bg-slate-200 rounded" />
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => setEditingStudent(student)}
-                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-green-600 hover:border-green-200 hover:bg-green-50/30 transition-all text-xs font-bold min-h-[44px]"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleViewDetails(student)}
-                          className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px] cursor-pointer"
-                        >
-                          View Profile
-                        </button>
+                        <div className="h-8 w-12 bg-slate-200 rounded" />
+                        <div className="h-8 w-20 bg-slate-200 rounded" />
                       </div>
                     </div>
                   </div>
-                );
-              })}
-              {filteredStudents.length === 0 && (
+                ))
+              ) : filteredStudents.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 font-light">
                   No matching student records found.
                 </div>
+              ) : (
+                filteredStudents.map((student) => {
+                  const hasDue = student.balanceDue > 0;
+                  const totalFees = student.totalFees ?? (student.paidAmount + student.balanceDue);
+                  const pendingPercentage = student.pendingPercentage ?? (totalFees > 0 ? Math.round((student.balanceDue / totalFees) * 100) : 0);
+                  const financialStatus = student.financialStatus || (hasDue ? `Pending Due (${pendingPercentage}%)` : 'Fully Paid (100%)');
+                  return (
+                    <div key={student.id} className="p-4 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-3">
+                          <StudentAvatar studentName={student.name} profilePhotoUrl={student.profilePhotoUrl} size="sm" />
+                          <div>
+                            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-bold font-mono">
+                              Roll: {student.rollNo}
+                            </span>
+                            <h4 className="text-sm font-bold text-slate-800 mt-1">{student.name}</h4>
+                            <p className="text-xs text-slate-400 font-medium mt-0.5">{student.email}</p>
+                          </div>
+                        </div>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
+                          hasDue 
+                            ? 'bg-amber-50 text-amber-600 border border-amber-200' 
+                            : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${hasDue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                          {financialStatus}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-250/10">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">Class & Section</span>
+                          <span className="font-bold text-slate-700 block mt-0.5">
+                            {student.class} - {student.section.replace('Section ', '')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">Parent / Guardian</span>
+                          <span className="font-bold text-slate-700 block mt-0.5">{student.fatherName}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2">
+                        <a href={`tel:${student.phone}`} className="flex items-center gap-1 text-slate-500 text-xs font-semibold hover:text-blue-600 min-h-[44px]">
+                          <Phone className="w-3.5 h-3.5" />
+                          {student.phone}
+                        </a>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditingStudent(student)}
+                            className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-green-600 hover:border-green-200 hover:bg-green-50/30 transition-all text-xs font-bold min-h-[44px]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleViewDetails(student)}
+                            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-xs font-bold min-h-[44px] cursor-pointer"
+                          >
+                            View Profile
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {!loading && totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100 px-6 py-4 bg-slate-50/50">
+                <div className="text-[12px] text-slate-550 font-medium text-center sm:text-left">
+                  Showing <span className="font-bold text-slate-800">{((page - 1) * limit) + 1}</span> to{' '}
+                  <span className="font-bold text-slate-800">{Math.min(page * limit, total)}</span> of{' '}
+                  <span className="font-bold text-slate-800">{total}</span> records (Page <span className="font-bold text-slate-800">{page}</span> of <span className="font-bold text-slate-800">{totalPages}</span>)
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 justify-center">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => loadStudents(1)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-all text-xs font-bold min-h-[38px] cursor-pointer"
+                    title="First Page"
+                  >
+                    First
+                  </button>
+                  <button
+                    disabled={page === 1}
+                    onClick={() => loadStudents(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-650 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-all text-xs font-bold min-h-[38px] cursor-pointer"
+                  >
+                    Previous
+                  </button>
+                  
+                  {Array.from({ length: totalPages }).map((_, i) => {
+                    const pNum = i + 1;
+                    if (totalPages > 5 && Math.abs(page - pNum) > 1 && pNum !== 1 && pNum !== totalPages) {
+                      if (pNum === 2 || pNum === totalPages - 1) {
+                        return <span key={pNum} className="text-slate-400 text-xs px-1 select-none">...</span>;
+                      }
+                      return null;
+                    }
+                    return (
+                      <button
+                        key={pNum}
+                        onClick={() => loadStudents(pNum)}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-bold min-h-[38px] transition-all cursor-pointer ${
+                          page === pNum
+                            ? 'bg-[#2E5BFF] border-[#2E5BFF] text-white'
+                            : 'border-slate-200 bg-white text-slate-650 hover:bg-slate-50'
+                        }`}
+                      >
+                        {pNum}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    disabled={page === totalPages}
+                    onClick={() => loadStudents(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-650 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-all text-xs font-bold min-h-[38px] cursor-pointer"
+                  >
+                    Next
+                  </button>
+                  <button
+                    disabled={page === totalPages}
+                    onClick={() => loadStudents(totalPages)}
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-all text-xs font-bold min-h-[38px] cursor-pointer"
+                    title="Last Page"
+                  >
+                    Last
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Floating Bulk Actions Bar */}
