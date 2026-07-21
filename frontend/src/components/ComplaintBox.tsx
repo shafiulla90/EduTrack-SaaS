@@ -516,15 +516,15 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
         
         {/* LWC Header Gradient */}
         <div className="bg-gradient-to-r from-[#2E5BFF] to-[#8B5CF6] p-6 sm:p-8 text-white">
-          <div className="flex items-center gap-5">
-            <div className="bg-white/20 p-4 rounded-2xl shrink-0">
-              <BookOpen className="w-8 h-8" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
+            <div className="bg-white/20 p-3 sm:p-4 rounded-2xl shrink-0">
+              <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
             </div>
             <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">
+              <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight leading-tight">
                 Student Behavior Submission
               </h1>
-              <p className="text-white/90 text-xs sm:text-sm font-medium">
+              <p className="text-white/90 text-[11px] sm:text-sm font-medium">
                 Submit complaints or praises for student behavior logs in the EduTrack Package
               </p>
             </div>
@@ -590,20 +590,20 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
           {!isLoading && activeTab === 'parent-complaints' && (
             <div className="space-y-6">
               {/* Filter Bar */}
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-wrap gap-4 items-center justify-between shadow-xs">
+              <div className="bg-slate-50 p-4 sm:p-6 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between shadow-xs">
                 <div className="flex items-center gap-2 text-slate-700">
                   <Filter className="w-4 h-4 text-blue-600" />
                   <span className="font-bold text-xs uppercase tracking-wider text-slate-700">Parent Grievance Tickets</span>
                 </div>
 
-                <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto justify-start sm:justify-end">
                   {(['All', 'OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'] as const).map(st => (
                     <button
                       key={st}
                       onClick={() => setParentFilterStatus(st)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         parentFilterStatus === st
-                          ? 'bg-blue-600 text-white shadow-xs'
+                          ? 'bg-blue-600 text-white shadow-xs border-blue-600'
                           : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
@@ -621,7 +621,9 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
                   <p className="text-xs text-slate-400 mt-1">Complaints submitted via Parent Portal will appear here in real time.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm bg-white">
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-2xl shadow-sm bg-white">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
@@ -686,7 +688,64 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
                     </tbody>
                   </table>
                 </div>
-              )}
+
+                {/* Mobile Card View */}
+                <div className="block md:hidden space-y-4">
+                  {parentComplaints.map(c => {
+                    const st = (c.status || 'OPEN').toUpperCase();
+                    return (
+                      <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-mono text-xs font-bold text-blue-600">
+                              #{c.id.substring(0, 8).toUpperCase()}
+                            </span>
+                            <h4 className="font-bold text-slate-800 text-sm mt-1">{c.submittedBy?.name || 'Parent'}</h4>
+                            <p className="text-[11px] text-slate-400 font-medium">
+                              {c.submittedBy?.email || c.submittedBy?.phone || ''}
+                            </p>
+                          </div>
+                          <span className={`inline-block text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider border ${
+                            st === 'OPEN' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            st === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            st === 'RESOLVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {c.status}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
+                          <div>
+                            <span className="inline-block px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-wider mb-1">
+                              {c.category}
+                            </span>
+                          </div>
+                          <p className="font-bold text-slate-800 text-xs truncate" title={c.title}>{c.title}</p>
+                          <p className="text-slate-500 text-[11px] line-clamp-2" title={c.description}>{c.description}</p>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-1">
+                          <span className="text-[10px] font-mono text-slate-400">
+                            Updated: {new Date(c.updatedAt || c.createdAt).toLocaleDateString()}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setSelectedParentComplaint(c);
+                              setParentNewStatus(c.status || 'OPEN');
+                              setParentReplyText(c.adminReply || '');
+                              setParentResolutionNotes(c.resolutionNotes || '');
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-all"
+                          >
+                            View &amp; Reply
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>)}
             </div>
           )}
 
@@ -1770,7 +1829,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
       <div className="max-w-[1400px] mx-auto space-y-6">
         
         {/* Nav Header Link */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <Link href="/dashboard" className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm cursor-pointer">
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
