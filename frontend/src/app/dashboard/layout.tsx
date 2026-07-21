@@ -597,7 +597,7 @@ export default function DashboardLayout({
             </button>
             {/* Notification Bell Dropdown */}
             <NotificationBell />
-            <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-slate-50 cursor-pointer min-h-[44px]">
+            <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-slate-50 cursor-pointer min-h-[44px]">
               <div className="text-right hidden sm:block">
                 <p className="text-[13px] font-semibold text-slate-800 leading-none">{currentUser?.name || adminName}</p>
                 <p className="text-[11px] text-slate-400 font-medium mt-1">{currentUser?.role === 'SCHOOL_ADMIN' ? 'Admin' : (currentUser?.role || 'User')}</p>
@@ -619,7 +619,7 @@ export default function DashboardLayout({
                 clearStoredAuth();
                 window.location.href = '/auth/login';
               }}
-              className="flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 min-h-[40px] cursor-pointer"
+              className="hidden md:flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 min-h-[40px] cursor-pointer"
               title="Logout"
             >
               <svg className="w-4 h-4 stroke-red-600 fill-none" viewBox="0 0 24 24">
@@ -671,6 +671,28 @@ export default function DashboardLayout({
                 </h1>
               </div>
             </div>
+
+            {/* User Profile widget inside Drawer */}
+            <div className="flex items-center gap-3 px-4 py-3 mx-4 mb-6 bg-slate-50 rounded-2xl border border-slate-100/80">
+              {currentUser?.avatarUrl ? (
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.name || adminName}
+                  className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-sm select-none shrink-0">
+                  {(currentUser?.name || adminName).split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold text-slate-800 leading-tight truncate">{currentUser?.name || adminName}</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  {currentUser?.role === 'SCHOOL_ADMIN' ? 'Admin' : (currentUser?.role === 'TEACHER' ? 'Teacher' : (currentUser?.role || 'User'))}
+                </p>
+              </div>
+            </div>
+
             <nav className="space-y-6 px-4">
               {navSections.map((section) => (
                 <div key={section.title}>
