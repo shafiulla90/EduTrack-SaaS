@@ -409,70 +409,387 @@ export default function StudentProgressPage() {
       )}
 
       {/* Dashboard analytics */}
-      {progress && (
-        <div className="space-y-6">
-          
-          {/* Card Summary Profile */}
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-50 text-[#2E5BFF] rounded-2xl flex items-center justify-center font-bold text-lg shrink-0">
-              <User className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800 text-[15px]">{progress.student?.name}</h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Roll No: {progress.student?.rollNo || 'N/A'}</p>
-            </div>
-          </div>
+      {progress && (() => {
+        // Calculations
+        const validMarks = progress.marksHistory?.filter((m: any) => m.score !== null) || [];
+        const scores = validMarks.map((m: any) => m.score);
+        const highestScore = scores.length > 0 ? Math.max(...scores) : 0;
+        const lowestScore = scores.length > 0 ? Math.min(...scores) : 0;
+        const averageScore = scores.length > 0 ? Math.round(scores.reduce((sum: number, s: number) => sum + s, 0) / scores.length) : 0;
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Attendance</span>
-              <span className="text-lg font-black text-emerald-600">{progress.stats?.attendanceRate || 100}%</span>
-            </div>
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Marks Avg</span>
-              <span className="text-lg font-black text-blue-600">{progress.stats?.averageScore || 0}%</span>
-            </div>
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm text-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Homework</span>
-              <span className="text-lg font-black text-purple-600">{progress.stats?.homeworkCompletion || 0}%</span>
-            </div>
-          </div>
+        // Group marks by exam name for Exam Performance Comparison (one bar per exam)
+        const examMap: Record<string, { totalScore: number; count: number; examName: string }> = {};
+        validMarks.forEach((m: any) => {
+          if (!examMap[m.examName]) {
+            examMap[m.examName] = { totalScore: 0, count: 0, examName: m.examName };
+          }
+          examMap[m.examName].totalScore += m.score;
+          examMap[m.examName].count += 1;
+        });
 
-          {/* SVG Marks trend */}
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="font-bold text-slate-800 text-[14px]">Academic Progress Trend</h3>
-            {progress.marksHistory?.length === 0 ? (
-              <div className="py-6 text-center text-slate-400 text-xs italic">No exam grades submitted yet.</div>
-            ) : (
-              renderSVGChart(progress.marksHistory)
-            )}
-          </div>
+        const aggregatedExams = Object.values(examMap).map(e => ({
+          examName: e.examName,
+          score: Math.round(e.totalScore / e.count)
+        }));
 
-          {/* Homework sublist */}
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
-            <h3 className="font-bold text-slate-800 text-[14px]">Homework Completion Log</h3>
-            {progress.homeworks?.length === 0 ? (
-              <div className="py-4 text-center text-slate-400 text-xs italic">No assignments logs found.</div>
-            ) : (
-              <div className="space-y-2">
-                {progress.homeworks?.map((hw: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">{hw.title}</h4>
-                      <p className="text-[10px] text-slate-400 font-medium mt-0.5">Due: {hw.dueDate.split('T')[0]}</p>
-                    </div>
-                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded uppercase border ${
-                      hw.submitted ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
-                    }`}>
-                      {hw.submitted ? 'Submitted' : 'Pending'}
-                    </span>
-                  </div>
-                ))}
+        const latestExam = aggregatedExams[aggregatedExams.length - 1];
+        const latestScore = latestExam ? latestExam.score : 0;
+        const latestExamName = latestExam ? latestExam.examName : 'N/A';
+
+        // Group marks by subject name for Subject Performance
+        const subjectMap: Record<string, { totalScore: number; count: number; subjectName: string }> = {};
+        validMarks.forEach((m: any) => {
+          const subName = m.subjectName || 'Unknown';
+          if (!subjectMap[subName]) {
+            subjectMap[subName] = { totalScore: 0, count: 0, subjectName: subName };
+          }
+          subjectMap[subName].totalScore += m.score;
+          subjectMap[subName].count += 1;
+        });
+
+        const subjectPerformance = Object.values(subjectMap).map(s => ({
+          subjectName: s.subjectName,
+          score: Math.round(s.totalScore / s.count)
+        })).sort((a, b) => b.score - a.score); // sort by score desc
+
+        // Calculate dynamic teacher insights
+        const bestSubject = subjectPerformance[0];
+        const worstSubject = subjectPerformance[subjectPerformance.length - 1];
+        
+        let mostImprovedExam = null;
+        let largestDropExam = null;
+        let maxImprovement = 0;
+        let maxDrop = 0;
+
+        for (let i = 1; i < aggregatedExams.length; i++) {
+          const diff = aggregatedExams[i].score - aggregatedExams[i - 1].score;
+          if (diff > maxImprovement) {
+            maxImprovement = diff;
+            mostImprovedExam = { examName: aggregatedExams[i].examName, diff };
+          } else if (diff < maxDrop) {
+            maxDrop = diff;
+            largestDropExam = { examName: aggregatedExams[i].examName, diff };
+          }
+        }
+
+        const attendanceVal = progress.stats?.attendanceRate ?? 100;
+        const hwCompletionVal = progress.stats?.homeworkCompletion ?? 0;
+
+        // Performance Trend
+        let trendText = 'Stable';
+        let trendIcon = '➡';
+        let trendBadgeColor = 'text-slate-600 bg-slate-50 border-slate-200/60';
+        let trendSubtext = 'No change from previous exam';
+        
+        if (aggregatedExams.length >= 2) {
+          const latest = aggregatedExams[aggregatedExams.length - 1].score;
+          const previous = aggregatedExams[aggregatedExams.length - 2].score;
+          const diff = latest - previous;
+          if (diff > 0) {
+            trendText = 'Improving';
+            trendIcon = '⬆';
+            trendBadgeColor = 'text-emerald-600 bg-emerald-50 border-emerald-100';
+            trendSubtext = `+${diff}% from previous exam`;
+          } else if (diff < 0) {
+            trendText = 'Declining';
+            trendIcon = '⬇';
+            trendBadgeColor = 'text-rose-600 bg-rose-50 border-rose-100';
+            trendSubtext = `${diff}% from previous exam`;
+          }
+        }
+
+        const getScoreColor = (score: number) => {
+          if (score >= 90) return 'text-emerald-600';
+          if (score >= 75) return 'text-blue-600';
+          if (score >= 50) return 'text-amber-600';
+          return 'text-rose-600';
+        };
+
+        const getScoreBg = (score: number) => {
+          if (score >= 90) return 'bg-emerald-500';
+          if (score >= 75) return 'bg-blue-500';
+          if (score >= 50) return 'bg-amber-500';
+          return 'bg-rose-500';
+        };
+
+        const getGrade = (score: number) => {
+          if (score >= 90) return 'A+';
+          if (score >= 75) return 'A';
+          if (score >= 50) return 'B';
+          return 'C';
+        };
+
+        const getResult = (score: number) => {
+          return score >= 50 ? 'Pass' : 'Fail';
+        };
+
+        return (
+          <div className="space-y-6">
+            
+            {/* Card Summary Profile */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-blue-50 text-[#2E5BFF] rounded-2xl flex items-center justify-center font-bold text-lg shrink-0">
+                  <User className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[15px]">{progress.student?.name}</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Roll No: {progress.student?.rollNo || 'N/A'}</p>
+                </div>
               </div>
-            )}
-          </div>
+              
+              {/* Performance Trend Indicator */}
+              <div className={`px-4 py-2 rounded-2xl border flex flex-col items-end shrink-0 ${trendBadgeColor}`}>
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">Trend</span>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-sm font-extrabold">{trendIcon} {trendText}</span>
+                </div>
+                {trendSubtext && (
+                  <span className="text-[9px] font-semibold opacity-75 mt-0.5">{trendSubtext}</span>
+                )}
+              </div>
+            </div>
 
+            {/* KPI Cards Summary Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Overall Score</span>
+                <span className={`text-xl font-black ${getScoreColor(averageScore)}`}>{averageScore}%</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Highest Score</span>
+                <span className={`text-xl font-black ${getScoreColor(highestScore)}`}>{highestScore}%</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Lowest Score</span>
+                <span className={`text-xl font-black ${getScoreColor(lowestScore)}`}>{lowestScore}%</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Average Score</span>
+                <span className={`text-xl font-black ${getScoreColor(averageScore)}`}>{averageScore}%</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Latest Exam</span>
+                <span className={`text-xl font-black ${getScoreColor(latestScore)}`}>{latestScore}%</span>
+                <span className="text-[9px] text-slate-500 font-medium block truncate mt-0.5" title={latestExamName}>{latestExamName}</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Attendance</span>
+                <span className={`text-xl font-black ${getScoreColor(attendanceVal)}`}>{attendanceVal}%</span>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Homework</span>
+                <span className={`text-xl font-black ${getScoreColor(hwCompletionVal)}`}>{hwCompletionVal}%</span>
+              </div>
+            </div>
+
+            {/* Performance Charts Section (Grid: Exam performance vs Subject performance) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Exam Performance Comparison */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                <h3 className="font-bold text-slate-800 text-[14px]">Exam Performance Comparison</h3>
+                {aggregatedExams.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 text-xs italic">No exam grades submitted yet.</div>
+                ) : (
+                  renderSVGChart(aggregatedExams)
+                )}
+              </div>
+
+              {/* Subject Performance */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[14px] mb-4">Subject Performance</h3>
+                  {subjectPerformance.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 text-xs italic">No subject marks available.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {subjectPerformance.map((sub, idx) => (
+                        <div key={idx} className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-700">
+                            <span>{sub.subjectName}</span>
+                            <span className={getScoreColor(sub.score)}>{sub.score}%</span>
+                          </div>
+                          {/* Horizontal Progress bar */}
+                          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-300 ${getScoreBg(sub.score)}`}
+                              style={{ width: `${sub.score}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Legend standard indicator */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-4 border-t border-slate-100 text-[10px] font-bold text-slate-500 mt-4">
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Excellent (90-100%)
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" /> Good (75-89%)
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block" /> Average (50-74%)
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded bg-rose-500 inline-block" /> Needs Imp. (&lt;50%)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Insights & Recent Table Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Teacher Insights */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 lg:col-span-1">
+                <h3 className="font-bold text-slate-800 text-[14px]">Teacher Insights</h3>
+                <div className="space-y-3">
+                  {bestSubject && (
+                    <div className="flex gap-2.5 items-start p-2.5 rounded-2xl bg-emerald-50/50 border border-emerald-100 text-xs font-semibold text-slate-800">
+                      <span className="text-sm">✅</span>
+                      <div>
+                        <div className="text-emerald-800 font-bold">Best Subject</div>
+                        <div className="text-[11px] text-emerald-700/90 mt-0.5">{bestSubject.subjectName} ({bestSubject.score}%)</div>
+                      </div>
+                    </div>
+                  )}
+                  {worstSubject && worstSubject.score < 75 && (
+                    <div className="flex gap-2.5 items-start p-2.5 rounded-2xl bg-amber-50/60 border border-amber-100 text-xs font-semibold text-slate-800">
+                      <span className="text-sm">⚠</span>
+                      <div>
+                        <div className="text-amber-850 font-bold">Needs Improvement</div>
+                        <div className="text-[11px] text-amber-700 mt-0.5">{worstSubject.subjectName} ({worstSubject.score}%)</div>
+                      </div>
+                    </div>
+                  )}
+                  {mostImprovedExam && (
+                    <div className="flex gap-2.5 items-start p-2.5 rounded-2xl bg-blue-50/50 border border-blue-100 text-xs font-semibold text-slate-800">
+                      <span className="text-sm">📈</span>
+                      <div>
+                        <div className="text-blue-800 font-bold">Most Improved Exam</div>
+                        <div className="text-[11px] text-blue-700 mt-0.5">{mostImprovedExam.examName} (+{mostImprovedExam.diff}%)</div>
+                      </div>
+                    </div>
+                  )}
+                  {largestDropExam && (
+                    <div className="flex gap-2.5 items-start p-2.5 rounded-2xl bg-rose-50/50 border border-rose-100 text-xs font-semibold text-slate-800">
+                      <span className="text-sm">📉</span>
+                      <div>
+                        <div className="text-rose-800 font-bold">Largest Drop</div>
+                        <div className="text-[11px] text-rose-700 mt-0.5">{largestDropExam.examName} ({largestDropExam.diff}%)</div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2.5 items-start p-2.5 rounded-2xl bg-slate-50 border border-slate-200/60 text-xs font-semibold text-slate-800">
+                    <span className="text-sm">⭐</span>
+                    <div>
+                      <div className="text-slate-800 font-bold">Attendance Record</div>
+                      <div className="text-[11px] text-slate-650 mt-0.5">
+                        {attendanceVal >= 90 ? 'Excellent Attendance' : 'Standard Attendance'}: {attendanceVal}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Exam Results Table */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 lg:col-span-2 overflow-hidden flex flex-col justify-between">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[14px]">Recent Exam Results</h3>
+                  {aggregatedExams.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 text-xs italic">No exam records.</div>
+                  ) : (
+                    <div className="overflow-x-auto mt-3">
+                      <table className="w-full border-collapse text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[9px] tracking-wider bg-slate-50">
+                            <th className="py-2.5 px-3">Exam</th>
+                            <th className="py-2.5 px-3 text-center">Percentage</th>
+                            <th className="py-2.5 px-3 text-center">Grade</th>
+                            <th className="py-2.5 px-3 text-center">Result</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {aggregatedExams.map((exam, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors font-medium text-slate-700">
+                              <td className="py-3 px-3 font-semibold text-slate-800">{exam.examName}</td>
+                              <td className="py-3 px-3 text-center font-bold">{exam.score}%</td>
+                              <td className="py-3 px-3 text-center">
+                                <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-extrabold ${getScoreColor(exam.score)} bg-slate-50 border border-slate-100`}>
+                                  {getGrade(exam.score)}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-extrabold ${
+                                  getResult(exam.score) === 'Pass' ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' : 'text-rose-700 bg-rose-50 border border-rose-100'
+                                }`}>
+                                  {getResult(exam.score)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Homework Completion Log */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-[14px]">Homework Completion Log</h3>
+              {progress.homeworks?.length === 0 ? (
+                <div className="py-4 text-center text-slate-400 text-xs italic">No assignments logs found.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {progress.homeworks?.map((hw: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center p-3 rounded-2xl border border-slate-100 bg-slate-50/40">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800 truncate max-w-[180px]">{hw.title}</h4>
+                        <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Due: {hw.dueDate.split('T')[0]}</p>
+                      </div>
+                      <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-lg uppercase border ${
+                        hw.submitted ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+                      }`}>
+                        {hw.submitted ? 'Submitted' : 'Pending'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        );
+      })()}
+      
+      {/* Tooltip Element */}
+      {hoveredBar && (
+        <div 
+          className="fixed pointer-events-none z-50 bg-slate-950/95 text-white text-[11px] p-3 rounded-2xl shadow-xl border border-slate-800 backdrop-blur-md transition-all duration-100 flex flex-col gap-1 w-44"
+          style={{ left: hoveredBar.x + 15, top: hoveredBar.y - 15 }}
+        >
+          <div className="font-extrabold text-slate-200 border-b border-slate-800 pb-1.5 truncate">
+            {hoveredBar.examName}
+          </div>
+          <div className="flex justify-between items-center mt-1.5">
+            <span className="text-slate-400 font-semibold">Percentage:</span>
+            <span className="font-extrabold text-emerald-400">{hoveredBar.score}%</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-400 font-semibold">Marks:</span>
+            <span className="font-bold text-slate-300">{hoveredBar.score} / 100</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-400 font-semibold">Grade:</span>
+            <span className={`font-black ${
+              hoveredBar.score >= 90 ? 'text-emerald-400' : hoveredBar.score >= 75 ? 'text-blue-400' : hoveredBar.score >= 50 ? 'text-amber-400' : 'text-rose-400'
+            }`}>
+              {hoveredBar.score >= 90 ? 'Excellent' : hoveredBar.score >= 75 ? 'Good' : hoveredBar.score >= 50 ? 'Average' : 'Needs Imp.'}
+            </span>
+          </div>
         </div>
       )}
 

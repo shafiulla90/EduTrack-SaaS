@@ -1618,6 +1618,8 @@ export class TeacherPortalService {
     const marksHistoryMapped = examMarks.map(em => ({
       examName: em.exam.name,
       score: Number(em.marksObtained),
+      subjectName: em.subject?.name || 'Unknown',
+      subjectId: em.subjectId,
     }));
 
     return {
