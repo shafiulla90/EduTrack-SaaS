@@ -721,7 +721,9 @@ export class TeacherPortalService {
   // 6. Timetable Schedule
   async getTeacherWeeklySchedule(userId: string, tenantId: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
-    return this.prisma.period.findMany({
+
+    // 1. Fetch all teaching periods for the teacher
+    const periods = await this.prisma.period.findMany({
       where: { tenantId, teacherId: staff.id },
       include: {
         subject: { select: { name: true } },
@@ -731,10 +733,58 @@ export class TeacherPortalService {
             section: { select: { name: true } },
           },
         },
-        periodTiming: { select: { startTime: true, endTime: true, periodNumber: true } },
+        periodTiming: { select: { id: true, startTime: true, endTime: true, periodNumber: true, name: true, isBreak: true } },
       },
-      orderBy: [{ dayOfWeek: 'asc' }, { periodTiming: { periodNumber: 'asc' } }],
     });
+
+    // 2. Fetch all break timings for this tenant
+    const breakTimings = await this.prisma.periodTiming.findMany({
+      where: { tenantId, isBreak: true, isActive: true },
+      orderBy: { periodNumber: 'asc' },
+    });
+
+    // 3. Merge periods and breaks for each weekday
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const mergedList: any[] = [];
+
+    daysOfWeek.forEach(day => {
+      // Lectures for this day
+      const dayLectures = periods.filter(p => p.dayOfWeek === day).map(p => ({
+        id: p.id,
+        dayOfWeek: p.dayOfWeek,
+        subject: p.subject,
+        classSection: p.classSection,
+        periodTiming: p.periodTiming,
+        substituteTeacherId: p.substituteTeacherId,
+        isBreak: false,
+      }));
+
+      // Break timings for this day
+      const dayBreaks = breakTimings.map(bt => ({
+        id: `BREAK-${day}-${bt.id}`,
+        dayOfWeek: day,
+        subject: { name: bt.name || 'Break' },
+        classSection: null,
+        periodTiming: {
+          id: bt.id,
+          startTime: bt.startTime,
+          endTime: bt.endTime,
+          periodNumber: bt.periodNumber,
+          name: bt.name,
+          isBreak: true,
+        },
+        substituteTeacherId: null,
+        isBreak: true,
+      }));
+
+      // Combine and sort by period number
+      const combined = [...dayLectures, ...dayBreaks];
+      combined.sort((a, b) => a.periodTiming.periodNumber - b.periodTiming.periodNumber);
+      
+      mergedList.push(...combined);
+    });
+
+    return mergedList;
   }
 
   // 7. Homework CRUD

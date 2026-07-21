@@ -72,39 +72,65 @@ export default function MyTimetablePage() {
             No lectures scheduled for {activeDay}.
           </div>
         ) : (
-          filteredPeriods.map((p, idx) => (
-            <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex justify-between items-center group">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2E5BFF] flex flex-col items-center justify-center font-bold shrink-0">
-                  <span className="text-[10px] text-slate-400 uppercase leading-none">Period</span>
-                  <span className="text-lg leading-none mt-1">{p.periodTiming.periodNumber}</span>
-                </div>
-                
-                <div className="space-y-1">
-                  <h3 className="font-bold text-slate-800 text-[14px]">
-                    {p.classSection.class.name} - {p.classSection.section.name}
-                  </h3>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 font-semibold">
-                    <span className="flex items-center gap-1">
-                      <BookOpen className="w-3.5 h-3.5 text-slate-400" />
-                      {p.subject.name}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      {p.periodTiming.startTime} - {p.periodTiming.endTime}
-                    </span>
+          filteredPeriods.map((p, idx) => {
+            const isBreak = p.isBreak || p.periodTiming?.isBreak;
+
+            if (isBreak) {
+              return (
+                <div key={idx} className="bg-slate-50/50 p-4 rounded-3xl border border-dashed border-slate-200 flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex flex-col items-center justify-center font-bold shrink-0 border border-slate-200/60">
+                      <span className="text-[9px] text-slate-400 uppercase leading-none font-bold">Break</span>
+                      <span className="text-sm leading-none mt-1 font-extrabold text-slate-600">{p.periodTiming.periodNumber}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-slate-650 text-xs uppercase tracking-wider">
+                        {p.subject?.name || p.periodTiming.name || 'Break / Recess'}
+                      </h3>
+                      <p className="text-[11px] text-slate-450 font-semibold flex items-center gap-1 mt-0.5">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        {p.periodTiming.startTime} - {p.periodTiming.endTime}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              );
+            }
 
-              {p.substituteTeacherId && (
-                <span className="bg-amber-50 text-amber-700 text-[9px] font-black uppercase px-2 py-0.5 rounded border border-amber-100 shrink-0">
-                  Substituted
-                </span>
-              )}
-            </div>
-          )))
-        }
+            return (
+              <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex justify-between items-center group">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2E5BFF] flex flex-col items-center justify-center font-bold shrink-0">
+                    <span className="text-[10px] text-slate-400 uppercase leading-none">Period</span>
+                    <span className="text-lg leading-none mt-1">{p.periodTiming.periodNumber}</span>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-slate-800 text-[14px]">
+                      {p.classSection?.class?.name} - {p.classSection?.section?.name}
+                    </h3>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 font-semibold">
+                      <span className="flex items-center gap-1">
+                        <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+                        {p.subject?.name}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        {p.periodTiming.startTime} - {p.periodTiming.endTime}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {p.substituteTeacherId && (
+                  <span className="bg-amber-50 text-amber-700 text-[9px] font-black uppercase px-2 py-0.5 rounded border border-amber-100 shrink-0">
+                    Substituted
+                  </span>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
 
     </div>
