@@ -948,21 +948,21 @@ function AttendanceDashboardContent() {
         {!isLoading && calendarView === 'daily' && (
           <div className="space-y-6">
             {overallDailySummary && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-around gap-6">
+              <div className="att-summary-strip bg-white border border-gray-200 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-around gap-6">
                 <div className="text-center sm:text-left">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Active Date</span>
-                  <span className="text-lg font-black text-slate-900 mt-1 block">{overallDailySummary.dateLabel}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Active Date</span>
+                  <span className="att-value-dark text-lg font-black text-slate-900 mt-1 block">{overallDailySummary.dateLabel}</span>
                 </div>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Students</span>
-                  <span className="text-2xl font-black text-slate-900 mt-1 block">{overallDailySummary.totalPotential}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Students</span>
+                  <span className="att-value-dark text-2xl font-black text-slate-900 mt-1 block">{overallDailySummary.totalPotential}</span>
                 </div>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Present Overall</span>
+                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Present Overall</span>
                   <span className="text-2xl font-black text-emerald-600 mt-1 block">{overallDailySummary.totalPresent}</span>
                 </div>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Absent Overall</span>
+                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Absent Overall</span>
                   <span className="text-2xl font-black text-rose-600 mt-1 block">{overallDailySummary.totalAbsent}</span>
                 </div>
                 <div className="w-16 h-16 rounded-full bg-indigo-50 border-4 border-indigo-200/50 flex flex-col items-center justify-center">
@@ -974,26 +974,26 @@ function AttendanceDashboardContent() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {classSectionSummary.map(summary => (
-                <div key={summary.key} className="relative attendance-card bg-white border border-gray-200 text-slate-700 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm">
+                <div key={summary.key} className="att-card-light relative attendance-card bg-white border border-gray-200 text-slate-700 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm">
                   <div className="flex justify-between items-start border-b border-gray-100 pb-3">
                     <div>
-                      <h3 className="font-bold text-sm text-slate-900">{summary.classValue} - Section {summary.section}</h3>
+                      <h3 className="att-card-title font-bold text-sm text-slate-900">{summary.classValue} - Section {summary.section}</h3>
                       <p className="text-[10px] text-indigo-600 font-bold mt-0.5">{summary.attendanceRate}% Attendance</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-                    <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                      <span className="text-[10px] font-bold text-slate-900 block">{summary.totalCount}</span>
-                      <span className="text-[9px] text-slate-500 font-semibold block mt-0.5">TOTAL</span>
+                    <div className="att-stat-box-total bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                      <span className="att-stat-total text-[10px] font-bold text-slate-900 block">{summary.totalCount}</span>
+                      <span className="att-stat-label text-[9px] text-slate-500 font-semibold block mt-0.5">TOTAL</span>
                     </div>
-                    <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
+                    <div className="att-stat-box-present bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
                       <span className="text-[10px] font-bold text-emerald-700 block">{summary.presentDisplay}</span>
-                      <span className="text-[9px] text-slate-500 font-semibold block mt-0.5">PRESENT</span>
+                      <span className="att-stat-label text-[9px] text-slate-500 font-semibold block mt-0.5">PRESENT</span>
                     </div>
-                    <div className="stat-box absent bg-rose-50 p-2.5 rounded-lg border border-rose-100">
+                    <div className="att-stat-box-absent stat-box absent bg-rose-50 p-2.5 rounded-lg border border-rose-100">
                       <span className="text-[10px] font-bold text-rose-700 block">{summary.absentCount}</span>
-                      <span className="text-[9px] text-slate-500 font-semibold block mt-0.5">ABSENT</span>
+                      <span className="att-stat-label text-[9px] text-slate-500 font-semibold block mt-0.5">ABSENT</span>
 
                       {summary.hasAbsentees && (
                         <div className="absentee-tooltip">

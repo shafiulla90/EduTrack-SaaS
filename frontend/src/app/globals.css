@@ -90,6 +90,44 @@
   color: #94a3b8 !important; /* slate-400 */
 }
 
+/* ── Attendance Dashboard: force white card + black text even in dark mode ── */
+.dark .att-card-light {
+  background-color: #ffffff !important;
+}
+.dark .att-card-light h3,
+.dark .att-card-light .att-card-title {
+  color: #0f172a !important; /* slate-900 – black heading */
+}
+.dark .att-card-light .att-stat-total {
+  color: #0f172a !important; /* black */
+}
+.dark .att-card-light .att-stat-label {
+  color: #64748b !important; /* slate-500 */
+}
+.dark .att-card-light .att-stat-box-total {
+  background-color: #f1f5f9 !important; /* slate-100 */
+  border-color: #e2e8f0 !important;
+}
+.dark .att-card-light .att-stat-box-present {
+  background-color: #ecfdf5 !important; /* emerald-50 */
+  border-color: #d1fae5 !important;
+}
+.dark .att-card-light .att-stat-box-absent {
+  background-color: #fff1f2 !important; /* rose-50 */
+  border-color: #ffe4e6 !important;
+}
+/* Summary strip – also keep white */
+.dark .att-summary-strip {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+.dark .att-summary-strip .att-label {
+  color: #64748b !important; /* slate-500 */
+}
+.dark .att-summary-strip .att-value-dark {
+  color: #0f172a !important; /* black */
+}
+
 /* Light alerts override */
 .dark .bg-blue-50 {
   background-color: rgba(46, 91, 255, 0.1) !important;
