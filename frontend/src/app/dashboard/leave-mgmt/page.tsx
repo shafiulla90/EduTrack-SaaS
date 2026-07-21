@@ -397,41 +397,49 @@ function LeaveMgmtContent() {
           </div>
         </div>
 
-        {/* Advanced Filters */}
+        {/* Filters Panel matching Screenshot */}
         <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs space-y-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
-            <Filter className="w-4 h-4 text-[#2E5BFF]" />
-            Search and Filter Filters
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#2E5BFF] uppercase tracking-wider">
+              <Filter className="w-4 h-4" />
+              Filter Applications
+            </div>
+
+            <div className="flex flex-wrap gap-4 items-center">
+              {/* Status Tabs exactly matching Screenshot */}
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map(st => (
+                  <button
+                    key={st}
+                    onClick={() => { setStatusFilter(st); setPage(1); }}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                      statusFilter === st ? 'bg-white text-[#2E5BFF] shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {st === 'ALL' ? 'All Status' : st.charAt(0) + st.slice(1).toLowerCase()}
+                  </button>
+                ))}
+              </div>
+
+              {/* Applicant Type Tabs exactly matching Screenshot */}
+              <div className="flex bg-slate-100 p-1 rounded-xl">
+                {(['ALL', 'STUDENT', 'TEACHER'] as const).map(tp => (
+                  <button
+                    key={tp}
+                    onClick={() => { setApplicantTypeFilter(tp); setPage(1); }}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                      applicantTypeFilter === tp ? 'bg-[#2E5BFF] text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {tp === 'ALL' ? 'All Types' : tp === 'STUDENT' ? 'Student Leaves' : 'Staff Leaves'}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="PENDING">Pending</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Applicant Type</label>
-              <select
-                value={applicantTypeFilter}
-                onChange={(e) => { setApplicantTypeFilter(e.target.value); setPage(1); }}
-                className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none"
-              >
-                <option value="ALL">All Applicants</option>
-                <option value="TEACHER">Teacher</option>
-                <option value="PARENT">Parent</option>
-              </select>
-            </div>
-
+          {/* Advanced Dropdown & Input Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-2 border-t border-slate-100">
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Leave Type</label>
               <select
@@ -482,6 +490,29 @@ function LeaveMgmtContent() {
                 className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none"
               />
             </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Sort Results</label>
+              <div className="flex gap-2">
+                <select
+                  value={sortBy}
+                  onChange={(e) => handleSort(e.target.value)}
+                  className="text-xs font-semibold bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none flex-1"
+                >
+                  <option value="appliedDate">Applied Date</option>
+                  <option value="startDate">Start Date</option>
+                  <option value="status">Status</option>
+                  <option value="applicantName">Applicant Name</option>
+                </select>
+                <button
+                  onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors flex items-center justify-center shrink-0"
+                  title="Toggle Order"
+                >
+                  <ArrowUpDown className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-4">
@@ -502,13 +533,13 @@ function LeaveMgmtContent() {
             <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
               <button
                 onClick={() => { setBulkActionType('APPROVED'); setBulkRemarks(''); }}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                className="px-4 py-2 bg-[#00875A] hover:bg-green-700 text-white rounded-xl text-xs font-bold cursor-pointer"
               >
                 Bulk Approve
               </button>
               <button
                 onClick={() => { setBulkActionType('REJECTED'); setBulkRemarks(''); }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold cursor-pointer"
+                className="px-4 py-2 bg-[#DE350B] hover:bg-red-700 text-white rounded-xl text-xs font-bold cursor-pointer"
               >
                 Bulk Reject
               </button>
@@ -522,198 +553,155 @@ function LeaveMgmtContent() {
           </div>
         )}
 
-        {/* Leaves Table (Desktop view) */}
-        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hidden md:block">
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                <th className="p-4 w-10">
-                  <input
-                    type="checkbox"
-                    checked={leaves.length > 0 && selectedIds.length === leaves.length}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded"
-                  />
-                </th>
-                <th className="p-4 cursor-pointer" onClick={() => handleSort('applicantName')}>
-                  <span className="flex items-center gap-1">Applicant Name <ArrowUpDown className="w-3 h-3" /></span>
-                </th>
-                <th className="p-4">Type</th>
-                <th className="p-4">Student / Class</th>
-                <th className="p-4">Leave Type</th>
-                <th className="p-4 cursor-pointer" onClick={() => handleSort('startDate')}>
-                  <span className="flex items-center gap-1">Date Range <ArrowUpDown className="w-3 h-3" /></span>
-                </th>
-                <th className="p-4">Days</th>
-                <th className="p-4 cursor-pointer" onClick={() => handleSort('appliedDate')}>
-                  <span className="flex items-center gap-1">Applied Date <ArrowUpDown className="w-3 h-3" /></span>
-                </th>
-                <th className="p-4 cursor-pointer" onClick={() => handleSort('status')}>
-                  <span className="flex items-center gap-1">Status <ArrowUpDown className="w-3 h-3" /></span>
-                </th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-600">
-              {calculatedLeaves.map((l) => {
-                const isStudent = l.applicantType === 'STUDENT' || !!l.student;
-                const name = isStudent ? (l.student?.user?.name || 'Student') : (l.teacher?.user?.name || 'Teacher');
-                const rollNoOrEmpId = isStudent ? (l.student?.rollNo || 'N/A') : (l.teacher?.employeeId || 'N/A');
-                const studentDetail = isStudent ? name : '';
-                const classSectionStr = l.student?.classSection ? `${l.student.classSection.class?.name || ''} - ${l.student.classSection.section?.name || ''}` : '';
-                const diffTime = Math.abs(new Date(l.endDate).getTime() - new Date(l.startDate).getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                const statusUpper = (l.status || 'PENDING').toUpperCase();
+        {/* Bulk Selector Tool */}
+        <div className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl border border-slate-150 text-xs font-semibold text-slate-600">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={leaves.length > 0 && selectedIds.length === leaves.length}
+              onChange={(e) => handleSelectAll(e.target.checked)}
+              className="rounded"
+            />
+            <span>Select All Visible Requests</span>
+          </div>
+          <span>Showing {leaves.length} Applications</span>
+        </div>
 
-                return (
-                  <tr key={l.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(l.id)}
-                        onChange={(e) => handleSelectOne(l.id, e.target.checked)}
-                        className="rounded"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <div className="font-semibold text-slate-800">{name}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">ID: {rollNoOrEmpId}</div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2.5 py-0.5 rounded-lg border text-[10px] uppercase font-bold ${
+        {/* Card-based Leave Applications Grid exactly matching Screenshot */}
+        {calculatedLeaves.length === 0 ? (
+          <div className="bg-white p-16 text-center rounded-3xl border border-slate-200 shadow-xs text-slate-400 space-y-2">
+            <FileText className="w-12 h-12 mx-auto text-slate-300" />
+            <p className="text-sm font-semibold text-slate-600">No leave applications found matching filters.</p>
+            <p className="text-xs text-slate-400">Applications submitted by parents or staff will appear here.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {calculatedLeaves.map((l) => {
+              const statusUpper = (l.status || 'PENDING').toUpperCase();
+              const isStudent = l.applicantType === 'STUDENT' || !!l.student;
+              const studentName = l.student?.user?.name || 'Student';
+              const className = l.student?.classSection ? `${l.student.classSection.class?.name || ''} - ${l.student.classSection.section?.name || ''}` : '';
+              const parentName = l.submittedBy?.name || 'Parent';
+              const teacherName = l.teacher?.user?.name || 'Staff Member';
+              const startDateStr = l.startDate ? l.startDate.split('T')[0] : 'N/A';
+              const endDateStr = l.endDate ? l.endDate.split('T')[0] : 'N/A';
+
+              return (
+                <div
+                  key={l.id}
+                  className={`bg-white p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 shadow-sm hover:shadow-md ${
+                    statusUpper === 'PENDING' ? 'border-amber-200 bg-amber-50/10' :
+                    statusUpper === 'APPROVED' ? 'border-emerald-200' : 'border-rose-200'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    {/* Header: Status and Type exactly matching Screenshot */}
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(l.id)}
+                          onChange={(e) => handleSelectOne(l.id, e.target.checked)}
+                          className="rounded"
+                        />
+                        <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-wider ${
+                          statusUpper === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-250' :
+                          statusUpper === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                          'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {statusUpper === 'APPROVED' ? 'Approved' : statusUpper === 'REJECTED' ? 'Rejected' : 'Pending Approval'}
+                        </span>
+                      </div>
+
+                      <span className={`text-[9px] font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider ${
                         isStudent ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-purple-50 text-purple-700 border-purple-100'
                       }`}>
-                        {isStudent ? 'Parent' : 'Teacher'}
+                        {isStudent ? 'Student Leave' : 'Staff Leave'}
                       </span>
-                    </td>
-                    <td className="p-4">
+                    </div>
+
+                    {/* Applicant Information exactly matching Screenshot */}
+                    <div>
                       {isStudent ? (
-                        <>
-                          <div className="text-slate-800">{studentDetail}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">{classSectionStr}</div>
-                        </>
+                        <div>
+                          <h3 className="font-extrabold text-slate-900 text-sm">{studentName}</h3>
+                          <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                            Class: {className || 'N/A'} &nbsp;·&nbsp; Parent: {parentName}
+                          </p>
+                        </div>
                       ) : (
-                        <span className="text-slate-400">N/A</span>
+                        <div>
+                          <h3 className="font-extrabold text-slate-900 text-sm">{teacherName}</h3>
+                          <p className="text-[11px] text-slate-500 font-semibold mt-0.5">Staff / Faculty Member</p>
+                        </div>
                       )}
-                    </td>
-                    <td className="p-4 text-[#2E5BFF] font-bold">{l.leaveType}</td>
-                    <td className="p-4 text-slate-500 font-semibold font-mono">
-                      {l.startDate?.split('T')[0]} to {l.endDate?.split('T')[0]}
-                    </td>
-                    <td className="p-4 font-bold">{diffDays} Days</td>
-                    <td className="p-4 text-slate-400 font-mono">
-                      {l.createdAt ? new Date(l.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="p-4">
-                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-wider ${
-                        statusUpper === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                        statusUpper === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                        'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}>
-                        {statusUpper === 'APPROVED' ? 'Approved' : statusUpper === 'REJECTED' ? 'Rejected' : 'Pending'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setSelectedLeave(l)}
-                          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-700 rounded-lg cursor-pointer"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {statusUpper === 'PENDING' && (
-                          <>
-                            <button
-                              onClick={() => { setSelectedLeave(l); setActionStatus('APPROVED'); setRemarks(''); }}
-                              className="p-1.5 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-750 rounded-lg cursor-pointer"
-                              title="Approve"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => { setSelectedLeave(l); setActionStatus('REJECTED'); setRemarks(''); }}
-                              className="p-1.5 hover:bg-rose-50 text-rose-600 hover:text-rose-750 rounded-lg cursor-pointer"
-                              title="Reject"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
+                    </div>
+
+                    {/* Inner leave details container exactly matching Screenshot */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-blue-600 text-[13px]">{l.leaveType} Leave</span>
+                        <span className="text-slate-500 font-bold text-[11px]">{startDateStr} to {endDateStr}</span>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <p className="text-slate-600 font-normal leading-relaxed whitespace-pre-wrap">{l.reason}</p>
+                      {l.attachment && (
+                        <a
+                          href={l.attachment}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline pt-1"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" /> View Attachment / Certificate
+                        </a>
+                      )}
+                    </div>
 
-        {/* Responsive Mobile Layout Cards */}
-        <div className="grid grid-cols-1 gap-4 md:hidden">
-          {calculatedLeaves.map((l) => {
-            const isStudent = l.applicantType === 'STUDENT' || !!l.student;
-            const name = isStudent ? (l.student?.user?.name || 'Student') : (l.teacher?.user?.name || 'Teacher');
-            const classSectionStr = l.student?.classSection ? `${l.student.classSection.class?.name || ''} - ${l.student.classSection.section?.name || ''}` : '';
-            const statusUpper = (l.status || 'PENDING').toUpperCase();
+                    {/* Comments / Admin Remarks exactly matching Screenshot */}
+                    {l.comments && (
+                      <div className="bg-blue-50/40 p-3 rounded-2xl border border-blue-100 text-[11px] text-slate-700 space-y-0.5">
+                        <strong className="text-blue-800 font-bold block">
+                          Remarks by {l.approver || 'Approver'}:
+                        </strong>
+                        <p className="italic">{l.comments}</p>
+                      </div>
+                    )}
+                  </div>
 
-            return (
-              <div
-                key={l.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-4"
-              >
-                <div className="flex justify-between items-center">
-                  <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-wider ${
-                    statusUpper === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                    statusUpper === 'REJECTED' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                    'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}>
-                    {statusUpper}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-lg border text-[9px] uppercase font-bold ${
-                    isStudent ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-purple-50 text-purple-700 border-purple-100'
-                  }`}>
-                    {isStudent ? 'Parent' : 'Teacher'}
-                  </span>
+                  {/* Card Actions Footer exactly matching Screenshot */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setSelectedLeave(l)}
+                      className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all bg-white"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-slate-500" /> Details &amp; History
+                    </button>
+
+                    {statusUpper === 'PENDING' ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setSelectedLeave(l); setActionStatus('APPROVED'); setRemarks(''); }}
+                          className="px-4 py-1.5 rounded-xl bg-[#00875A] hover:bg-green-700 text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => { setSelectedLeave(l); setActionStatus('REJECTED'); setRemarks(''); }}
+                          className="px-4 py-1.5 rounded-xl bg-[#DE350B] hover:bg-red-750 text-white text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mr-2">
+                        Processed
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm">{name}</h3>
-                  {isStudent && classSectionStr && (
-                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">Class: {classSectionStr}</p>
-                  )}
-                  <p className="text-xs text-slate-800 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <strong className="text-blue-600 block mb-1">{l.leaveType} Leave</strong>
-                    {l.startDate?.split('T')[0]} to {l.endDate?.split('T')[0]}
-                  </p>
-                </div>
-                <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
-                  <button
-                    onClick={() => setSelectedLeave(l)}
-                    className="px-3 py-1.5 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Details
-                  </button>
-                  {statusUpper === 'PENDING' && (
-                    <>
-                      <button
-                        onClick={() => { setSelectedLeave(l); setActionStatus('APPROVED'); setRemarks(''); }}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => { setSelectedLeave(l); setActionStatus('REJECTED'); setRemarks(''); }}
-                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold"
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Server-Side Pagination Controls */}
         <div className="flex justify-between items-center pt-4">
@@ -722,14 +710,14 @@ function LeaveMgmtContent() {
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 text-xs font-bold rounded-xl cursor-pointer"
+              className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 text-xs font-bold rounded-xl cursor-pointer bg-white shadow-xs"
             >
               Previous
             </button>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 text-xs font-bold rounded-xl cursor-pointer"
+              className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 text-xs font-bold rounded-xl cursor-pointer bg-white shadow-xs"
             >
               Next
             </button>
@@ -755,7 +743,7 @@ function LeaveMgmtContent() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto animate-in zoom-in-95">
                 {/* Applicant Info */}
                 <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-150">
                   <div>
@@ -884,7 +872,7 @@ function LeaveMgmtContent() {
                 {actionStatus && (
                   <form onSubmit={handleProcessAction} className="border-t border-slate-200 pt-4 space-y-3">
                     <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
-                      {actionStatus === 'APPROVED' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
+                      {actionStatus === 'APPROVED' ? <CheckCircle className="w-4 h-4 text-[#00875A]" /> : <AlertCircle className="w-4 h-4 text-[#DE350B]" />}
                       Confirm {actionStatus === 'APPROVED' ? 'Approval' : 'Rejection'}
                     </h4>
 
@@ -913,7 +901,7 @@ function LeaveMgmtContent() {
                         type="submit"
                         disabled={isProcessingAction}
                         className={`px-5 py-2 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-sm ${
-                          actionStatus === 'APPROVED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                          actionStatus === 'APPROVED' ? 'bg-[#00875A] hover:bg-green-700' : 'bg-[#DE350B] hover:bg-red-750'
                         }`}
                       >
                         {isProcessingAction ? 'Processing...' : `Confirm ${actionStatus === 'APPROVED' ? 'Approval' : 'Rejection'}`}
@@ -931,7 +919,7 @@ function LeaveMgmtContent() {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[110] p-4 animate-in fade-in">
             <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6">
               <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 mb-3">
-                {bulkActionType === 'APPROVED' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
+                {bulkActionType === 'APPROVED' ? <CheckCircle className="w-4 h-4 text-[#00875A]" /> : <AlertCircle className="w-4 h-4 text-[#DE350B]" />}
                 Bulk Process {selectedIds.length} Leave Request(s)
               </h4>
 
@@ -961,7 +949,7 @@ function LeaveMgmtContent() {
                     type="submit"
                     disabled={isProcessingBulk}
                     className={`px-5 py-2 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-sm ${
-                      bulkActionType === 'APPROVED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                      bulkActionType === 'APPROVED' ? 'bg-[#00875A] hover:bg-green-700' : 'bg-[#DE350B] hover:bg-red-750'
                     }`}
                   >
                     {isProcessingBulk ? 'Processing...' : `Confirm Bulk ${bulkActionType === 'APPROVED' ? 'Approval' : 'Rejection'}`}
@@ -1122,7 +1110,7 @@ function LeaveMgmtContent() {
                   {lv.comments && (
                     <div className="bg-blue-50/40 p-2.5 rounded-xl border border-blue-100 text-[11px] text-slate-700 space-y-0.5">
                       <strong className="text-blue-800 font-bold block">
-                        Remarks by {lv.approver || lv.approvedBy?.name || 'Approver'}:
+                        Remarks by {lv.approver || 'Approver'}:
                       </strong>
                       <p className="italic">{lv.comments}</p>
                     </div>
@@ -1133,7 +1121,7 @@ function LeaveMgmtContent() {
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                   <button
                     onClick={() => setSelectedLeave(lv)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all"
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all bg-white"
                   >
                     <Eye className="w-3.5 h-3.5 text-slate-500" /> Details &amp; History
                   </button>
@@ -1172,7 +1160,7 @@ function LeaveMgmtContent() {
               </button>
             </div>
 
-            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto animate-in zoom-in-95">
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
                   <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Applicant</span>
@@ -1196,7 +1184,7 @@ function LeaveMgmtContent() {
 
               <div>
                 <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] block mb-1">Reason Description</span>
-                <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed">
+                <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed whitespace-pre-wrap">
                   {selectedLeave.reason}
                 </p>
               </div>
