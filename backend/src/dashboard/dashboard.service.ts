@@ -56,7 +56,8 @@ export class DashboardService {
       revenueAgg,
       expenseAgg,
       sessions,
-      marks
+      marks,
+      leavesList
     ] = await Promise.all([
       // 1. Total Students
       this.prisma.studentProfile.count({
@@ -121,6 +122,12 @@ export class DashboardService {
       this.prisma.examMark.findMany({
         where: { tenantId },
         select: { marksObtained: true },
+      }),
+
+      // 7b. Leave requests
+      this.prisma.leaveRequest.findMany({
+        where: { tenantId },
+        select: { status: true, approvedDate: true, rejectedDate: true }
       })
     ]);
 
@@ -249,6 +256,11 @@ export class DashboardService {
       ? Math.round((marks.reduce((sum, m) => sum + Number(m.marksObtained), 0) / (marks.length)) * 10) / 10
       : 0;
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const pendingLeaveRequests = leavesList.filter((l: any) => l.status === 'PENDING').length;
+    const approvedToday = leavesList.filter((l: any) => l.status === 'APPROVED' && l.approvedDate && l.approvedDate.toISOString().split('T')[0] === todayStr).length;
+    const rejectedToday = leavesList.filter((l: any) => l.status === 'REJECTED' && l.rejectedDate && l.rejectedDate.toISOString().split('T')[0] === todayStr).length;
+
     const recentAdmissions = recentStudents.map(s => ({
       id: s.id,
       name: s.user.name,
@@ -320,6 +332,9 @@ export class DashboardService {
         netIncome,
         attendanceRate,
         academicAverage,
+        pendingLeaveRequests,
+        approvedToday,
+        rejectedToday,
         trends: {
           students: {
             value: Math.abs(Math.round(studentTrendVal * 10) / 10) + '%',

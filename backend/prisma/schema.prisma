@@ -959,6 +959,8 @@ model LeaveRequest {
   @@index([studentId])
   @@index([classSectionId])
   @@index([startDate])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model StatusHistory {

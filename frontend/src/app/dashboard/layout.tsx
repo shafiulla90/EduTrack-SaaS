@@ -102,6 +102,18 @@ export default function DashboardLayout({
           ),
         },
         {
+          name: 'Leave Requests',
+          href: '/dashboard/leave-mgmt',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2"></line>
+              <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2"></line>
+              <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2"></line>
+            </svg>
+          ),
+        },
+        {
           name: 'Teacher & Class Management',
           href: '/dashboard/teachers',
           svg: (
@@ -990,7 +1002,9 @@ function NotificationBell() {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = currentUser?.role === 'SCHOOL_ADMIN'
+    ? notifications.filter(n => !n.isRead && (n.type === 'LEAVE_APPROVAL' || n.title?.toLowerCase().includes('leave') || n.message?.includes('LeaveRequestId:'))).length
+    : notifications.filter(n => !n.isRead).length;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -1130,7 +1144,12 @@ function NotificationBell() {
                       }
                       setIsOpen(false);
                       if (n.type === 'LEAVE_APPROVAL' || n.title?.toLowerCase().includes('leave')) {
-                        window.location.href = '/dashboard/leave-mgmt';
+                        const details = parseLeaveRequestMessage(n.message || '');
+                        if (details.leaveRequestId) {
+                          window.location.href = `/dashboard/leave-mgmt?id=${details.leaveRequestId}`;
+                        } else {
+                          window.location.href = '/dashboard/leave-mgmt';
+                        }
                       } else if (n.type === 'COMPLAINT_UPDATE' || n.title?.toLowerCase().includes('complaint')) {
                         window.location.href = '/dashboard/complaints';
                       } else {

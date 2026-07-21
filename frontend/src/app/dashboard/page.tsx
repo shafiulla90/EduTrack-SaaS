@@ -23,6 +23,9 @@ function AdminDashboardOverview() {
     netIncome: 0,
     attendanceRate: 0,
     academicAverage: 0,
+    pendingLeaveRequests: 0,
+    approvedToday: 0,
+    rejectedToday: 0,
     trends: {
       students: { value: '0%', isUp: true },
       revenue: { value: '0%', isUp: true },
@@ -246,8 +249,8 @@ function AdminDashboardOverview() {
         </div>
       )}
 
-      {/* DYNAMIC KPI STATS GRID - 8 Harmonious Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      {/* DYNAMIC KPI STATS GRID - 5 Harmonious Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
         {/* Total Students */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-36 sm:h-40">
           <div className="flex justify-between items-center">
@@ -340,6 +343,38 @@ function AdminDashboardOverview() {
             <strong>Real-time</strong> from Org
           </div>
         </div>
+
+        {/* Central Leave Requests */}
+        <Link 
+          href="/dashboard/leave-mgmt"
+          className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between h-36 sm:h-40 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer text-left"
+        >
+          <div className="flex justify-between items-center">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <svg className="icon-svg w-5 h-5 sm:w-6 sm:h-6 stroke-current fill-none" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2"></line>
+                <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2"></line>
+                <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2"></line>
+              </svg>
+            </div>
+            {stats.pendingLeaveRequests > 0 && (
+              <span className="text-[10px] sm:text-[11px] font-black px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 animate-pulse">
+                {stats.pendingLeaveRequests} Pending
+              </span>
+            )}
+          </div>
+          <div>
+            <div className="text-2xl sm:text-[32px] font-extrabold text-slate-800 leading-none">
+              {stats.pendingLeaveRequests || 0}
+            </div>
+            <div className="text-xs sm:text-[14px] text-slate-500 font-semibold mt-1">Pending Leaves</div>
+          </div>
+          <div className="border-t border-slate-100 pt-2 flex justify-between text-[9px] sm:text-[10px] text-slate-400 font-semibold uppercase">
+            <span>Appr: {stats.approvedToday || 0}</span>
+            <span>Rej: {stats.rejectedToday || 0}</span>
+          </div>
+        </Link>
       </div>
 
       {/* SECTION GRID - admissions and transaction lists */}

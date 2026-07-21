@@ -22,6 +22,7 @@ import { ExamScheduleModule } from './exam-schedule/exam-schedule.module';
 import { ParentPortalModule } from './parent-portal/parent-portal.module';
 import { ExamConfigModule } from './exam-config/exam-config.module';
 import { TransportModule } from './transport/transport.module';
+import { LeaveManagementModule } from './leave-management/leave-management.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { TransportModule } from './transport/transport.module';
     ParentPortalModule,
     ExamConfigModule,
     TransportModule,
+    LeaveManagementModule,
   ],
   controllers: [],
   providers: [],
