@@ -1226,7 +1226,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
             <div className="space-y-6">
               
               {/* Student Selector card */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 shadow-xs max-w-xl mx-auto space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 shadow-xs w-full sm:max-w-xl mx-auto space-y-4">
                 <div>
                   <h3 className="font-bold text-sm text-slate-800 leading-none font-sans">Select Student to view history</h3>
                   <p className="text-slate-450 text-[11px] font-semibold mt-1">Queries student stats metrics and full logs registry.</p>
@@ -1419,7 +1419,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
                   </div>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-16 text-center text-slate-400 max-w-xl mx-auto">
+                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-16 text-center text-slate-400 w-full sm:max-w-xl mx-auto">
                   <User className="w-12 h-12 mx-auto mb-3 opacity-30 animate-pulse text-slate-400" />
                   <h3 className="text-base font-bold text-slate-705">Select a Student</h3>
                   <p className="text-xs text-slate-400 mt-1">Please search and select a student above to inspect behavior timelines.</p>
@@ -1433,7 +1433,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
       {/* CASE DETAILS & EDIT MODAL */}
       {selectedCase && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[999] p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl space-y-0">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full sm:max-w-xl overflow-hidden shadow-2xl space-y-0">
             
             {/* Modal Header */}
             <div className={`p-6 text-white flex justify-between items-start ${
@@ -1686,7 +1686,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
       {/* PARENT COMPLAINT ACTION MODAL */}
       {selectedParentComplaint && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[999] p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl space-y-0">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full sm:max-w-2xl overflow-hidden shadow-2xl space-y-0">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Parent Grievance Ticket</span>
@@ -1826,7 +1826,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
   return (
     <main className="min-h-screen bg-[#F8FAFC] text-slate-800 p-4 sm:p-8 font-sans selection:bg-blue-500 selection:text-white">
       {/* Main Container */}
-      <div className="max-w-[1400px] mx-auto space-y-6">
+      <div className="w-full sm:max-w-[1400px] mx-auto space-y-6">
         
         {/* Nav Header Link */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
