@@ -871,7 +871,7 @@ export default function StudentsDirectory() {
 
           {/* Floating Bulk Actions Bar */}
           {(selectedIds.length > 0 || selectedClass !== 'All' || selectedSection !== 'All' || selectedYear !== 'All' || search !== '') && filteredStudents.length > 0 && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-4 z-40 border border-slate-800 animate-slide-up max-w-[90%] sm:max-w-max">
+            <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-3 sm:gap-4 z-40 border border-slate-800 animate-slide-up max-w-[90%] sm:max-w-max">
               <div className="flex items-center gap-3">
                 <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
                 <span className="text-xs font-semibold text-slate-300">

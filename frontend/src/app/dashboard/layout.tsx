@@ -904,12 +904,13 @@ function parseComplaintMessage(message: string) {
   return { complaintId, parentName, title, category };
 }
 
-function NotificationComplaintItem({ notification, details, onRead, onRefresh }: { notification: any, details: any, onRead: () => void, onRefresh: () => void }) {
+function NotificationComplaintItem({ notification, details, onRead, onRefresh, onDelete }: { notification: any, details: any, onRead: () => void, onRefresh: () => void, onDelete: (id: string) => void }) {
   const [reply, setReply] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAction = async (status: 'IN_PROGRESS' | 'RESOLVED', defaultReply: string) => {
     if (!details.complaintId) return;
+    loading; // suppress unused check
     setLoading(true);
     try {
       await api.patch(`/complaint-box/parent-complaints/${details.complaintId}/status`, {
@@ -931,9 +932,23 @@ function NotificationComplaintItem({ notification, details, onRead, onRefresh }:
         <span className="text-slate-800 font-extrabold text-xs">
           {notification.title}
         </span>
-        {!notification.isRead && (
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 mt-1" />
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {!notification.isRead && (
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(notification.id);
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Delete notification"
+          >
+            <svg className="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24">
+              <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1 text-[11px] font-medium text-slate-600">
@@ -1013,6 +1028,17 @@ function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && window.innerWidth < 640) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   const handleMarkAsRead = async (id: string) => {
     try {
       await api.post(`/communications/${id}/read`);
@@ -1021,6 +1047,25 @@ function NotificationBell() {
       );
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.delete(`/communications/${id}`);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (err) {
+      console.error('Failed to delete notification:', err);
+    }
+  };
+
+  const handleClearRead = async () => {
+    if (!currentUser?.id) return;
+    try {
+      await api.post(`/communications/clear-read/${currentUser.id}`);
+      setNotifications(prev => prev.filter(n => !n.isRead));
+    } catch (err) {
+      console.error('Failed to clear read notifications:', err);
     }
   };
 
@@ -1050,14 +1095,24 @@ function NotificationBell() {
         <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-20 sm:top-auto sm:mt-2 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] overflow-hidden text-slate-800 animate-in fade-in slide-in-from-top-1 max-h-[calc(100vh-90px)] sm:max-h-[80vh]">
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-150 flex justify-between items-center">
             <span className="font-extrabold text-xs text-slate-700 uppercase tracking-wide">Notifications</span>
-            {unreadCount > 0 && (
-              <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded">
-                {unreadCount} Unread
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {notifications.some(n => n.isRead) && (
+                <button
+                  onClick={handleClearRead}
+                  className="text-[10px] text-red-650 hover:text-red-800 font-bold bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded transition-colors cursor-pointer border border-red-100"
+                >
+                  Clear Read
+                </button>
+              )}
+              {unreadCount > 0 && (
+                <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                  {unreadCount} Unread
+                </span>
+              )}
+            </div>
           </div>
           
-          <div className="overflow-y-auto divide-y divide-slate-100 max-h-[calc(100vh-160px)] sm:max-h-80">
+          <div className="overflow-y-auto divide-y divide-slate-100 max-h-[calc(100vh-160px)] sm:max-h-80 pb-20 sm:pb-4">
             {notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-slate-400 font-medium">
                 No notifications yet.
@@ -1079,9 +1134,23 @@ function NotificationBell() {
                         <span className="text-slate-800 font-extrabold text-xs">
                           {n.title}
                         </span>
-                        {!n.isRead && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0 mt-1" />
-                        )}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!n.isRead && (
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0" />
+                          )}
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              handleDelete(n.id);
+                            }}
+                            className="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-100 transition-colors cursor-pointer"
+                            title="Delete notification"
+                          >
+                            <svg className="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24">
+                              <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+                            </svg>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 space-y-1 text-[11px] font-medium text-slate-600">
@@ -1153,6 +1222,7 @@ function NotificationBell() {
                       details={details}
                       onRead={() => handleMarkAsRead(n.id)}
                       onRefresh={fetchNotifications}
+                      onDelete={handleDelete}
                     />
                   );
                 }
@@ -1186,9 +1256,23 @@ function NotificationBell() {
                       <span className={`text-slate-800 font-bold ${!n.isRead ? 'text-blue-700' : ''}`}>
                         {n.title}
                       </span>
-                      {!n.isRead && (
-                        <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1" />
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!n.isRead && (
+                          <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1" />
+                        )}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            handleDelete(n.id);
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-100 transition-colors cursor-pointer"
+                          title="Delete notification"
+                        >
+                          <svg className="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24">
+                            <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                     <p className="text-slate-500 font-normal leading-relaxed">
                       {n.message}

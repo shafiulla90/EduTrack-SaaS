@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Delete } from '@nestjs/common';
 import { CommunicationsService } from './communications.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -20,5 +20,15 @@ export class CommunicationsController {
   @Post(':id/read')
   async read(@Param('id') id: string) {
     return this.communicationsService.markAsRead(id);
+  }
+
+  @Delete(':id')
+  async deleteNotification(@Param('id') id: string) {
+    return this.communicationsService.deleteNotification(id);
+  }
+
+  @Post('clear-read/:recipientId')
+  async clearReadNotifications(@Param('recipientId') recipientId: string) {
+    return this.communicationsService.clearReadNotifications(recipientId);
   }
 }

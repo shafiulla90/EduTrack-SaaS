@@ -163,4 +163,18 @@ export class CommunicationsService {
     }
     return this.prisma.communicationRecipient.update({ where: { id: recipientId }, data });
   }
+
+  async deleteNotification(id: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.notification.delete({
+      where: { id },
+    });
+  }
+
+  async clearReadNotifications(recipientId: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.notification.deleteMany({
+      where: { recipientId, isRead: true },
+    });
+  }
 }
