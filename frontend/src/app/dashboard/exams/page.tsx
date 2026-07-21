@@ -32,6 +32,7 @@ type StudentMarkRow = {
 };
 
 export default function ExamsAndMarksPage() {
+  const router = useRouter();
   // Metadata options
   const [classes, setClasses] = useState<ClassSectionOption[]>([]);
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
@@ -294,7 +295,7 @@ export default function ExamsAndMarksPage() {
         </div>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => window.open('/dashboard/exams/config', '_blank')}
+            onClick={() => router.push('/dashboard/exams/config')}
             className="px-4 py-2.5 rounded-xl border border-[#2E5BFF]/30 bg-blue-50 hover:bg-blue-100 text-[#2E5BFF] font-semibold text-[13px] flex items-center gap-2 transition-all shadow-xs cursor-pointer"
           >
             <Settings className="w-4 h-4" />
