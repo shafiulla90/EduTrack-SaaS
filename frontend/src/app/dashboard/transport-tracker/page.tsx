@@ -24,6 +24,7 @@ export default function DriverTransportTrackerPage() {
   const [accuracyNotice, setAccuracyNotice] = useState<string | null>(null);
 
   const watchIdRef = useRef<number | null>(null);
+  const intervalIdRef = useRef<any>(null);
   const wakeLockRef = useRef<any>(null);
 
   const fetchAssignedBus = useCallback(async () => {
@@ -69,9 +70,49 @@ export default function DriverTransportTrackerPage() {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
+    if (intervalIdRef.current !== null) {
+      clearInterval(intervalIdRef.current);
+      intervalIdRef.current = null;
+    }
     releaseWakeLock();
     setGpsActive(false);
+    console.log('[Driver Device GPS] Stopped tracking & cleared intervals.');
   }, []);
+
+  const sendGpsPing = async (pos: GeolocationPosition) => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    const speed = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0; // m/s to km/h
+    const heading = pos.coords.heading || 0;
+    const accuracy = Math.round(pos.coords.accuracy || 0);
+
+    setCurrentCoords({ lat, lng, speed, heading, accuracy });
+    const pingTime = new Date().toLocaleTimeString();
+    setLastPingTime(pingTime);
+
+    if (accuracy > 500) {
+      setAccuracyNotice(`Low GPS Precision (Accuracy: ${accuracy}m). Transmitting fallback coordinates...`);
+    } else {
+      setAccuracyNotice(null);
+    }
+
+    const payload = {
+      lat,
+      lng,
+      speed,
+      heading,
+      accuracy,
+      dutyStatus: 'ON_ROUTE',
+    };
+
+    console.log('[Driver Device GPS Ping] Sending payload to /transport/driver/gps:', payload, 'Timestamp:', pingTime);
+
+    try {
+      await api.post('/transport/driver/gps', payload);
+    } catch (err) {
+      console.error('[Driver Device GPS Error] Failed to post GPS position:', err);
+    }
+  };
 
   const startGpsTracking = async () => {
     setGpsError(null);
@@ -85,42 +126,20 @@ export default function DriverTransportTrackerPage() {
 
     await requestWakeLock();
     setGpsActive(true);
+    console.log('[Driver Device GPS] Starting tracking & requesting position...');
 
+    // Immediately capture position
+    navigator.geolocation.getCurrentPosition(
+      (pos) => sendGpsPing(pos),
+      (err) => console.warn('[Driver Device Initial GPS Error]:', err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
+    // Watch position changes
     watchIdRef.current = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const speed = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0; // m/s to km/h
-        const heading = pos.coords.heading || 0;
-        const accuracy = Math.round(pos.coords.accuracy || 0);
-
-        setCurrentCoords({ lat, lng, speed, heading, accuracy });
-        setLastPingTime(new Date().toLocaleTimeString());
-
-        // GPS Accuracy Filtering: Ignore readings with accuracy > 30 meters
-        if (accuracy > 30) {
-          setAccuracyNotice(`Weak GPS Signal (Accuracy: ${accuracy}m > 30m). Waiting for accurate position fix before transmitting...`);
-          return;
-        } else {
-          setAccuracyNotice(null);
-        }
-
-        // Post GPS Ping to Backend
-        try {
-          await api.post('/transport/driver/gps', {
-            lat,
-            lng,
-            speed,
-            heading,
-            accuracy,
-            dutyStatus: 'ON_ROUTE',
-          });
-        } catch (err) {
-          console.error('Failed to post GPS position:', err);
-        }
-      },
+      (pos) => sendGpsPing(pos),
       (err) => {
-        console.error('GPS Watch Error:', err);
+        console.error('[Driver Device GPS Error]:', err);
         setGpsErrorCode(err.code);
         if (err.code === 1) {
           setGpsError('Location permission was denied. Please allow location access in your browser settings to track live bus movement.');
@@ -131,7 +150,6 @@ export default function DriverTransportTrackerPage() {
         } else {
           setGpsError('An unknown error occurred while retrieving GPS location.');
         }
-        setGpsActive(false);
       },
       {
         enableHighAccuracy: true,
@@ -139,6 +157,15 @@ export default function DriverTransportTrackerPage() {
         maximumAge: 0,
       }
     );
+
+    // Continuous 5-second polling interval fallback
+    intervalIdRef.current = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => sendGpsPing(pos),
+        (err) => console.warn('[Driver Device Interval GPS Error]:', err),
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    }, 5000);
   };
 
   const handleDutyChange = async (newStatus: string) => {

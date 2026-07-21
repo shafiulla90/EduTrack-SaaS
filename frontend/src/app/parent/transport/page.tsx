@@ -25,10 +25,11 @@ export default function ParentTransportPage() {
     if (!selectedChild?.id) return;
     try {
       const res = await api.get(`/transport/parent-portal/children/${selectedChild.id}`);
+      console.log('[Parent Portal Telemetry] Received update for child:', selectedChild.name, res.data);
       setTransportData(res.data);
       setError('');
     } catch (err: any) {
-      console.error('Failed to fetch transport data:', err);
+      console.error('[Parent Portal Telemetry Error] Failed to fetch transport data:', err);
       setError('Failed to load real-time transport data.');
     } finally {
       setLoading(false);

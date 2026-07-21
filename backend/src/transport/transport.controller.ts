@@ -133,6 +133,7 @@ export class TransportController {
     @Body() gpsData: { lat: number; lng: number; speed?: number; heading?: number; accuracy?: number; batteryLevel?: number; dutyStatus?: string },
   ) {
     const userId = req.user.id || req.user.userId || req.user.sub;
+    console.log(`[Backend GPS Controller] Received GPS ping from userId=${userId}:`, gpsData);
     return this.transportService.processDriverGps(userId, req.user.tenantId, gpsData);
   }
 
@@ -142,6 +143,8 @@ export class TransportController {
   @Get('parent-portal/children/:studentId')
   @Roles(Role.PARENT, Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   async getParentStudentTransport(@Req() req: any, @Param('studentId') studentId: string) {
-    return this.transportService.getParentStudentTransport(studentId, req.user.userId, req.user.tenantId);
+    const parentUserId = req.user.id || req.user.userId || req.user.sub;
+    console.log(`[Backend Parent Portal Controller] Fetching transport info for studentId=${studentId}, parentUserId=${parentUserId}`);
+    return this.transportService.getParentStudentTransport(studentId, parentUserId, req.user.tenantId);
   }
 }

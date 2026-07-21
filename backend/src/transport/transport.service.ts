@@ -551,14 +551,16 @@ export class TransportService {
     });
     if (!bus) throw new NotFoundException('No assigned bus found for this driver');
 
-    // GPS Accuracy Filtering: Ignore readings with accuracy > 30 meters to prevent erratic jumps
-    if (gpsData.accuracy !== undefined && gpsData.accuracy > 30) {
-      console.warn(`[GPS Filtering] High uncertainty ping (${gpsData.accuracy}m > 30m). Skipping location update.`);
+    // GPS Accuracy Filtering: Ignore readings with accuracy > 500 meters to prevent erratic jumps
+    if (gpsData.accuracy !== undefined && gpsData.accuracy > 500) {
+      console.warn(`[GPS Filtering] High uncertainty ping (${gpsData.accuracy}m > 500m). Skipping location update.`);
       return bus;
     }
 
     const now = new Date();
     const currentDuty = gpsData.dutyStatus || bus.dutyStatus || 'ON_ROUTE';
+
+    console.log(`[Backend processDriverGps] Updating Bus ID=${bus.id} (${bus.busNumber}) with lat=${gpsData.lat}, lng=${gpsData.lng}, speed=${gpsData.speed || 0}km/h, dutyStatus=${currentDuty}, timestamp=${now.toISOString()}`);
 
     const updatedBus = await this.prisma.bus.update({
       where: { id: bus.id },
@@ -598,6 +600,7 @@ export class TransportService {
 
           // 500m Proximity check for pickup stops
           if (distKm <= 0.5) {
+            console.log(`[Geofence] Bus ${bus.busNumber} is within 500m of stop ${stop.stopName}`);
             const stopStudents = await this.prisma.studentProfile.findMany({
               where: { busStopId: stop.id, tenantId },
               include: { parentProfile: { select: { userId: true } } },
@@ -690,8 +693,8 @@ export class TransportService {
 
     const bus = student.bus;
     const isOnline = bus.lastGpsUpdate
-      ? (Date.now() - new Date(bus.lastGpsUpdate).getTime()) < 45000 && bus.dutyStatus !== 'OFF_DUTY'
-      : false;
+      ? (Date.now() - new Date(bus.lastGpsUpdate).getTime()) < 180000 && bus.dutyStatus !== 'OFFLINE' && bus.dutyStatus !== 'OFF_DUTY'
+      : (bus.dutyStatus === 'ON_ROUTE' || bus.dutyStatus === 'NEAR_SCHOOL');
 
     // Calculate dynamic ETA & Next Stop if bus has current lat/lng
     let etaMinutes = 8;
