@@ -362,15 +362,11 @@ export default function FeesBillingPage() {
         });
       }
 
-      // Dynamically create a hidden container for the invoice sheet
       const container = document.createElement('div');
       container.style.position = 'fixed';
-      container.style.left = '0';
-      container.style.top = '0';
+      container.style.left = '-9999px';
+      container.style.top = '-9999px';
       container.style.width = '800px';
-      container.style.zIndex = '-9999';
-      container.style.opacity = '0';
-      container.style.pointerEvents = 'none';
       container.style.backgroundColor = '#ffffff';
       container.style.color = '#2d3748';
       container.style.fontFamily = 'sans-serif';
