@@ -1015,27 +1015,9 @@ export default function FeesBillingPage() {
 
             {/* Payment Summary */}
             <div className="border-t border-slate-100 pt-3 text-xs font-semibold text-slate-655 space-y-2">
-              <div className="flex justify-between">
-                <span>Previous Due:</span>
-                <span className="font-mono text-slate-800 font-semibold">₹{(selectedStudent.feeSummary?.overall?.totalPreviousYearDue || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Current Due:</span>
-                <span className="font-mono text-slate-800 font-semibold">₹{(selectedStudent.feeSummary?.overall?.totalCurrentYearDue || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Amount Due (Before Payment):</span>
-                <span className="font-mono text-slate-800 font-bold">₹{selectedStudent.totalPendingBalance.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-100/60 pt-2">
-                <span>Amount Being Paid:</span>
-                <span className="font-mono text-blue-600 font-extrabold text-sm">₹{billingTotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Remaining Balance After Payment:</span>
-                <span className="font-mono text-rose-600 font-bold">
-                  ₹{Math.max(0, (selectedStudent.totalPendingBalance || 0) - billingTotal).toLocaleString()}
-                </span>
+              <div className="flex justify-between items-center">
+                <span>Total Amount Being Paid:</span>
+                <span className="font-mono text-blue-600 font-black text-base">₹{billingTotal.toLocaleString()}</span>
               </div>
             </div>
 
@@ -1050,16 +1032,6 @@ export default function FeesBillingPage() {
               <div>
                 <span className="text-slate-400 block mb-0.5">Payment Date</span>
                 <span className="text-slate-850 font-bold block">{new Date().toLocaleDateString('en-IN')}</span>
-              </div>
-              <div className="col-span-2">
-                <span className="text-slate-400 block mb-1">Notes / Remarks (Optional)</span>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Enter remarks for invoice record..."
-                  rows={2}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-blue-500 font-semibold text-slate-800"
-                />
               </div>
             </div>
 
