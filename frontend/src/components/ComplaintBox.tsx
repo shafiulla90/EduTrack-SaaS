@@ -496,7 +496,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
   });
 
   const contentBody = (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full min-w-0 overflow-hidden">
       
       {/* Alert toast notification */}
       {alertMessage && (
@@ -512,7 +512,7 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
       )}
 
       {/* Premium Card Panel */}
-      <div className="bg-white border border-slate-200 rounded-[20px] shadow-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-[20px] shadow-xl overflow-hidden w-full max-w-full">
         
         {/* LWC Header Gradient */}
         <div className="bg-gradient-to-r from-[#2E5BFF] to-[#8B5CF6] p-6 sm:p-8 text-white">
@@ -989,28 +989,28 @@ export default function ComplaintBox({ isEmbedded = false }: ComplaintBoxProps) 
             <div className="space-y-6">
               
               {/* Ledger filters */}
-              <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 flex flex-wrap gap-4 items-center justify-between shadow-xs">
+              <div className="bg-slate-50 p-4 sm:p-6 rounded-xl border border-slate-200 flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between shadow-xs">
                 <div className="flex items-center gap-2 text-slate-700">
                   <Filter className="w-4 h-4 text-blue-600" />
                   <span className="font-bold text-xs uppercase tracking-wider text-slate-700">Filters Ledger</span>
                 </div>
 
-                <div className="flex flex-wrap gap-3 items-center">
-                  <div className="relative">
+                <div className="flex flex-col sm:flex-row gap-2 items-center w-full sm:w-auto">
+                  <div className="relative w-full sm:w-48">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
                       placeholder="Search student, details..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-1.5 text-xs text-slate-800 outline-none w-48 focus:border-blue-500"
+                      className="bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-1.5 text-xs text-slate-800 outline-none w-full focus:border-blue-500"
                     />
                   </div>
 
                   <select
                     value={filterAcademicYear}
                     onChange={(e) => setFilterAcademicYear(e.target.value)}
-                    className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+                    className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 outline-none w-full sm:w-auto focus:border-blue-500"
                   >
                     <option value="All">All Years</option>
                     {academicYears.map(year => (
