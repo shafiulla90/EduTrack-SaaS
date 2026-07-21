@@ -103,22 +103,25 @@ export class TransportController {
   @Get('driver/assigned-bus')
   @Roles(Role.DRIVER, Role.STAFF, Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   async getDriverAssignedBus(@Req() req: any) {
-    return this.transportService.getDriverAssignedBus(req.user.userId, req.user.tenantId);
+    const userId = req.user.id || req.user.userId || req.user.sub;
+    return this.transportService.getDriverAssignedBus(userId, req.user.tenantId);
   }
 
   @Post('driver/duty')
   @Roles(Role.DRIVER, Role.STAFF, Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   async updateDriverDuty(@Req() req: any, @Body('dutyStatus') dutyStatus: string) {
-    return this.transportService.updateDriverDuty(req.user.userId, req.user.tenantId, dutyStatus);
+    const userId = req.user.id || req.user.userId || req.user.sub;
+    return this.transportService.updateDriverDuty(userId, req.user.tenantId, dutyStatus);
   }
 
   @Post('driver/gps')
   @Roles(Role.DRIVER, Role.STAFF, Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   async processDriverGps(
     @Req() req: any,
-    @Body() gpsData: { lat: number; lng: number; speed?: number; heading?: number; batteryLevel?: number; dutyStatus?: string },
+    @Body() gpsData: { lat: number; lng: number; speed?: number; heading?: number; accuracy?: number; batteryLevel?: number; dutyStatus?: string },
   ) {
-    return this.transportService.processDriverGps(req.user.userId, req.user.tenantId, gpsData);
+    const userId = req.user.id || req.user.userId || req.user.sub;
+    return this.transportService.processDriverGps(userId, req.user.tenantId, gpsData);
   }
 
   // -------------------------------------------------------------

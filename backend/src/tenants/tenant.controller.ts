@@ -87,7 +87,15 @@ export class TenantController {
 
     const currentUser = await this.prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, role: true, avatarUrl: true },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        avatarUrl: true,
+        staffProfile: {
+          select: { id: true, staffRole: true, designation: true, staffCategory: true }
+        }
+      },
     });
 
     const setup = await this.prisma.schoolSetup.findUnique({

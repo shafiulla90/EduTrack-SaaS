@@ -176,7 +176,16 @@ export default function SchoolAdminTransportPage() {
     delayedBuses: 0,
   };
 
-  const busLocations = buses
+  const [selectedRouteFilter, setSelectedRouteFilter] = useState('');
+  const [selectedDriverFilter, setSelectedDriverFilter] = useState('');
+
+  const filteredBuses = buses.filter((b) => {
+    if (selectedRouteFilter && b.routeId !== selectedRouteFilter) return false;
+    if (selectedDriverFilter && b.driverId !== selectedDriverFilter) return false;
+    return true;
+  });
+
+  const busLocations = filteredBuses
     .filter((b) => b.currentLat && b.currentLng)
     .map((b) => ({
       id: b.id,
@@ -188,7 +197,7 @@ export default function SchoolAdminTransportPage() {
       lat: b.currentLat,
       lng: b.currentLng,
       speed: b.currentSpeed || 0,
-      isOnline: b.dutyStatus !== 'OFF_DUTY',
+      isOnline: b.dutyStatus !== 'OFF_DUTY' && b.dutyStatus !== 'OFFLINE',
     }));
 
   return (
@@ -268,15 +277,46 @@ export default function SchoolAdminTransportPage() {
             ))}
           </div>
 
-          {/* Multi-Bus Leaflet Map */}
+          {/* Filter Controls & Multi-Bus Leaflet Map */}
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide flex items-center gap-2">
                 <span>🗺️</span> Multi-Bus Live GPS Fleet Overview
               </h2>
-              <span className="text-xs text-slate-400 font-mono">
-                Live position auto-refreshes every 10s
-              </span>
+
+              {/* Fleet Map Filters */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <select
+                  value={selectedRouteFilter}
+                  onChange={(e) => setSelectedRouteFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none text-slate-700"
+                >
+                  <option value="">All Routes</option>
+                  {routes.map((r) => (
+                    <option key={r.id} value={r.id}>{r.routeName}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedDriverFilter}
+                  onChange={(e) => setSelectedDriverFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold outline-none text-slate-700"
+                >
+                  <option value="">All Drivers</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.user?.name}</option>
+                  ))}
+                </select>
+
+                {(selectedRouteFilter || selectedDriverFilter) && (
+                  <button
+                    onClick={() => { setSelectedRouteFilter(''); setSelectedDriverFilter(''); }}
+                    className="text-xs text-blue-600 font-bold hover:underline"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
             </div>
 
             <LiveBusMap buses={busLocations} height="480px" zoom={12} />

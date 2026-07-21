@@ -800,8 +800,16 @@ function TeacherDashboardView() {
   );
 }
 
+import DriverTransportTrackerPage from './transport-tracker/page';
+
 export default function DashboardOverview() {
   const { currentUser } = useTenant();
+
+  const isDriver = currentUser?.role === 'DRIVER' || currentUser?.staffProfile?.staffRole === 'Driver' || currentUser?.staffProfile?.designation?.toLowerCase().includes('driver');
+
+  if (isDriver) {
+    return <DriverTransportTrackerPage />;
+  }
 
   if (currentUser?.role === 'TEACHER') {
     return <TeacherDashboardView />;

@@ -342,7 +342,14 @@ export class TransportService {
   // -------------------------------------------------------------
   async getDriverAssignedBus(userId: string, tenantId: string) {
     const staff = await this.prisma.staffProfile.findFirst({
-      where: { userId, tenantId },
+      where: {
+        tenantId,
+        OR: [
+          { userId },
+          { user: { id: userId } },
+        ],
+      },
+      include: { user: true },
     });
     if (!staff) throw new NotFoundException('Driver staff profile not found');
 
@@ -363,25 +370,93 @@ export class TransportService {
       },
     });
 
-    if (!bus) throw new NotFoundException('No assigned bus found for this driver');
+    if (!bus) {
+      return {
+        driver: staff,
+        bus: null,
+        validations: {
+          hasAssignedBus: false,
+          hasAssignedRoute: false,
+          isBusActive: false,
+          isTripCompletedToday: false,
+          canStartTrip: false,
+          validationError: 'No bus is assigned to your driver account.',
+        },
+      };
+    }
 
-    return { driver: staff, bus };
+    const hasAssignedRoute = Boolean(bus.routeId && bus.route);
+    const isBusActive = bus.status === 'ACTIVE';
+
+    // Check if today's trip is already completed
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const completedTripToday = await this.prisma.busTrip.findFirst({
+      where: {
+        busId: bus.id,
+        tenantId,
+        status: 'COMPLETED',
+        endTime: { gte: startOfToday },
+      },
+    });
+    const isTripCompletedToday = Boolean(completedTripToday && bus.dutyStatus === 'TRIP_COMPLETED');
+
+    let validationError: string | null = null;
+    if (!hasAssignedRoute) {
+      validationError = 'Assigned bus does not have a route configured.';
+    } else if (!isBusActive) {
+      validationError = `Assigned bus status is ${bus.status}. It must be ACTIVE to start a trip.`;
+    } else if (isTripCompletedToday) {
+      validationError = 'Today\'s trip has already been completed for this bus.';
+    }
+
+    const canStartTrip = hasAssignedRoute && isBusActive && !isTripCompletedToday;
+
+    return {
+      driver: staff,
+      bus,
+      validations: {
+        hasAssignedBus: true,
+        hasAssignedRoute,
+        isBusActive,
+        isTripCompletedToday,
+        canStartTrip,
+        validationError,
+      },
+    };
   }
 
   async updateDriverDuty(userId: string, tenantId: string, dutyStatus: string) {
-    const staff = await this.prisma.staffProfile.findFirst({ where: { userId, tenantId } });
+    const staff = await this.prisma.staffProfile.findFirst({
+      where: {
+        tenantId,
+        OR: [{ userId }, { user: { id: userId } }],
+      },
+    });
     if (!staff) throw new NotFoundException('Driver profile not found');
 
     const bus = await this.prisma.bus.findFirst({ where: { driverId: staff.id, tenantId } });
     if (!bus) throw new NotFoundException('No bus assigned to driver');
 
+    // Standardize status representation
+    let stdStatus = dutyStatus;
+    if (dutyStatus === 'STARTING_ROUTE' || dutyStatus === 'EN_ROUTE' || dutyStatus === 'ON_ROUTE') {
+      stdStatus = 'ON_ROUTE';
+    } else if (dutyStatus === 'SCHOOL_REACHED' || dutyStatus === 'REACHED_STOP' || dutyStatus === 'NEAR_SCHOOL') {
+      stdStatus = 'NEAR_SCHOOL';
+    } else if (dutyStatus === 'ROUTE_COMPLETED' || dutyStatus === 'TRIP_COMPLETED') {
+      stdStatus = 'TRIP_COMPLETED';
+    } else if (dutyStatus === 'OFF_DUTY' || dutyStatus === 'OFFLINE') {
+      stdStatus = 'OFFLINE';
+    }
+
     const updatedBus = await this.prisma.bus.update({
       where: { id: bus.id },
-      data: { dutyStatus },
+      data: { dutyStatus: stdStatus },
     });
 
-    // Create or update active trip
-    if (dutyStatus === 'STARTING_ROUTE' || dutyStatus === 'EN_ROUTE') {
+    // Handle BusTrip record management
+    if (stdStatus === 'ON_ROUTE') {
       await this.prisma.busTrip.create({
         data: {
           busId: bus.id,
@@ -393,41 +468,59 @@ export class TransportService {
         },
       }).catch(err => console.error('Failed to create trip:', err));
 
-      // Notify parents assigned to bus
-      await this.notifyParentsForBus(bus.id, tenantId, 'Bus Route Started', `Bus ${bus.busNumber} has started its route.`);
-    } else if (dutyStatus === 'SCHOOL_REACHED') {
-      const activeTrip = await this.prisma.busTrip.findFirst({
-        where: { busId: bus.id, tenantId, status: 'IN_PROGRESS' },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (activeTrip) {
-        await this.prisma.busTrip.update({
-          where: { id: activeTrip.id },
-          data: { arrivalTimestamp: new Date(), status: 'COMPLETED', endTime: new Date() },
-        }).catch(err => console.error('Failed to update trip arrival:', err));
-      }
-      await this.notifyParentsForBus(bus.id, tenantId, 'Bus Reached School', `Bus ${bus.busNumber} has safely arrived at school.`);
-    } else if (dutyStatus === 'OFF_DUTY' || dutyStatus === 'ROUTE_COMPLETED') {
+      await this.notifyParentsForBus(bus.id, tenantId, '🚌 Bus Route Started', `Bus ${bus.busNumber} has started its trip.`);
+    } else if (stdStatus === 'NEAR_SCHOOL') {
+      await this.notifyParentsForBus(bus.id, tenantId, '🏫 Bus Approaching School', `Bus ${bus.busNumber} is approaching school.`);
+    } else if (stdStatus === 'TRIP_COMPLETED' || stdStatus === 'OFFLINE') {
       await this.prisma.busTrip.updateMany({
         where: { busId: bus.id, tenantId, status: 'IN_PROGRESS' },
         data: { status: 'COMPLETED', endTime: new Date() },
       }).catch(err => console.error('Failed to close trips:', err));
+
+      if (stdStatus === 'TRIP_COMPLETED') {
+        await this.notifyParentsForBus(bus.id, tenantId, '🏁 Trip Completed', `Bus ${bus.busNumber} trip has completed safely.`);
+      }
     }
 
     return updatedBus;
   }
 
-  async processDriverGps(userId: string, tenantId: string, gpsData: { lat: number; lng: number; speed?: number; heading?: number; batteryLevel?: number; dutyStatus?: string }) {
-    const staff = await this.prisma.staffProfile.findFirst({ where: { userId, tenantId } });
+  async processDriverGps(
+    userId: string,
+    tenantId: string,
+    gpsData: {
+      lat: number;
+      lng: number;
+      speed?: number;
+      heading?: number;
+      accuracy?: number;
+      batteryLevel?: number;
+      dutyStatus?: string;
+    },
+  ) {
+    const staff = await this.prisma.staffProfile.findFirst({
+      where: {
+        tenantId,
+        OR: [{ userId }, { user: { id: userId } }],
+      },
+    });
     if (!staff) throw new NotFoundException('Driver profile not found');
 
     const bus = await this.prisma.bus.findFirst({
       where: { driverId: staff.id, tenantId },
       include: { route: { include: { stops: { orderBy: { sequenceOrder: 'asc' } } } } },
     });
-    if (!bus) throw new NotFoundException('No assigned bus found');
+    if (!bus) throw new NotFoundException('No assigned bus found for this driver');
+
+    // GPS Accuracy Filtering: Ignore readings with accuracy > 30 meters to prevent erratic jumps
+    if (gpsData.accuracy !== undefined && gpsData.accuracy > 30) {
+      console.warn(`[GPS Filtering] High uncertainty ping (${gpsData.accuracy}m > 30m). Skipping location update.`);
+      return bus;
+    }
 
     const now = new Date();
+    const currentDuty = gpsData.dutyStatus || bus.dutyStatus || 'ON_ROUTE';
+
     const updatedBus = await this.prisma.bus.update({
       where: { id: bus.id },
       data: {
@@ -437,7 +530,7 @@ export class TransportService {
         currentHeading: gpsData.heading || 0,
         batteryLevel: gpsData.batteryLevel !== undefined ? gpsData.batteryLevel : bus.batteryLevel,
         lastGpsUpdate: now,
-        dutyStatus: gpsData.dutyStatus || bus.dutyStatus,
+        dutyStatus: currentDuty,
       },
     });
 
@@ -450,20 +543,22 @@ export class TransportService {
         longitude: gpsData.lng,
         speed: gpsData.speed || 0,
         heading: gpsData.heading || 0,
-        dutyStatus: gpsData.dutyStatus || bus.dutyStatus,
+        dutyStatus: currentDuty,
         batteryLevel: gpsData.batteryLevel || null,
         recordedAt: now,
         tenantId,
       },
     }).catch(err => console.error('GPS Log Error:', err));
 
-    // Geofencing Check: Proximity (~500m / 0.5km) to Bus Stops
+    // Geofencing Proximity Notification & Auto Trip Completion Check
     if (bus.route?.stops && bus.route.stops.length > 0) {
-      for (const stop of bus.route.stops) {
+      const stops = bus.route.stops;
+      for (const stop of stops) {
         if (stop.lat && stop.lng) {
           const distKm = getHaversineDistanceKm(gpsData.lat, gpsData.lng, stop.lat, stop.lng);
+
+          // 500m Proximity check for pickup stops
           if (distKm <= 0.5) {
-            // Bus is within 500m of this stop! Notify students/parents assigned to this stop
             const stopStudents = await this.prisma.studentProfile.findMany({
               where: { busStopId: stop.id, tenantId },
               include: { parentProfile: { select: { userId: true } } },
@@ -473,14 +568,28 @@ export class TransportService {
                 await this.prisma.notification.create({
                   data: {
                     recipientId: stud.parentProfile.userId,
-                    title: 'Bus Approaching Stop',
-                    message: `Bus ${bus.busNumber} is approaching ${stop.stopName} (approx 500m away).`,
+                    title: '🚏 Bus Approaching Stop',
+                    message: `Bus ${bus.busNumber} is approaching ${stop.stopName} (~500m away).`,
                     type: 'IN_APP',
                   },
                 }).catch(() => {});
               }
             }
           }
+        }
+      }
+
+      // Auto-detect when bus reaches the final stop / school (within 100m of last stop)
+      const lastStop = stops[stops.length - 1];
+      if (lastStop && lastStop.lat && lastStop.lng) {
+        const distToFinalKm = getHaversineDistanceKm(gpsData.lat, gpsData.lng, lastStop.lat, lastStop.lng);
+        if (distToFinalKm <= 0.1 && currentDuty === 'ON_ROUTE') {
+          // Auto update status to NEAR_SCHOOL
+          await this.prisma.bus.update({
+            where: { id: bus.id },
+            data: { dutyStatus: 'NEAR_SCHOOL' },
+          });
+          await this.notifyParentsForBus(bus.id, tenantId, '🏫 Bus Reached Destination', `Bus ${bus.busNumber} has arrived at ${lastStop.stopName}.`);
         }
       }
     }

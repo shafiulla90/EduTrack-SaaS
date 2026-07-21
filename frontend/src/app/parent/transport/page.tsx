@@ -178,8 +178,24 @@ export default function ParentTransportPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">LIVE STATUS</span>
-              <strong className="text-xs font-black text-blue-600 mt-1 block uppercase">
-                {bus.dutyStatus || 'OFF_DUTY'}
+              <strong className={`text-xs font-black mt-1 block uppercase ${
+                bus.dutyStatus === 'ON_ROUTE' || bus.dutyStatus === 'STARTING_ROUTE' || bus.dutyStatus === 'EN_ROUTE'
+                  ? 'text-emerald-600'
+                  : bus.dutyStatus === 'NEAR_SCHOOL' || bus.dutyStatus === 'SCHOOL_REACHED'
+                  ? 'text-blue-600'
+                  : bus.dutyStatus === 'TRIP_COMPLETED'
+                  ? 'text-indigo-600'
+                  : 'text-slate-500'
+              }`}>
+                {bus.dutyStatus === 'ON_ROUTE' || bus.dutyStatus === 'EN_ROUTE' || bus.dutyStatus === 'STARTING_ROUTE'
+                  ? 'On Route'
+                  : bus.dutyStatus === 'NEAR_SCHOOL' || bus.dutyStatus === 'SCHOOL_REACHED'
+                  ? 'Near School'
+                  : bus.dutyStatus === 'TRIP_COMPLETED'
+                  ? 'Trip Completed'
+                  : bus.dutyStatus === 'WAITING'
+                  ? 'Waiting'
+                  : 'Offline'}
               </strong>
             </div>
 

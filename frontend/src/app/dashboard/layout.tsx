@@ -450,7 +450,41 @@ export default function DashboardLayout({
     },
   ];
 
-  const navSections = currentUser?.role === 'TEACHER' ? teacherNavSections : adminNavSections;
+  const driverNavSections = [
+    {
+      title: 'Transport Duty',
+      items: [
+        {
+          name: 'Transport Tracker',
+          href: '/dashboard/transport-tracker',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="1" y="3" width="22" height="13" rx="2" ry="2"></rect>
+              <line x1="16" y1="8" x2="20" y2="8"></line>
+              <circle cx="5.5" cy="18.5" r="2.5"></circle>
+              <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
+          ),
+        },
+        {
+          name: 'My Profile',
+          href: '/dashboard/profile',
+          svg: (
+            <svg className="icon-svg" viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          ),
+        },
+      ],
+    },
+  ];
+
+  const isDriver = currentUser?.role === 'DRIVER' || currentUser?.staffProfile?.staffRole === 'Driver' || currentUser?.staffProfile?.designation?.toLowerCase().includes('driver');
+
+  const navSections = isDriver
+    ? driverNavSections
+    : (currentUser?.role === 'TEACHER' ? teacherNavSections : adminNavSections);
 
   return (
     <ToastProvider>
