@@ -132,15 +132,26 @@ export default function GradesMarksPage() {
     return 'bg-rose-50 text-rose-600 border-rose-100';
   };
 
+  const getSubjectGrade = (score: number) => {
+    if (score >= 90) return 'A+';
+    if (score >= 80) return 'A';
+    if (score >= 70) return 'B';
+    if (score >= 60) return 'C';
+    if (score >= 50) return 'D';
+    return 'F';
+  };
+
+  const classLabel = classes.find(c => c.value === selectedClassSectionId)?.label || 'Class Section';
+
   return (
     <div className="space-y-6 animate-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5 print:hidden">
         <div>
-          <h2 className="text-[28px] font-bold text-slate-900 leading-none">
-            Grades & Marks Roster
+          <h2 className="text-[22px] sm:text-[28px] font-bold text-slate-900 leading-none">
+            Grades &amp; Marks Roster
           </h2>
-          <p className="text-slate-500 text-[13px] font-medium mt-2">
+          <p className="text-slate-500 text-[12px] sm:text-[13px] font-medium mt-2">
             View student term score analysis, ranks classifications, and generate report cards.
           </p>
         </div>
@@ -156,7 +167,7 @@ export default function GradesMarksPage() {
             onClick={handleResetFilters}
             className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-[13px] transition-colors"
           >
-            Reset Filters
+            Reset
           </button>
         </div>
       </div>
@@ -169,7 +180,7 @@ export default function GradesMarksPage() {
       )}
 
       {/* Filters config bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 print:hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 print:hidden">
         {/* Search */}
         <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 sm:col-span-2 shadow-xs focus-within:border-[#2E5BFF]">
           <Search className="w-4 h-4 text-slate-400 mr-2" />
@@ -206,230 +217,295 @@ export default function GradesMarksPage() {
       </div>
 
       {/* KPI Stats Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 print:hidden">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-6 print:hidden">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
           <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Total Students</span>
-          <span className="text-2xl font-extrabold text-slate-800 block mt-2">{totalStudents}</span>
-          <span className="text-[10px] text-slate-400 font-semibold block mt-1">Staged in current filters</span>
+          <span className="text-xl sm:text-2xl font-extrabold text-slate-800 block mt-1 sm:mt-2">{totalStudents}</span>
+          <span className="text-[10px] text-slate-400 font-semibold block mt-1 hidden sm:block">Staged in current filters</span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Class Average</span>
-          <span className="text-2xl font-extrabold text-slate-850 block mt-2">{averageScore}%</span>
-          <span className="text-[10px] text-emerald-600 font-semibold block mt-1">Recalculated from DB scores</span>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Class Avg</span>
+          <span className="text-xl sm:text-2xl font-extrabold text-slate-850 block mt-1 sm:mt-2">{averageScore}%</span>
+          <span className="text-[10px] text-emerald-600 font-semibold block mt-1 hidden sm:block">Recalculated from DB scores</span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Passed Count</span>
-          <span className="text-2xl font-extrabold text-emerald-600 block mt-2">{passedCount}</span>
-          <span className="text-[10px] text-slate-450 font-semibold block mt-1">{passRate}% Pass Rate</span>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Passed</span>
+          <span className="text-xl sm:text-2xl font-extrabold text-emerald-600 block mt-1 sm:mt-2">{passedCount}</span>
+          <span className="text-[10px] text-slate-450 font-semibold block mt-1 hidden sm:block">{passRate}% Pass Rate</span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Failed Count</span>
-          <span className="text-2xl font-extrabold text-rose-600 block mt-2">{failedCount}</span>
-          <span className="text-[10px] text-slate-455 font-semibold block mt-1">Score below 45% threshold</span>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
+          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Failed</span>
+          <span className="text-xl sm:text-2xl font-extrabold text-rose-600 block mt-1 sm:mt-2">{failedCount}</span>
+          <span className="text-[10px] text-slate-455 font-semibold block mt-1 hidden sm:block">Score below 45% threshold</span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm col-span-2 sm:col-span-1">
           <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Top Scorer</span>
-          <span className="text-sm font-black text-slate-800 block mt-2 truncate">
+          <span className="text-sm font-black text-slate-800 block mt-1 sm:mt-2 truncate">
             {topScorer ? `${topScorer.name} (${topScorer.score}%)` : '—'}
           </span>
-          <span className="text-[10px] text-purple-650 font-semibold block mt-1 truncate">
+          <span className="text-[10px] text-purple-650 font-semibold block mt-1 hidden sm:block truncate">
             Rank 1 in Class Section
           </span>
         </div>
       </div>
 
-      {/* Student Performance Table */}
+      {/* Student Performance List */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm print:hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between sm:items-center gap-1">
           <h3 className="text-sm font-bold text-slate-700">Student Performance Marks Roster</h3>
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">— Click a row to view detailed report card</span>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tap a card to view report card</span>
         </div>
 
-        <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
-              <RefreshCw className="w-8 h-8 animate-spin" />
-              <span className="text-xs font-semibold">Generating report roster...</span>
-            </div>
-          ) : filteredRecords.length === 0 ? (
-            <div className="py-16 text-center text-slate-450 text-xs font-semibold">
-              No evaluation records found for this class and test term.
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                  <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">Roll Number</th>
-                  <th className="px-6 py-4">Class Section</th>
-                  <th className="px-6 py-4">Class Rank</th>
-                  <th className="px-6 py-4" style={{ width: '200px' }}>Score</th>
-                  <th className="px-6 py-4">Grade</th>
-                  <th className="px-6 py-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-slate-650 font-semibold">
-                {filteredRecords.map((r) => (
-                  <tr
-                    key={r.studentId}
-                    onClick={() => setActiveReportStudent(r)}
-                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-slate-855 text-sm leading-tight">{r.name}</div>
-                    </td>
-                    <td className="px-6 py-4 font-mono font-bold text-slate-500">{r.rollNo}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-2 py-0.5 rounded bg-slate-50 border border-slate-200 font-bold text-[10px] text-slate-650">
-                        {classes.find(c => c.value === selectedClassSectionId)?.label || 'Class Section'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-800">Rank {r.rank}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-slate-150 h-1.5 rounded-full overflow-hidden w-28">
-                          <div className="bg-[#2E5BFF] h-full rounded-full" style={{ width: `${r.score}%` }} />
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+            <RefreshCw className="w-8 h-8 animate-spin" />
+            <span className="text-xs font-semibold">Generating report roster...</span>
+          </div>
+        ) : filteredRecords.length === 0 ? (
+          <div className="py-16 text-center text-slate-450 text-xs font-semibold">
+            No evaluation records found for this class and test term.
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table – hidden on mobile */}
+            <div className="hidden sm:block overflow-x-auto max-h-[500px] overflow-y-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4">Student</th>
+                    <th className="px-6 py-4">Roll No.</th>
+                    <th className="px-6 py-4">Class Section</th>
+                    <th className="px-6 py-4">Rank</th>
+                    <th className="px-6 py-4" style={{ width: '200px' }}>Score</th>
+                    <th className="px-6 py-4">Grade</th>
+                    <th className="px-6 py-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs text-slate-650 font-semibold">
+                  {filteredRecords.map((r) => (
+                    <tr
+                      key={r.studentId}
+                      onClick={() => setActiveReportStudent(r)}
+                      className="hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-855 text-sm leading-tight">{r.name}</div>
+                      </td>
+                      <td className="px-6 py-4 font-mono font-bold text-slate-500">{r.rollNo}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-0.5 rounded bg-slate-50 border border-slate-200 font-bold text-[10px] text-slate-650">
+                          {classLabel}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-800">Rank {r.rank}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-150 h-1.5 rounded-full overflow-hidden w-28">
+                            <div className="bg-[#2E5BFF] h-full rounded-full" style={{ width: `${r.score}%` }} />
+                          </div>
+                          <span className="font-bold font-mono text-[11px] shrink-0">{r.score}%</span>
                         </div>
-                        <span className="font-bold font-mono text-[11px] shrink-0">{r.score}%</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getGradeBadge(r.grade)}`}>
+                          {r.grade}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-blue-600 hover:text-blue-500 text-xs font-bold inline-flex items-center gap-0.5">
+                          Report Card <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards – shown only on mobile */}
+            <div className="sm:hidden divide-y divide-slate-100">
+              {filteredRecords.map((r) => (
+                <button
+                  key={r.studentId}
+                  onClick={() => setActiveReportStudent(r)}
+                  className="w-full text-left px-4 py-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div>
+                      <div className="font-bold text-slate-800 text-sm leading-tight">{r.name}</div>
+                      <div className="text-[11px] text-slate-400 font-semibold mt-0.5">
+                        Roll: <span className="font-mono">{r.rollNo}</span> · Rank {r.rank} · {classLabel}
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getGradeBadge(r.grade)}`}>
                         {r.grade}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-blue-600 hover:text-blue-500 text-xs font-bold inline-flex items-center gap-0.5">
-                        Report Card <ChevronRight className="w-3.5 h-3.5" />
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                      <ChevronRight className="w-4 h-4 text-blue-400" />
+                    </div>
+                  </div>
+                  {/* Score bar */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${r.score}%`,
+                          background: r.score >= 75 ? '#10b981' : r.score >= 45 ? '#2E5BFF' : '#ef4444'
+                        }}
+                      />
+                    </div>
+                    <span className="font-bold font-mono text-[12px] shrink-0 text-slate-700">{r.score}%</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
+      {/* REPORT CARD MODAL */}
       {activeReportStudent && (
         <>
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 transition-opacity print:hidden" onClick={() => setActiveReportStudent(null)} />
-          <div className="fixed inset-x-3 top-4 bottom-4 sm:top-auto sm:bottom-auto sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-xl bg-white border border-slate-200 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden print:relative print:top-0 print:left-0 print:translate-x-0 print:translate-y-0 print:w-full print:max-w-none print:shadow-none print:border-none print:p-0 print:m-0">
-            {/* Sticky Modal Header */}
-            <div className="flex justify-between items-start border-b border-slate-100 pb-3 p-6 shrink-0 print:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 print:hidden"
+            onClick={() => setActiveReportStudent(null)}
+          />
+
+          {/* Modal – fills screen on mobile, centered popup on desktop */}
+          <div className="fixed inset-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg bg-white sm:rounded-2xl shadow-2xl z-50 flex flex-col print:relative print:inset-0 print:translate-x-0 print:translate-y-0 print:w-full print:max-w-none print:shadow-none print:border-none">
+
+            {/* Sticky Header */}
+            <div className="flex justify-between items-center px-5 py-4 border-b border-slate-100 shrink-0 print:hidden">
               <div className="flex items-center gap-3">
-                <Trophy className="w-6 h-6 text-purple-600" />
+                <Trophy className="w-5 h-5 text-purple-600 shrink-0" />
                 <div>
-                  <h3 className="font-extrabold text-slate-850 text-lg leading-tight">Terminal Report Card</h3>
-                  <p className="text-slate-455 text-[11px] font-semibold">{selectedExamName}</p>
+                  <h3 className="font-extrabold text-slate-800 text-base leading-tight">Report Card</h3>
+                  <p className="text-slate-400 text-[11px] font-semibold">{selectedExamName} · {classLabel}</p>
                 </div>
               </div>
-              <button onClick={() => setActiveReportStudent(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 print:hidden">
+              <button
+                onClick={() => setActiveReportStudent(null)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Scrollable Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 print:p-0 print:overflow-visible">
-              {/* School details banner */}
-              <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl space-y-2 text-xs">
-                <div className="text-center font-bold text-slate-700 text-sm">{schoolName}</div>
-                <div className="grid grid-cols-2 gap-2 text-slate-600 font-semibold pt-2 border-t border-slate-200/50">
-                  <div>Student Name: <strong className="text-slate-800 font-extrabold block">{activeReportStudent.name}</strong></div>
-                  <div>Roll Number: <strong className="text-slate-800 font-mono font-extrabold block">{activeReportStudent.rollNo}</strong></div>
-                  <div>Class Section: <strong className="text-slate-800 font-extrabold block">
-                    {classes.find(c => c.value === selectedClassSectionId)?.label || 'Class Section'}
-                  </strong></div>
-                  <div>Class Section Rank: <strong className="text-purple-600 font-extrabold block">Rank {activeReportStudent.rank}</strong></div>
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto print:overflow-visible">
+
+              {/* Student Info Banner */}
+              <div className="mx-4 mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <div className="text-center font-bold text-slate-700 text-sm mb-3">{schoolName}</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div>
+                    <span className="text-slate-400 font-semibold block">Student Name</span>
+                    <span className="text-slate-800 font-extrabold">{activeReportStudent.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">Roll Number</span>
+                    <span className="text-slate-800 font-extrabold font-mono">{activeReportStudent.rollNo}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">Class Section</span>
+                    <span className="text-slate-800 font-extrabold">{classLabel}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold block">Class Rank</span>
+                    <span className="text-purple-600 font-extrabold">Rank {activeReportStudent.rank}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Marks breakdown Table */}
-              <div className="overflow-x-auto border border-slate-100 rounded-xl">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                      <th className="px-4 py-2">Subject Course</th>
-                      <th className="px-4 py-2 text-right">Max Marks</th>
-                      <th className="px-4 py-2 text-right">Secured Score</th>
-                      <th className="px-4 py-2 text-right">Grade Letter</th>
-                      <th className="px-4 py-2 text-right">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs text-slate-650 font-semibold">
-                    {activeReportStudent.subjectsList.map((subj, idx) => {
-                      const isPass = subj.score >= 45;
-                      let letter = 'F';
-                      if (subj.score >= 90) letter = 'A+';
-                      else if (subj.score >= 80) letter = 'A';
-                      else if (subj.score >= 70) letter = 'B';
-                      else if (subj.score >= 60) letter = 'C';
-                      else if (subj.score >= 50) letter = 'D';
-
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50/50">
-                          <td className="px-4 py-2 font-bold text-slate-750">{subj.name}</td>
-                          <td className="px-4 py-2 text-right font-mono text-slate-400">{subj.max}</td>
-                          <td className="px-4 py-2 text-right font-mono font-extrabold text-slate-800">{subj.score}</td>
-                          <td className="px-4 py-2 text-right font-bold text-blue-600">{letter}</td>
-                          <td className="px-4 py-2 text-right">
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                              isPass ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
-                            }`}>
-                              {isPass ? 'PASSED' : 'FAILED'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* Subject-wise Marks – Card layout (no horizontal scroll) */}
+              <div className="mx-4 mt-4 space-y-2">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Subject Wise Marks</h4>
+                {activeReportStudent.subjectsList.map((subj, idx) => {
+                  const isPass = subj.score >= 45;
+                  const letter = getSubjectGrade(subj.score);
+                  const pct = Math.round((subj.score / subj.max) * 100);
+                  return (
+                    <div key={idx} className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-slate-800 text-sm">{subj.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-blue-600 text-sm">{letter}</span>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            isPass ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                          }`}>
+                            {isPass ? 'PASS' : 'FAIL'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${pct}%`,
+                              background: pct >= 75 ? '#10b981' : pct >= 45 ? '#2E5BFF' : '#ef4444'
+                            }}
+                          />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-600 font-mono shrink-0">
+                          {subj.score} / {subj.max}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* GPA Summary footer */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 border border-slate-150 p-4 rounded-xl text-center">
-                <div>
+              {/* GPA Summary */}
+              <div className="mx-4 mt-4 mb-4 grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
                   <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Total Marks</span>
                   <span className="text-sm font-extrabold text-slate-800 block mt-1">
                     {activeReportStudent.subjectsList.reduce((sum, s) => sum + s.score, 0)} / {activeReportStudent.subjectsList.length * 100}
                   </span>
                 </div>
-                <div>
-                  <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Overall Average</span>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                  <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Overall Avg</span>
                   <span className="text-sm font-extrabold text-slate-800 block mt-1">{activeReportStudent.score}%</span>
                 </div>
-                <div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
                   <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">GPA Grade</span>
-                  <span className="text-sm font-extrabold text-purple-650 block mt-1">{activeReportStudent.grade}</span>
+                  <span className="text-sm font-extrabold text-purple-600 block mt-1">{activeReportStudent.grade}</span>
                 </div>
-                <div>
+                <div className={`border rounded-xl p-3 text-center ${
+                  activeReportStudent.score >= 45
+                    ? 'bg-emerald-50 border-emerald-100'
+                    : 'bg-rose-50 border-rose-100'
+                }`}>
                   <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Final Result</span>
-                  <span className="text-sm font-extrabold text-emerald-650 block mt-1">
+                  <span className={`text-sm font-extrabold block mt-1 ${
+                    activeReportStudent.score >= 45 ? 'text-emerald-600' : 'text-rose-600'
+                  }`}>
                     {activeReportStudent.score >= 45 ? 'PASSED' : 'FAILED'}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Sticky Footer – Print button always visible */}
-            <div className="flex justify-end p-4 gap-2 border-t border-slate-100 shrink-0 bg-white print:hidden">
+            {/* Sticky Footer – always visible */}
+            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 shrink-0 bg-white print:hidden">
               <button
                 onClick={() => setActiveReportStudent(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-semibold text-xs"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-semibold text-sm transition-colors"
               >
                 Close
               </button>
               <button
-                onClick={() => {
-                  window.print();
-                }}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-500/10 flex items-center gap-1.5"
+                onClick={() => window.print()}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 flex items-center gap-2 transition-colors"
               >
-                <Printer className="w-3.5 h-3.5" /> Print Report Card
+                <Printer className="w-4 h-4" /> Print PDF
               </button>
             </div>
           </div>
