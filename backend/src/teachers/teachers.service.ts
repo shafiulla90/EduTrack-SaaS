@@ -247,47 +247,71 @@ export class TeachersService {
     });
 
     if (!profile) {
-      throw new NotFoundException('Teacher profile not found');
+      throw new NotFoundException('Staff profile not found');
     }
 
-    const hasActiveAssignments = await this.prisma.teacherAssignment.findFirst({
-      where: { teacherId: id }
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Unlink Bus driver assignment if assigned to a bus
+        await tx.bus.updateMany({
+          where: { driverId: id },
+          data: { driverId: null },
+        });
 
-    if (hasActiveAssignments) {
-      throw new BadRequestException('Cannot delete teacher with active class assignments');
+        // 2. Unlink BusTrips
+        await tx.busTrip.updateMany({
+          where: { driverId: id },
+          data: { driverId: null },
+        });
+
+        // 3. Unlink ClassSection teacherId (class advisor)
+        await tx.classSection.updateMany({
+          where: { teacherId: id },
+          data: { teacherId: null },
+        });
+
+        // 4. Unlink Timetable Periods
+        await tx.period.updateMany({
+          where: {
+            OR: [{ teacherId: id }, { substituteTeacherId: id }],
+          },
+          data: {
+            teacherId: null,
+            substituteTeacherId: null,
+          },
+        });
+
+        // 5. Unlink BehaviorCases
+        await tx.behaviorCase.updateMany({
+          where: { teacherId: id },
+          data: { teacherId: null },
+        });
+
+        // 6. Remove TeacherAssignments & TeacherSkills
+        await tx.teacherAssignment.deleteMany({
+          where: { teacherId: id },
+        });
+        await tx.teacherSkill.deleteMany({
+          where: { teacherId: id },
+        });
+
+        // 7. Deactivate profile and user
+        await tx.staffProfile.update({
+          where: { id },
+          data: { status: 'INACTIVE' },
+        });
+
+        await tx.user.update({
+          where: { id: profile.userId },
+          data: { isActive: false },
+        });
+
+        return { success: true };
+      });
+    } catch (err: any) {
+      console.error('Error in deleteTeacher:', err);
+      throw new BadRequestException(err.message || 'Failed to delete staff member due to dependent records.');
     }
-
-    return this.prisma.$transaction(async (tx) => {
-      // Clean up references
-      await tx.classSection.updateMany({
-        where: { teacherId: id },
-        data: { teacherId: null },
-      });
-      await tx.period.updateMany({
-        where: {
-          OR: [{ teacherId: id }, { substituteTeacherId: id }],
-        },
-        data: {
-          teacherId: null,
-          substituteTeacherId: null,
-        },
-      });
-      await tx.behaviorCase.updateMany({
-        where: { teacherId: id },
-        data: { teacherId: null },
-      });
-      // Deactivate profile and user
-      await tx.staffProfile.update({
-        where: { id },
-        data: { status: 'INACTIVE' },
-      });
-      await tx.user.update({
-        where: { id: profile.userId },
-        data: { isActive: false },
-      });
-      return { success: true };
-    });
   }
 
   async updateTeacher(id: string, data: any) {
