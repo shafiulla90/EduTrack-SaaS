@@ -36,6 +36,7 @@ type Timing = {
   startTime: string;
   endTime: string;
   timeLabel?: string;
+  isBreak?: boolean;
 };
 
 type TeacherWorkload = {
@@ -197,14 +198,36 @@ export default function TimetablePage() {
 
       // Period Timings
       const ptRes = await api.get('/timetable/period-timings');
-      setTimings(ptRes.data);
-      setTimingInputs(ptRes.data.length > 0 ? ptRes.data : [
-        { num: 1, label: 'Period 1', startTime: '08:30 AM', endTime: '09:30 AM' },
-        { num: 2, label: 'Period 2', startTime: '09:30 AM', endTime: '10:30 AM' },
-        { num: 3, label: 'Period 3', startTime: '10:45 AM', endTime: '11:45 AM' },
-        { num: 4, label: 'Period 4', startTime: '11:45 AM', endTime: '12:45 PM' },
-        { num: 5, label: 'Period 5', startTime: '01:30 PM', endTime: '02:30 PM' },
-        { num: 6, label: 'Period 6', startTime: '02:30 PM', endTime: '03:30 PM' }
+      const rawTimings = ptRes.data || [];
+      const sortedTimings = [...rawTimings].sort((a: any, b: any) => (a.periodNumber ?? a.num ?? 0) - (b.periodNumber ?? b.num ?? 0));
+      let displayCount = 1;
+      const mappedTimings = sortedTimings.map((pt: any) => {
+        const isBreak = pt.isBreak ?? false;
+        const displayLabel = isBreak ? (pt.name || 'Break') : `Period ${displayCount}`;
+        const displayNum = isBreak ? null : displayCount;
+        if (!isBreak) {
+          displayCount++;
+        }
+        return {
+          id: pt.id,
+          num: pt.periodNumber ?? pt.num,
+          label: displayLabel,
+          displayPeriodNumber: displayNum,
+          startTime: pt.startTime,
+          endTime: pt.endTime,
+          timeLabel: `${pt.startTime} - ${pt.endTime}`,
+          isBreak
+        };
+      });
+
+      setTimings(mappedTimings);
+      setTimingInputs(mappedTimings.length > 0 ? mappedTimings : [
+        { num: 1, label: 'Period 1', startTime: '08:30 AM', endTime: '09:30 AM', isBreak: false },
+        { num: 2, label: 'Period 2', startTime: '09:30 AM', endTime: '10:30 AM', isBreak: false },
+        { num: 3, label: 'Period 3', startTime: '10:45 AM', endTime: '11:45 AM', isBreak: false },
+        { num: 4, label: 'Period 4', startTime: '11:45 AM', endTime: '12:45 PM', isBreak: false },
+        { num: 5, label: 'Period 5', startTime: '01:30 PM', endTime: '02:30 PM', isBreak: false },
+        { num: 6, label: 'Period 6', startTime: '02:30 PM', endTime: '03:30 PM', isBreak: false }
       ]);
 
       // Workloads
@@ -380,7 +403,15 @@ export default function TimetablePage() {
 
   const handleSavePeriodTimings = async () => {
     try {
-      await api.post('/timetable/period-timings', timingInputs);
+      const payload = timingInputs.map(t => ({
+        id: t.id,
+        periodNumber: t.num,
+        name: t.isBreak ? (t.label === `Period ${t.num}` ? 'Break' : t.label) : (t.label || `P${t.num}`),
+        startTime: t.startTime,
+        endTime: t.endTime,
+        isBreak: t.isBreak ?? false
+      }));
+      await api.post('/timetable/period-timings', payload);
       showAlert('success', 'Period timings configured successfully!');
       fetchMetadata();
     } catch (err) {
@@ -706,7 +737,11 @@ export default function TimetablePage() {
                         const cell = timetableData[key];
                         return (
                           <td key={t.id} className="p-2 border-l border-slate-900">
-                            {cell ? (
+                            {t.isBreak ? (
+                              <div className="w-full p-4 rounded-xl border border-dashed border-slate-850 bg-slate-900/5 text-[10px] text-slate-500 italic font-semibold text-center flex flex-col justify-center min-h-[90px]">
+                                {t.label}
+                              </div>
+                            ) : cell ? (
                               <div className={`p-3 rounded-xl border text-xs flex flex-col justify-between min-h-[90px] relative transition-all group ${
                                 cell.isOnLeave 
                                   ? 'bg-rose-950/30 border-rose-500/20 text-rose-200' 
@@ -1224,7 +1259,7 @@ export default function TimetablePage() {
             <div className="flex justify-between items-center border-b border-slate-850 pb-2">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <Settings className="w-4 h-4 text-indigo-500" />
-                Schedule Slot: {editingCell.day} - Period {editingCell.num}
+                Schedule Slot: {editingCell.day} - {timings.find(t => t.num === editingCell.num)?.label || `Period ${editingCell.num}`}
               </h3>
               <button onClick={() => setEditingCell(null)} className="text-slate-500 hover:text-slate-300"><X className="w-4.5 h-4.5" /></button>
             </div>
@@ -1291,7 +1326,7 @@ export default function TimetablePage() {
             <div className="flex justify-between items-center border-b border-slate-850 pb-2">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <ArrowLeftRight className="w-4 h-4 text-rose-500" />
-                Assign Leave Substitute: {substituteCell.day} - Period {substituteCell.num}
+                Assign Leave Substitute: {substituteCell.day} - {timings.find(t => t.num === substituteCell.num)?.label || `Period ${substituteCell.num}`}
               </h3>
               <button onClick={() => setSubstituteCell(null)} className="text-slate-500 hover:text-slate-300"><X className="w-4.5 h-4.5" /></button>
             </div>

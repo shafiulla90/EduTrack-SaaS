@@ -548,13 +548,14 @@ export default function TeacherClassManagement() {
   const loadWorkloadDashboard = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [summaryRes, teachersRes, classesRes, subjectsRes, yearsRes, sectionsRes] = await Promise.all([
+      const [summaryRes, teachersRes, classesRes, subjectsRes, yearsRes, sectionsRes, timingsRes] = await Promise.all([
         api.get('/timetable/workload/summary'),
         api.get('/timetable/workload/teachers'),
         api.get('/timetable/workload/classes'),
         api.get('/timetable/subjects'),
         api.get('/academics/academic-years'),
-        api.get('/academics/sections')
+        api.get('/academics/sections'),
+        api.get('/timetable/period-timings')
       ]);
 
       setWorkloadSummary({
@@ -585,6 +586,29 @@ export default function TeacherClassManagement() {
         loadPercent: c.loadPercent || 0
       }));
       setClasses(mappedClasses);
+
+      const rawTimings = timingsRes.data || [];
+      const sortedTimings = [...rawTimings].sort((a: any, b: any) => (a.periodNumber ?? a.num ?? 0) - (b.periodNumber ?? b.num ?? 0));
+      let displayCount = 1;
+      const mappedTimings = sortedTimings.map((pt: any) => {
+        const isBreak = pt.isBreak ?? false;
+        const displayLabel = isBreak ? (pt.name || 'Break') : `Period ${displayCount}`;
+        const displayNum = isBreak ? null : displayCount;
+        if (!isBreak) {
+          displayCount++;
+        }
+        return {
+          ...pt,
+          id: pt.id,
+          num: pt.periodNumber ?? pt.num,
+          label: displayLabel,
+          displayPeriodNumber: displayNum,
+          startTime: pt.startTime,
+          endTime: pt.endTime,
+          isBreak
+        };
+      });
+      setTimings(mappedTimings);
 
       setAllSubjects(subjectsRes.data || []);
       setAcademicYears(yearsRes.data || []);
@@ -989,7 +1013,28 @@ export default function TeacherClassManagement() {
       ]);
 
       setClassSubjects(workloadRes.data.subjects || []);
-      setTimings(timingsRes.data || []);
+      const rawTimings = timingsRes.data || [];
+      const sortedTimings = [...rawTimings].sort((a: any, b: any) => (a.periodNumber ?? a.num ?? 0) - (b.periodNumber ?? b.num ?? 0));
+      let displayCount = 1;
+      const mappedTimings = sortedTimings.map((pt: any) => {
+        const isBreak = pt.isBreak ?? false;
+        const displayLabel = isBreak ? (pt.name || 'Break') : `Period ${displayCount}`;
+        const displayNum = isBreak ? null : displayCount;
+        if (!isBreak) {
+          displayCount++;
+        }
+        return {
+          ...pt,
+          id: pt.id,
+          num: pt.periodNumber ?? pt.num,
+          label: displayLabel,
+          displayPeriodNumber: displayNum,
+          startTime: pt.startTime,
+          endTime: pt.endTime,
+          isBreak
+        };
+      });
+      setTimings(mappedTimings);
       // Always refresh the full subjects list so the dropdown is never empty
       if (subjectsRes.data && subjectsRes.data.length > 0) {
         setAllSubjects(subjectsRes.data);
@@ -1889,7 +1934,7 @@ export default function TeacherClassManagement() {
                                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase tracking-wide block w-fit mb-1">{p.leaserType}</span>
                                                 )}
                                                 <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
-                                                  <span>Period {p.periodNumber}</span>
+                                                  <span>{timings.find(t => (t.num ?? t.periodNumber) === p.periodNumber)?.label || `Period ${p.periodNumber}`}</span>
                                                   <span>{p.startTime}</span>
                                                 </div>
                                                 <div className="text-xs font-extrabold text-slate-800 truncate mt-1">{p.subjectName}</div>
@@ -2178,7 +2223,7 @@ export default function TeacherClassManagement() {
                                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 uppercase tracking-wide block w-fit mb-1">SUBSTITUTE</span>
                                                 )}
                                                 <div className="flex justify-between items-center text-[10px] font-bold text-slate-400">
-                                                  <span>Period {p.periodNumber}</span>
+                                                  <span>{timings.find(t => (t.num ?? t.periodNumber) === p.periodNumber)?.label || `Period ${p.periodNumber}`}</span>
                                                   <span>{p.startTime}</span>
                                                 </div>
                                                 <div className="text-xs font-extrabold text-slate-800 truncate mt-1">{p.subjectName}</div>
@@ -2622,7 +2667,7 @@ export default function TeacherClassManagement() {
                       <th className="px-4 py-3.5 border border-slate-700 w-24">Day</th>
                       {timings.map(t => (
                         <th key={t.id} className="px-4 py-3.5 border border-slate-700 text-center">
-                          <div className="font-extrabold">{t.name || `P${t.periodNumber}`}</div>
+                          <div className="font-extrabold">{t.label || t.name || `P${t.periodNumber}`}</div>
                           <div className="text-[9px] opacity-80 font-normal mt-0.5">{t.startTime} - {t.endTime}</div>
                         </th>
                       ))}

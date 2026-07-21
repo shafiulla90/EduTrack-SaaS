@@ -737,45 +737,82 @@ export class TeacherPortalService {
       },
     });
 
-    // 2. Fetch all break timings for this tenant
-    const breakTimings = await this.prisma.periodTiming.findMany({
-      where: { tenantId, isBreak: true, isActive: true },
+    // 2. Fetch all active timings for this tenant to compute displayPeriodNumber
+    const allTimings = await this.prisma.periodTiming.findMany({
+      where: { tenantId, isActive: true },
       orderBy: { periodNumber: 'asc' },
     });
 
-    // 3. Merge periods and breaks for each weekday
+    // 3. Build a map of timing ID -> display details
+    let teachingPeriodIndex = 1;
+    const timingDisplayMap = new Map<string, { displayPeriodNumber: number | null; label: string }>();
+    
+    allTimings.forEach(t => {
+      if (t.isBreak) {
+        timingDisplayMap.set(t.id, {
+          displayPeriodNumber: null,
+          label: t.name || 'Break',
+        });
+      } else {
+        timingDisplayMap.set(t.id, {
+          displayPeriodNumber: teachingPeriodIndex,
+          label: `Period ${teachingPeriodIndex}`,
+        });
+        teachingPeriodIndex++;
+      }
+    });
+
+    // 4. Merge periods and breaks for each weekday
     const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const mergedList: any[] = [];
 
     daysOfWeek.forEach(day => {
       // Lectures for this day
-      const dayLectures = periods.filter(p => p.dayOfWeek === day).map(p => ({
-        id: p.id,
-        dayOfWeek: p.dayOfWeek,
-        subject: p.subject,
-        classSection: p.classSection,
-        periodTiming: p.periodTiming,
-        substituteTeacherId: p.substituteTeacherId,
-        isBreak: false,
-      }));
+      const dayLectures = periods.filter(p => p.dayOfWeek === day).map(p => {
+        const displayInfo = timingDisplayMap.get(p.periodTiming.id) || {
+          displayPeriodNumber: p.periodTiming.periodNumber,
+          label: `Period ${p.periodTiming.periodNumber}`,
+        };
+        return {
+          id: p.id,
+          dayOfWeek: p.dayOfWeek,
+          subject: p.subject,
+          classSection: p.classSection,
+          periodTiming: {
+            ...p.periodTiming,
+            displayPeriodNumber: displayInfo.displayPeriodNumber,
+            label: displayInfo.label,
+          },
+          substituteTeacherId: p.substituteTeacherId,
+          isBreak: false,
+        };
+      });
 
       // Break timings for this day
-      const dayBreaks = breakTimings.map(bt => ({
-        id: `BREAK-${day}-${bt.id}`,
-        dayOfWeek: day,
-        subject: { name: bt.name || 'Break' },
-        classSection: null,
-        periodTiming: {
-          id: bt.id,
-          startTime: bt.startTime,
-          endTime: bt.endTime,
-          periodNumber: bt.periodNumber,
-          name: bt.name,
+      const dayBreaks = allTimings.filter(t => t.isBreak).map(bt => {
+        const displayInfo = timingDisplayMap.get(bt.id) || {
+          displayPeriodNumber: null,
+          label: bt.name || 'Break',
+        };
+        return {
+          id: `BREAK-${day}-${bt.id}`,
+          dayOfWeek: day,
+          subject: { name: bt.name || 'Break' },
+          classSection: null,
+          periodTiming: {
+            id: bt.id,
+            startTime: bt.startTime,
+            endTime: bt.endTime,
+            periodNumber: bt.periodNumber,
+            name: bt.name,
+            isBreak: true,
+            displayPeriodNumber: displayInfo.displayPeriodNumber,
+            label: displayInfo.label,
+          },
+          substituteTeacherId: null,
           isBreak: true,
-        },
-        substituteTeacherId: null,
-        isBreak: true,
-      }));
+        };
+      });
 
       // Combine and sort by period number
       const combined = [...dayLectures, ...dayBreaks];

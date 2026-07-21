@@ -102,7 +102,7 @@ export default function MyTimetablePage() {
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2E5BFF] flex flex-col items-center justify-center font-bold shrink-0">
                     <span className="text-[10px] text-slate-400 uppercase leading-none">Period</span>
-                    <span className="text-lg leading-none mt-1">{p.periodTiming.periodNumber}</span>
+                    <span className="text-lg leading-none mt-1">{p.periodTiming.displayPeriodNumber ?? p.periodTiming.periodNumber}</span>
                   </div>
                   
                   <div className="space-y-1">
