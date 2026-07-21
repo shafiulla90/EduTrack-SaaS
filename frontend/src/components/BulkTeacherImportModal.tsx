@@ -48,21 +48,93 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
     document.body.removeChild(element);
   };
 
+  // RFC-4180 compliant CSV row parser (handles quoted fields, escaped quotes, commas inside quotes)
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim().replace(/^"|"$/g, '').trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim().replace(/^"|"$/g, '').trim());
+    return result;
+  };
+
+  // Helper to split CSV text into lines, respecting quotes across newlines
+  const splitCSVLines = (text: string): string[] => {
+    const lines: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+        current += char;
+      } else if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && text[i + 1] === '\n') {
+          i++;
+        }
+        if (current.trim()) {
+          lines.push(current);
+        }
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    if (current.trim()) {
+      lines.push(current);
+    }
+    return lines;
+  };
+
+  // Case-insensitive & quote-stripped helper to retrieve a field value from a row record
+  const getRowVal = (row: ParsedRecord, key: string): string => {
+    if (!row) return '';
+    let rawVal = row[key];
+    if (rawVal === undefined) {
+      const foundKey = Object.keys(row).find(k => k.toLowerCase() === key.toLowerCase());
+      if (foundKey) rawVal = row[foundKey];
+    }
+    if (!rawVal) return '';
+    return String(rawVal).replace(/^"|"$/g, '').trim();
+  };
+
   // CSV Parsing logic
   const parseCSV = (text: string) => {
     try {
-      const lines = text.split(/\r\n|\n/);
-      if (lines.length === 0 || !lines[0].trim()) {
+      const lines = splitCSVLines(text);
+      if (lines.length === 0) {
         alert('CSV file is empty.');
         return;
       }
 
-      const headers = lines[0].split(',').map(h => h.trim());
-      
-      // Basic check for templates headers matching
-      const hasCorrectHeaders = templateHeaders.every(h => headers.includes(h));
-      if (!hasCorrectHeaders) {
-        alert('Invalid CSV template format. Please download and use the official template.');
+      // Parse headers and strip UTF-8 BOM (\uFEFF)
+      const rawHeaderLine = lines[0].replace(/^\uFEFF/, '');
+      const headers = parseCSVLine(rawHeaderLine).map(h => h.toLowerCase());
+      const originalHeaders = parseCSVLine(rawHeaderLine);
+
+      // Check required headers
+      const required = ['first name', 'last name', 'email'];
+      const missing = required.filter(req => !headers.includes(req));
+
+      if (missing.length > 0) {
+        alert(`Invalid CSV template format. Missing required headers: ${missing.join(', ')}. Please download and use the official CSV template.`);
         return;
       }
 
@@ -71,11 +143,12 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
         const line = lines[i].trim();
         if (!line) continue;
 
-        const currentLine = line.split(',');
+        const currentValues = parseCSVLine(line);
         const obj: ParsedRecord = {};
-        
-        for (let j = 0; j < headers.length; j++) {
-          obj[headers[j]] = currentLine[j] ? currentLine[j].trim() : '';
+
+        for (let j = 0; j < originalHeaders.length; j++) {
+          const headerName = originalHeaders[j];
+          obj[headerName] = currentValues[j] !== undefined ? currentValues[j] : '';
         }
         rows.push(obj);
       }
@@ -114,9 +187,9 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
 
     parsedData.forEach((row, index) => {
       const rowNum = index + 2;
-      const firstName = row['First Name'];
-      const lastName = row['Last Name'];
-      const email = row['Email'];
+      const firstName = getRowVal(row, 'First Name');
+      const lastName = getRowVal(row, 'Last Name');
+      const email = getRowVal(row, 'Email');
 
       if (!firstName) {
         errorLogs.push(`Row ${rowNum}: First Name is missing.`);
@@ -135,37 +208,32 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
         return;
       }
 
-      const basicSalary = row['Basic Salary'] ? Number(row['Basic Salary']) : undefined;
-      const allowances = row['Allowances'] ? Number(row['Allowances']) : undefined;
-      const deductions = row['Deductions'] ? Number(row['Deductions']) : undefined;
-      const pf = row['PF'] ? Number(row['PF']) : undefined;
+      const parseNumVal = (raw: string) => {
+        if (!raw) return undefined;
+        const clean = raw.replace(/[^0-9.]/g, '');
+        const num = Number(clean);
+        return isNaN(num) ? undefined : num;
+      };
 
-      if (row['Basic Salary'] && isNaN(Number(row['Basic Salary']))) {
-        errorLogs.push(`Row ${rowNum}: Basic Salary must be a number.`);
-        return;
-      }
-      if (row['Allowances'] && isNaN(Number(row['Allowances']))) {
-        errorLogs.push(`Row ${rowNum}: Allowances must be a number.`);
-        return;
-      }
-      if (row['Deductions'] && isNaN(Number(row['Deductions']))) {
-        errorLogs.push(`Row ${rowNum}: Deductions must be a number.`);
-        return;
-      }
-      if (row['PF'] && isNaN(Number(row['PF']))) {
-        errorLogs.push(`Row ${rowNum}: PF must be a number.`);
-        return;
-      }
+      const basicSalaryRaw = getRowVal(row, 'Basic Salary');
+      const allowancesRaw = getRowVal(row, 'Allowances');
+      const deductionsRaw = getRowVal(row, 'Deductions');
+      const pfRaw = getRowVal(row, 'PF');
+
+      const basicSalary = parseNumVal(basicSalaryRaw);
+      const allowances = parseNumVal(allowancesRaw);
+      const deductions = parseNumVal(deductionsRaw);
+      const pf = parseNumVal(pfRaw);
 
       const skills: any[] = [];
       const mapSkill = (subNameKey: string, skillLevelKey: string) => {
-        const sName = row[subNameKey];
+        const sName = getRowVal(row, subNameKey);
         if (sName) {
           const matchedSub = allSubjects.find(s => s.name.toLowerCase() === sName.toLowerCase());
           if (matchedSub) {
             skills.push({
               subjectId: matchedSub.id,
-              skillLevel: row[skillLevelKey] || 'Expert',
+              skillLevel: getRowVal(row, skillLevelKey) || 'Expert',
               yearsOfExperience: 5
             });
           } else {
@@ -182,14 +250,14 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
         firstName,
         lastName,
         email,
-        phone: row['Phone'] || undefined,
-        qualification: row['Qualification'] || undefined,
-        designation: row['Designation'] || undefined,
-        basicSalary: basicSalary ? Number(basicSalary) : undefined,
-        allowances: allowances ? Number(allowances) : undefined,
-        deductions: deductions ? Number(deductions) : undefined,
-        pf: pf ? Number(pf) : undefined,
-        joiningDate: row['Joining Date'] || undefined,
+        phone: getRowVal(row, 'Phone') || undefined,
+        qualification: getRowVal(row, 'Qualification') || undefined,
+        designation: getRowVal(row, 'Designation') || undefined,
+        basicSalary,
+        allowances,
+        deductions,
+        pf,
+        joiningDate: getRowVal(row, 'Joining Date') || undefined,
         skills
       });
     });
@@ -328,11 +396,11 @@ export default function BulkTeacherImportModal({ isOpen, onClose, onImportSucces
                       {parsedData.slice(0, 3).map((row, idx) => (
                         <tr key={idx}>
                           <td className="px-4 py-2 font-bold text-slate-900">
-                            {row['First Name']} {row['Last Name']}
+                            {getRowVal(row, 'First Name')} {getRowVal(row, 'Last Name')}
                           </td>
-                          <td className="px-4 py-2">{row['Email']}</td>
-                          <td className="px-4 py-2">{row['Designation'] || '—'}</td>
-                          <td className="px-4 py-2">{row['Subject 1'] || '—'}</td>
+                          <td className="px-4 py-2">{getRowVal(row, 'Email')}</td>
+                          <td className="px-4 py-2">{getRowVal(row, 'Designation') || '—'}</td>
+                          <td className="px-4 py-2">{getRowVal(row, 'Subject 1') || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
