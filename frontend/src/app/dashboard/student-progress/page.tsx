@@ -764,34 +764,6 @@ export default function StudentProgressPage() {
           </div>
         );
       })()}
-      
-      {/* Tooltip Element */}
-      {hoveredBar && (
-        <div 
-          className="fixed pointer-events-none z-50 bg-slate-950/95 text-white text-[11px] p-3 rounded-2xl shadow-xl border border-slate-800 backdrop-blur-md transition-all duration-100 flex flex-col gap-1 w-44"
-          style={{ left: hoveredBar.x + 15, top: hoveredBar.y - 15 }}
-        >
-          <div className="font-extrabold text-slate-200 border-b border-slate-800 pb-1.5 truncate">
-            {hoveredBar.examName}
-          </div>
-          <div className="flex justify-between items-center mt-1.5">
-            <span className="text-slate-400 font-semibold">Percentage:</span>
-            <span className="font-extrabold text-emerald-400">{hoveredBar.score}%</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-slate-400 font-semibold">Marks:</span>
-            <span className="font-bold text-slate-300">{hoveredBar.score} / 100</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-slate-400 font-semibold">Grade:</span>
-            <span className={`font-black ${
-              hoveredBar.score >= 90 ? 'text-emerald-400' : hoveredBar.score >= 75 ? 'text-blue-400' : hoveredBar.score >= 50 ? 'text-amber-400' : 'text-rose-400'
-            }`}>
-              {hoveredBar.score >= 90 ? 'Excellent' : hoveredBar.score >= 75 ? 'Good' : hoveredBar.score >= 50 ? 'Average' : 'Needs Imp.'}
-            </span>
-          </div>
-        </div>
-      )}
 
     </div>
   );
