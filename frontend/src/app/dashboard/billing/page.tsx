@@ -351,12 +351,26 @@ export default function FeesBillingPage() {
       const res = await api.get(`/billing/invoices/${invoiceId}/pdf`);
       const data: InvoicePDFData = res.data;
 
+      // 1. Preload logo image (if exists) to ensure html2canvas can capture it successfully
+      if (data.schoolLogo) {
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = resolve;
+          img.onerror = resolve;
+          img.src = data.schoolLogo;
+        });
+      }
+
       // Dynamically create a hidden container for the invoice sheet
       const container = document.createElement('div');
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.top = '-9999px';
+      container.style.position = 'fixed';
+      container.style.left = '0';
+      container.style.top = '0';
       container.style.width = '800px';
+      container.style.zIndex = '-9999';
+      container.style.opacity = '0';
+      container.style.pointerEvents = 'none';
       container.style.backgroundColor = '#ffffff';
       container.style.color = '#2d3748';
       container.style.fontFamily = 'sans-serif';
@@ -472,6 +486,9 @@ export default function FeesBillingPage() {
       `;
 
       document.body.appendChild(container);
+
+      // Wait 300ms for browser layout engine to render container contents
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Dynamically import html2canvas and jsPDF to keep initial load lightweight
       const html2canvas = (await import('html2canvas')).default;
