@@ -754,7 +754,7 @@ export default function SchoolStaffPage() {
       {selectedStaff && (
         <>
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50" onClick={() => setSelectedStaff(null)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-[90vh]">
+          <div className="fixed top-4 sm:top-1/2 bottom-20 sm:bottom-auto left-1/2 -translate-x-1/2 translate-y-0 sm:-translate-y-1/2 w-[92%] sm:w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-none sm:max-h-[90vh] flex flex-col">
             {/* Modal Header Banner */}
             <div className="p-5" style={{ background: selectedStaff.gradient }}>
               <div className="flex items-start justify-between">
@@ -862,7 +862,7 @@ export default function SchoolStaffPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-[500px] text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                           <th className="px-4 py-2.5">Month / Description</th>
@@ -914,7 +914,7 @@ export default function SchoolStaffPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-[600px] text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                           <th className="px-4 py-2.5">Day</th>
@@ -955,7 +955,7 @@ export default function SchoolStaffPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-[500px] text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                           <th className="px-4 py-2.5">Type</th>
@@ -1000,13 +1000,13 @@ export default function SchoolStaffPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-2 border-t border-slate-100">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100">
                 <button
                   onClick={() => {
                     setEditingStaff(selectedStaff);
                     setSelectedStaff(null);
                   }}
-                  className="flex-1 py-2.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-sm flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full sm:flex-1 py-2.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
                 >
                   <Edit2 className="w-4 h-4" /> Edit Profile
                 </button>
@@ -1018,7 +1018,7 @@ export default function SchoolStaffPage() {
                       name: selectedStaff.name
                     });
                   }}
-                  className="px-5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm flex items-center gap-2 cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
                 >
                   <Trash2 className="w-4 h-4" /> Remove
                 </button>
@@ -1032,7 +1032,7 @@ export default function SchoolStaffPage() {
       {editingStaff && (
         <>
           <div className="fixed inset-0 bg-slate-900/60 z-50" onClick={() => setEditingStaff(null)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-white rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-[90vh]">
+          <div className="fixed top-4 sm:top-1/2 bottom-20 sm:bottom-auto left-1/2 -translate-x-1/2 translate-y-0 sm:-translate-y-1/2 w-[92%] sm:w-full max-w-xl bg-white rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-none sm:max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h3 className="font-extrabold text-slate-800 text-lg">Edit Staff Member</h3>
               <button onClick={() => setEditingStaff(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"><X className="w-5 h-5" /></button>
@@ -1233,7 +1233,7 @@ export default function SchoolStaffPage() {
       {showAddModal && (
         <>
           <div className="fixed inset-0 bg-slate-900/60 z-50" onClick={() => setShowAddModal(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-white rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-[90vh]">
+          <div className="fixed top-4 sm:top-1/2 bottom-20 sm:bottom-auto left-1/2 -translate-x-1/2 translate-y-0 sm:-translate-y-1/2 w-[92%] sm:w-full max-w-xl bg-white rounded-2xl shadow-2xl z-50 overflow-y-auto max-h-none sm:max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h3 className="font-extrabold text-slate-800 text-lg">Add New Staff Member</h3>
               <button onClick={() => setShowAddModal(false)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"><X className="w-5 h-5" /></button>
