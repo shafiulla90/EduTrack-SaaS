@@ -1667,7 +1667,7 @@ export default function TeacherClassManagement() {
         <div className="space-y-6 animate-in">
           
           {/* Workload Overview Banner & Action Controls */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
             <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
               <div>
                 <h3 className="dash-title">Workload Overview</h3>
