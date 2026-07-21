@@ -49,6 +49,18 @@ export class TransportController {
     return this.transportService.createDriver(req.user.tenantId, dto);
   }
 
+  @Patch('drivers/:id')
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
+  async updateDriver(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    return this.transportService.updateDriver(req.user.tenantId, id, dto);
+  }
+
+  @Delete('drivers/:id')
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
+  async deleteDriver(@Req() req: any, @Param('id') id: string) {
+    return this.transportService.deleteDriver(req.user.tenantId, id);
+  }
+
   @Get('routes')
   @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.STAFF)
   async getRoutes(@Req() req: any) {

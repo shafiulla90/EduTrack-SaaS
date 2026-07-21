@@ -54,6 +54,15 @@ export default function SchoolAdminTransportPage() {
     emergencyContact: '',
   });
 
+  const [showEditDriverModal, setShowEditDriverModal] = useState(false);
+  const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
+  const [editDriverForm, setEditDriverForm] = useState({
+    name: '',
+    phone: '',
+    licenseNumber: '',
+    emergencyContact: '',
+  });
+
   const [showRouteModal, setShowRouteModal] = useState(false);
   const [routeForm, setRouteForm] = useState({
     routeName: '',
@@ -127,6 +136,40 @@ export default function SchoolAdminTransportPage() {
       await fetchAllData();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to create driver');
+    }
+  };
+
+  const openEditDriverModal = (driver: any) => {
+    setEditingDriverId(driver.id);
+    setEditDriverForm({
+      name: driver.user?.name || '',
+      phone: driver.user?.phone || driver.whatsappNumber || '',
+      licenseNumber: driver.licenseNumber || '',
+      emergencyContact: driver.emergencyContact || '',
+    });
+    setShowEditDriverModal(true);
+  };
+
+  const handleUpdateDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDriverId) return;
+    try {
+      await api.patch(`/transport/drivers/${editingDriverId}`, editDriverForm);
+      setShowEditDriverModal(false);
+      setEditingDriverId(null);
+      await fetchAllData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update driver details');
+    }
+  };
+
+  const handleDeleteDriver = async (driverId: string, driverName: string) => {
+    if (!confirm(`Are you sure you want to delete driver ${driverName}?`)) return;
+    try {
+      await api.delete(`/transport/drivers/${driverId}`);
+      await fetchAllData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete driver');
     }
   };
 
@@ -407,12 +450,13 @@ export default function SchoolAdminTransportPage() {
                   <th className="p-3">Phone</th>
                   <th className="p-3">Emergency Contact</th>
                   <th className="p-3">Assigned Bus</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                 {drivers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                    <td colSpan={7} className="p-8 text-center text-slate-400">
                       No drivers created yet. Click "+ Add Driver" above.
                     </td>
                   </tr>
@@ -425,6 +469,20 @@ export default function SchoolAdminTransportPage() {
                       <td className="p-3">{d.user?.phone || 'N/A'}</td>
                       <td className="p-3">{d.emergencyContact || 'N/A'}</td>
                       <td className="p-3 font-bold text-blue-600">{d.assignedBus?.busNumber || 'None'}</td>
+                      <td className="p-3 text-right space-x-1 whitespace-nowrap">
+                        <button
+                          onClick={() => openEditDriverModal(d)}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold rounded-lg text-[11px] transition-colors cursor-pointer"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDriver(d.id, d.user?.name || 'Driver')}
+                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-extrabold rounded-lg text-[11px] transition-colors cursor-pointer"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -813,6 +871,84 @@ export default function SchoolAdminTransportPage() {
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md"
                 >
                   Add Stop
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT DRIVER */}
+      {showEditDriverModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h2 className="text-base font-black text-slate-900">✏️ Edit Driver Details</h2>
+              <button
+                onClick={() => setShowEditDriverModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleUpdateDriver} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Driver Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editDriverForm.name}
+                  onChange={(e) => setEditDriverForm({ ...editDriverForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Phone Number (Staff Portal Login)</label>
+                <input
+                  type="text"
+                  required
+                  value={editDriverForm.phone}
+                  onChange={(e) => setEditDriverForm({ ...editDriverForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Driving License Number</label>
+                <input
+                  type="text"
+                  required
+                  value={editDriverForm.licenseNumber}
+                  onChange={(e) => setEditDriverForm({ ...editDriverForm, licenseNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-700">Emergency Contact Phone</label>
+                <input
+                  type="text"
+                  value={editDriverForm.emergencyContact}
+                  onChange={(e) => setEditDriverForm({ ...editDriverForm, emergencyContact: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold outline-none focus:border-blue-500"
+                  placeholder="Optional emergency contact"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditDriverModal(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md cursor-pointer"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

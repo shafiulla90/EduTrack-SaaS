@@ -179,6 +179,45 @@ export class TransportService {
     return staff;
   }
 
+  async updateDriver(tenantId: string, driverId: string, dto: any) {
+    const staff = await this.prisma.staffProfile.findFirst({
+      where: { id: driverId, tenantId },
+      include: { user: true },
+    });
+    if (!staff) throw new NotFoundException('Driver not found');
+
+    if (dto.name || dto.phone) {
+      await this.prisma.user.update({
+        where: { id: staff.userId },
+        data: {
+          ...(dto.name ? { name: dto.name } : {}),
+          ...(dto.phone ? { phone: dto.phone } : {}),
+        },
+      });
+    }
+
+    return this.prisma.staffProfile.update({
+      where: { id: driverId },
+      data: {
+        licenseNumber: dto.licenseNumber !== undefined ? dto.licenseNumber : staff.licenseNumber,
+        emergencyContact: dto.emergencyContact !== undefined ? dto.emergencyContact : staff.emergencyContact,
+        address: dto.address !== undefined ? dto.address : staff.address,
+        aadhaarNo: dto.aadhaarNo !== undefined ? dto.aadhaarNo : staff.aadhaarNo,
+        whatsappNumber: dto.phone !== undefined ? dto.phone : staff.whatsappNumber,
+      },
+      include: { user: true, assignedBus: true },
+    });
+  }
+
+  async deleteDriver(tenantId: string, driverId: string) {
+    const staff = await this.prisma.staffProfile.findFirst({
+      where: { id: driverId, tenantId },
+    });
+    if (!staff) throw new NotFoundException('Driver not found');
+
+    return this.prisma.user.delete({ where: { id: staff.userId } });
+  }
+
   // -------------------------------------------------------------
   // SCHOOL ADMIN: ROUTE & STOP MANAGEMENT
   // -------------------------------------------------------------
