@@ -8,7 +8,7 @@ import { useTenant } from '@/app/providers/TenantContext';
 import { 
   Receipt, Search, CreditCard, Sparkles, X, CheckCircle2, 
   QrCode, User, ArrowRight, CornerDownRight, RotateCcw,
-  BookOpen, Calendar, Printer, ShieldCheck
+  BookOpen, Calendar, Printer, ShieldCheck, AlertCircle
 } from 'lucide-react';
 
 interface StagedInvoice {
@@ -54,6 +54,15 @@ export default function FeesBillingPage() {
   const [successInvoiceId, setSuccessInvoiceId] = useState<string | null>(null);
   const [lastPaidStudentName, setLastPaidStudentName] = useState('');
   const [lastPaidAmount, setLastPaidAmount] = useState(0);
+
+  // Payment Confirmation states
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [successRemainingBalance, setSuccessRemainingBalance] = useState(0);
+  const [successPaymentDate, setSuccessPaymentDate] = useState('');
 
   // Load initial options & recent invoices
   useEffect(() => {
@@ -211,11 +220,47 @@ export default function FeesBillingPage() {
     return sum + (item.isSelected ? item.input : 0);
   }, 0);
 
+  const handleOpenConfirmModal = () => {
+    if (!selectedStudent) return;
+
+    // 1. Ensure at least one fee product is selected
+    const selectedItemsCount = feeItems.filter(item => item.isSelected).length;
+    if (selectedItemsCount === 0) {
+      alert('Error: Please select at least one fee product before processing payment.');
+      return;
+    }
+
+    // 2. Ensure the payment amount is greater than zero
+    if (billingTotal <= 0) {
+      alert('Error: Payment amount must be greater than zero.');
+      return;
+    }
+
+    // 3. Ensure payment amount does not exceed the outstanding balance
+    if (billingTotal > (selectedStudent.totalPendingBalance || 0)) {
+      alert(`Error: Payment amount (₹${billingTotal.toLocaleString()}) cannot exceed the outstanding balance (₹${selectedStudent.totalPendingBalance.toLocaleString()}).`);
+      return;
+    }
+
+    // 4. Validate payment method selection
+    const isValidMethod = paymentChannels.some(c => c.value === selectedChannel);
+    if (!isValidMethod) {
+      alert('Error: Please select a valid payment method.');
+      return;
+    }
+
+    setConfirmModalOpen(true);
+  };
+
   const handleFinalizePayment = async () => {
-    if (!selectedStudent || billingTotal <= 0) return;
+    if (!selectedStudent || billingTotal <= 0 || isSubmittingPayment) return;
 
     const openOpp = selectedStudent.account.opportunities?.[0];
-    if (!openOpp) return;
+    if (!openOpp) {
+      setErrorMessage('Student opportunity record not found.');
+      setErrorModalOpen(true);
+      return;
+    }
 
     const itemsToPay = feeItems
       .filter(item => item.isSelected && item.input > 0)
@@ -226,6 +271,7 @@ export default function FeesBillingPage() {
       }));
 
     try {
+      setIsSubmittingPayment(true);
       setIsLoading(true);
       const res = await api.post('/billing/invoices', {
         opportunityId: openOpp.id,
@@ -241,9 +287,15 @@ export default function FeesBillingPage() {
       });
 
       const createdInvoiceId = res.data;
+      const nextBalance = Math.max(0, (selectedStudent.totalPendingBalance || 0) - billingTotal);
+      
       setLastPaidStudentName(selectedStudent.account.name);
       setLastPaidAmount(billingTotal);
       setSuccessInvoiceId(createdInvoiceId);
+      setSuccessRemainingBalance(nextBalance);
+      setSuccessPaymentDate(new Date().toLocaleString('en-IN'));
+      
+      setConfirmModalOpen(false);
       setSuccessModalOpen(true);
 
       setToastMessage(`Success: Payment of ₹${billingTotal.toLocaleString()} logged for ${selectedStudent.account.name}.`);
@@ -254,6 +306,7 @@ export default function FeesBillingPage() {
       // Clear select & reload history
       setSelectedStudent(null);
       setFeeItems([]);
+      setNotes('');
       
       const txRes = await api.get('/billing/invoices/recent');
       setTransactions(txRes.data);
@@ -261,8 +314,12 @@ export default function FeesBillingPage() {
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err: any) {
       console.error('Payment failed', err);
-      alert(`Payment registration failed: ${err.response?.data?.message || err.message}`);
+      const reason = err.response?.data?.message || err.message || 'Unknown network error occurred.';
+      setErrorMessage(reason);
+      setConfirmModalOpen(false);
+      setErrorModalOpen(true);
     } finally {
+      setIsSubmittingPayment(false);
       setIsLoading(false);
     }
   };
@@ -683,8 +740,8 @@ export default function FeesBillingPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleFinalizePayment}
-                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/10"
+                  onClick={handleOpenConfirmModal}
+                  className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/10 cursor-pointer"
                 >
                   ✓ Finalize Payment
                 </button>
@@ -844,14 +901,36 @@ export default function FeesBillingPage() {
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-3.5 text-xs text-slate-600 space-y-1.5 text-left border border-slate-100">
+            <div className="bg-slate-50 rounded-xl p-3.5 text-xs text-slate-650 space-y-1.5 text-left border border-slate-100">
               <div className="flex justify-between">
                 <span className="font-semibold text-slate-400">Student:</span>
                 <span className="font-bold text-slate-800">{lastPaidStudentName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-400">Total Amount:</span>
+                <span className="font-semibold text-slate-400">Receipt Number:</span>
+                <span className="font-mono text-slate-800 font-bold">{successInvoiceId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-400">Transaction ID:</span>
+                <span className="font-mono text-slate-800">{successInvoiceId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-400">Amount Paid:</span>
                 <span className="font-extrabold text-slate-900">₹{lastPaidAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-400">Payment Method:</span>
+                <span className="font-semibold text-slate-800">
+                  {paymentChannels.find(c => c.value === selectedChannel)?.label || selectedChannel}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-400">Payment Date &amp; Time:</span>
+                <span className="font-mono text-slate-700 font-semibold">{successPaymentDate}</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200/60 pt-1.5">
+                <span className="font-bold text-slate-500">Remaining Balance:</span>
+                <span className="font-black text-rose-600 font-mono">₹{successRemainingBalance.toLocaleString()}</span>
               </div>
             </div>
 
@@ -862,7 +941,6 @@ export default function FeesBillingPage() {
                   if (successInvoiceId) {
                     window.open(`/dashboard/billing/invoices/${successInvoiceId}`, '_blank');
                   }
-                  setSuccessModalOpen(false);
                 }}
                 className="w-full sm:w-auto flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer border-none"
               >
@@ -874,6 +952,180 @@ export default function FeesBillingPage() {
                 className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all cursor-pointer bg-white"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Confirmation Modal */}
+      {confirmModalOpen && selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200 text-left">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">
+                Confirm Payment Details
+              </h3>
+              <p className="text-xs text-slate-500 font-semibold mt-1">
+                Please review the transaction summary carefully before confirming.
+              </p>
+            </div>
+
+            {/* Student details */}
+            <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-650">
+              <div>
+                <span className="text-slate-400 block mb-0.5">Student Name</span>
+                <span className="text-slate-800 font-bold block">{selectedStudent.account.name}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Roll/Admission Number</span>
+                <span className="text-slate-800 font-bold block">{selectedStudent.account.rollNo || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Class &amp; Section</span>
+                <span className="text-slate-800 font-bold block">
+                  {selectedStudent.account.class} {selectedStudent.account.section}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Academic Session</span>
+                <span className="text-slate-800 font-bold block">
+                  {academicYears.find(y => y.value === selectedYear)?.label || selectedYear}
+                </span>
+              </div>
+            </div>
+
+            {/* Selected items list */}
+            <div>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Selected Fee Products</span>
+              <div className="max-h-36 overflow-y-auto border border-slate-150 rounded-2xl p-3 divide-y divide-slate-100 bg-white">
+                {feeItems.filter(item => item.isSelected && item.input > 0).map((item) => (
+                  <div key={item.id} className="flex justify-between py-2 text-xs font-semibold text-slate-600">
+                    <div>
+                      <span className="font-bold text-slate-800">{item.name}</span>
+                      {item.discount > 0 && (
+                        <span className="text-[10px] text-slate-400 ml-2">Discount: ₹{item.discount.toLocaleString()}</span>
+                      )}
+                    </div>
+                    <span className="font-mono text-slate-800 font-bold">₹{item.input.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Summary */}
+            <div className="border-t border-slate-100 pt-3 text-xs font-semibold text-slate-655 space-y-2">
+              <div className="flex justify-between">
+                <span>Previous Due:</span>
+                <span className="font-mono text-slate-800 font-semibold">₹{(selectedStudent.feeSummary?.overall?.totalPreviousYearDue || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Current Due:</span>
+                <span className="font-mono text-slate-800 font-semibold">₹{(selectedStudent.feeSummary?.overall?.totalCurrentYearDue || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Amount Due (Before Payment):</span>
+                <span className="font-mono text-slate-800 font-bold">₹{selectedStudent.totalPendingBalance.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-100/60 pt-2">
+                <span>Amount Being Paid:</span>
+                <span className="font-mono text-blue-600 font-extrabold text-sm">₹{billingTotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Remaining Balance After Payment:</span>
+                <span className="font-mono text-rose-600 font-bold">
+                  ₹{Math.max(0, (selectedStudent.totalPendingBalance || 0) - billingTotal).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Payment Collection Info */}
+            <div className="border-t border-slate-100 pt-3 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-650">
+              <div>
+                <span className="text-slate-400 block mb-0.5">Payment Method</span>
+                <span className="text-slate-800 font-bold block">
+                  {paymentChannels.find(c => c.value === selectedChannel)?.label || selectedChannel}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Payment Date</span>
+                <span className="text-slate-850 font-bold block">{new Date().toLocaleDateString('en-IN')}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-slate-400 block mb-1">Notes / Remarks (Optional)</span>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Enter remarks for invoice record..."
+                  rows={2}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-blue-500 font-semibold text-slate-800"
+                />
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setConfirmModalOpen(false)}
+                disabled={isSubmittingPayment}
+                className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-colors bg-white disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleFinalizePayment}
+                disabled={isSubmittingPayment}
+                className="flex-1 py-3 bg-[#00875A] hover:bg-green-750 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {isSubmittingPayment ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-t-white border-white/20 rounded-full animate-spin"></div>
+                    Processing Payment...
+                  </>
+                ) : (
+                  'Confirm Payment'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Failed Modal */}
+      {errorModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center text-rose-600 mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900">
+                Payment Failed
+              </h3>
+              <p className="text-xs text-rose-600 font-semibold mt-1">
+                {errorMessage}
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorModalOpen(false);
+                  setConfirmModalOpen(true);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all cursor-pointer border-none"
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                onClick={() => setErrorModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all cursor-pointer bg-white"
+              >
+                Cancel
               </button>
             </div>
           </div>
