@@ -653,7 +653,7 @@ export default function DashboardLayout({
                 clearStoredAuth();
                 window.location.href = '/auth/login';
               }}
-              className="hidden md:flex items-center justify-center gap-2 px-4 py-2 text-[13px] font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 min-h-[40px] cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 text-[12px] sm:text-[13px] font-semibold text-red-600 bg-red-50/50 hover:bg-red-50 rounded-xl transition-all border border-red-100/80 min-h-[38px] cursor-pointer"
               title="Logout"
             >
               <svg className="w-4 h-4 stroke-red-600 fill-none" viewBox="0 0 24 24">
@@ -661,7 +661,7 @@ export default function DashboardLayout({
                 <polyline points="16 17 21 12 16 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></polyline>
                 <line x1="21" y1="12" x2="9" y2="12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></line>
               </svg>
-              <span className="hidden md:inline">Logout</span>
+              <span className="inline">Logout</span>
             </button>
           </div>
         </header>
@@ -676,13 +676,13 @@ export default function DashboardLayout({
 
       {/* Mobile Drawer Overlay Backdrop & Drawer with transitions */}
       <div
-        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 lg:hidden transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[100] lg:hidden transition-opacity duration-300 ${
           mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         onClick={() => setMobileOpen(false)}
       >
         <div
-          className={`w-[280px] bg-white h-full py-6 select-none overflow-y-auto flex flex-col justify-between transition-transform duration-300 ease-in-out transform ${
+          className={`w-[280px] bg-white h-full py-6 pb-24 select-none overflow-y-auto flex flex-col justify-between transition-transform duration-300 ease-in-out transform ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
           onClick={(e) => e.stopPropagation()}
@@ -765,13 +765,13 @@ export default function DashboardLayout({
             </nav>
           </div>
           {/* Mobile Logout Button */}
-          <div className="px-6 pt-4 border-t border-slate-100">
+          <div className="px-6 pt-4 pb-20 border-t border-slate-100">
             <button
               onClick={() => {
                 clearStoredAuth();
                 window.location.href = '/auth/login';
               }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[14px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[14px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all cursor-pointer shadow-xs"
             >
               <svg className="w-5 h-5 stroke-red-600 fill-none" viewBox="0 0 24 24">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
