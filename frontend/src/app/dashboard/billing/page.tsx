@@ -480,7 +480,7 @@ export default function FeesBillingPage() {
       const canvas = await html2canvas(container, {
         scale: 2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff'
       });
 
