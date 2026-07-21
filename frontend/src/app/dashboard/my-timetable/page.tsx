@@ -76,16 +76,34 @@ export default function MyTimetablePage() {
             const isBreak = p.isBreak || p.periodTiming?.isBreak;
 
             if (isBreak) {
+              const breakName = (p.subject?.name || p.periodTiming?.name || 'Break').toUpperCase();
+              let badgeLine1 = 'BREAK';
+              let badgeLine2 = '';
+
+              if (breakName.includes('LUNCH') || breakName === 'BREAK') {
+                badgeLine1 = 'LUNCH';
+                badgeLine2 = 'BREAK';
+              } else if (breakName.includes('SHORT')) {
+                badgeLine1 = 'SHORT';
+                badgeLine2 = 'BREAK';
+              } else {
+                const words = breakName.split(' ');
+                badgeLine1 = words[0] || 'BREAK';
+                badgeLine2 = words[1] || '';
+              }
+
               return (
                 <div key={idx} className="bg-slate-50/50 p-4 rounded-3xl border border-dashed border-slate-200 flex justify-between items-center">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex flex-col items-center justify-center font-bold shrink-0 border border-slate-200/60">
-                      <span className="text-[9px] text-slate-400 uppercase leading-none font-bold">Break</span>
-                      <span className="text-sm leading-none mt-1 font-extrabold text-slate-600">{p.periodTiming.periodNumber}</span>
+                      <span className="text-[9px] text-slate-400 uppercase leading-none font-bold">{badgeLine1}</span>
+                      {badgeLine2 && (
+                        <span className="text-[8px] text-slate-400 uppercase leading-none font-bold mt-1">{badgeLine2}</span>
+                      )}
                     </div>
                     <div>
                       <h3 className="font-extrabold text-slate-650 text-xs uppercase tracking-wider">
-                        {p.subject?.name || p.periodTiming.name || 'Break / Recess'}
+                        {breakName === 'BREAK' ? 'LUNCH BREAK' : breakName}
                       </h3>
                       <p className="text-[11px] text-slate-450 font-semibold flex items-center gap-1 mt-0.5">
                         <Clock className="w-3 h-3 text-slate-400" />
