@@ -767,7 +767,7 @@ function AttendanceDashboardContent() {
               <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold text-slate-900">Attendance Report</h1>
+              <h1 className="text-2xl font-extrabold att-heading-black force-text-black" style={{ color: '#0f172a' }}>Attendance Report</h1>
               <p className="text-xs text-slate-500 mt-1">Track and analyze student attendance</p>
             </div>
           </div>
@@ -950,20 +950,20 @@ function AttendanceDashboardContent() {
             {overallDailySummary && (
               <div className="att-summary-strip bg-white border border-gray-200 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-around gap-6">
                 <div className="text-center sm:text-left">
-                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Active Date</span>
-                  <span className="att-value-dark text-lg font-black text-slate-900 mt-1 block">{overallDailySummary.dateLabel}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Active Date</span>
+                  <span className="att-value-dark text-lg font-black force-text-black mt-1 block" style={{ color: '#0f172a' }}>{overallDailySummary.dateLabel}</span>
                 </div>
                 <div className="text-center">
-                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Students</span>
-                  <span className="att-value-dark text-2xl font-black text-slate-900 mt-1 block">{overallDailySummary.totalPotential}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Total Students</span>
+                  <span className="att-value-dark text-2xl font-black force-text-black mt-1 block" style={{ color: '#0f172a' }}>{overallDailySummary.totalPotential}</span>
                 </div>
                 <div className="text-center">
-                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Present Overall</span>
-                  <span className="text-2xl font-black text-emerald-600 mt-1 block">{overallDailySummary.totalPresent}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Present Overall</span>
+                  <span className="text-2xl font-black force-text-green mt-1 block" style={{ color: '#047857' }}>{overallDailySummary.totalPresent}</span>
                 </div>
                 <div className="text-center">
-                  <span className="att-label text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Absent Overall</span>
-                  <span className="text-2xl font-black text-rose-600 mt-1 block">{overallDailySummary.totalAbsent}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Absent Overall</span>
+                  <span className="text-2xl font-black force-text-red mt-1 block" style={{ color: '#be123c' }}>{overallDailySummary.totalAbsent}</span>
                 </div>
                 <div className="w-16 h-16 rounded-full bg-indigo-50 border-4 border-indigo-200/50 flex flex-col items-center justify-center">
                   <span className="text-[9px] font-bold text-indigo-600 leading-none">RATE</span>
@@ -977,23 +977,23 @@ function AttendanceDashboardContent() {
                 <div key={summary.key} className="att-card-light relative attendance-card bg-white border border-gray-200 text-slate-700 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm">
                   <div className="flex justify-between items-start border-b border-gray-100 pb-3">
                     <div>
-                      <h3 className="att-card-title font-bold text-sm text-slate-900">{summary.classValue} - Section {summary.section}</h3>
+                      <h3 className="att-card-title font-bold text-sm force-text-black" style={{ color: '#0f172a' }}>{summary.classValue} - Section {summary.section}</h3>
                       <p className="text-[10px] text-indigo-600 font-bold mt-0.5">{summary.attendanceRate}% Attendance</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-                    <div className="att-stat-box-total bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                      <span className="att-stat-total text-[10px] font-bold text-slate-900 block">{summary.totalCount}</span>
-                      <span className="att-stat-label text-[9px] text-slate-500 font-semibold block mt-0.5">TOTAL</span>
+                    <div className="att-stat-box-total bg-white p-2.5 rounded-lg border border-gray-300">
+                      <span className="att-stat-total force-text-black text-[12px] font-black block" style={{ color: '#0f172a' }}>{summary.totalCount}</span>
+                      <span className="att-stat-label force-text-black text-[9px] font-bold block mt-0.5" style={{ color: '#0f172a' }}>TOTAL</span>
                     </div>
-                    <div className="att-stat-box-present bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
-                      <span className="text-[10px] font-bold text-emerald-700 block">{summary.presentDisplay}</span>
-                      <span className="att-stat-label text-[9px] text-slate-500 font-semibold block mt-0.5">PRESENT</span>
+                    <div className="att-stat-box-present bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                      <span className="att-stat-present force-text-green text-[12px] font-black block" style={{ color: '#047857' }}>{summary.presentDisplay}</span>
+                      <span className="att-stat-label force-text-green text-[9px] font-bold block mt-0.5" style={{ color: '#047857' }}>PRESENT</span>
                     </div>
-                    <div className="att-stat-box-absent stat-box absent bg-rose-50 p-2.5 rounded-lg border border-rose-100">
-                      <span className="text-[10px] font-bold text-rose-700 block">{summary.absentCount}</span>
-                      <span className="att-stat-label text-[9px] text-slate-500 font-semibold block mt-0.5">ABSENT</span>
+                    <div className="att-stat-box-absent stat-box absent bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                      <span className="att-stat-absent force-text-red text-[12px] font-black block" style={{ color: '#be123c' }}>{summary.absentCount}</span>
+                      <span className="att-stat-label force-text-red text-[9px] font-bold block mt-0.5" style={{ color: '#be123c' }}>ABSENT</span>
 
                       {summary.hasAbsentees && (
                         <div className="absentee-tooltip">

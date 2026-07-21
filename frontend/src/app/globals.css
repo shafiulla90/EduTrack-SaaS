@@ -91,42 +91,83 @@
 }
 
 /* ── Attendance Dashboard: force white card + black text even in dark mode ── */
+html.dark .force-text-black,
+body.dark .force-text-black,
+.dark .force-text-black,
+html.dark .att-force-black,
+body.dark .att-force-black,
+.dark .att-force-black,
+html.dark .att-card-title,
+body.dark .att-card-title,
+.dark .att-card-title,
+html.dark .att-heading-black,
+body.dark .att-heading-black,
+.dark .att-heading-black,
+html.dark .att-stat-total,
+body.dark .att-stat-total,
+.dark .att-stat-total {
+  color: #0f172a !important; /* Slate 900 Black */
+}
+
+html.dark .force-text-green,
+body.dark .force-text-green,
+.dark .force-text-green,
+html.dark .att-stat-present,
+body.dark .att-stat-present,
+.dark .att-stat-present {
+  color: #047857 !important; /* Emerald 700 Dark Green */
+}
+
+html.dark .force-text-red,
+body.dark .force-text-red,
+.dark .force-text-red,
+html.dark .att-stat-absent,
+body.dark .att-stat-absent,
+.dark .att-stat-absent {
+  color: #be123c !important; /* Rose 700 Dark Red */
+}
+
+html.dark .att-card-light,
+body.dark .att-card-light,
 .dark .att-card-light {
   background-color: #ffffff !important;
-}
-.dark .att-card-light h3,
-.dark .att-card-light .att-card-title {
-  color: #0f172a !important; /* slate-900 – black heading */
-}
-.dark .att-card-light .att-stat-total {
-  color: #0f172a !important; /* black */
-}
-.dark .att-card-light .att-stat-label {
-  color: #64748b !important; /* slate-500 */
-}
-.dark .att-card-light .att-stat-box-total {
-  background-color: #f1f5f9 !important; /* slate-100 */
   border-color: #e2e8f0 !important;
 }
-.dark .att-card-light .att-stat-box-present {
-  background-color: #ecfdf5 !important; /* emerald-50 */
-  border-color: #d1fae5 !important;
-}
-.dark .att-card-light .att-stat-box-absent {
-  background-color: #fff1f2 !important; /* rose-50 */
-  border-color: #ffe4e6 !important;
-}
-/* Summary strip – also keep white */
+
+html.dark .att-summary-strip,
+body.dark .att-summary-strip,
 .dark .att-summary-strip {
   background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
 }
-.dark .att-summary-strip .att-label {
-  color: #64748b !important; /* slate-500 */
+
+html.dark .att-stat-box-total,
+body.dark .att-stat-box-total,
+.dark .att-stat-box-total {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
 }
-.dark .att-summary-strip .att-value-dark {
-  color: #0f172a !important; /* black */
+
+html.dark .att-stat-box-present,
+body.dark .att-stat-box-present,
+.dark .att-stat-box-present {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
 }
+
+html.dark .att-stat-box-absent,
+body.dark .att-stat-box-absent,
+.dark .att-stat-box-absent {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+}
+
+html.dark .att-label,
+body.dark .att-label,
+.dark .att-label {
+  color: #475569 !important; /* Slate 600 */
+}
+
 
 /* Light alerts override */
 .dark .bg-blue-50 {
