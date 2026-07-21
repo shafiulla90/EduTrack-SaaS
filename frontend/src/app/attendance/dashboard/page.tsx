@@ -757,7 +757,7 @@ function AttendanceDashboardContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f3f4f6] text-slate-800 p-4 sm:p-8 font-sans">
+    <main className="min-h-screen bg-[#f3f4f6] dark:bg-slate-950 text-slate-800 dark:text-slate-100 p-4 sm:p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header Section */}
@@ -767,8 +767,8 @@ function AttendanceDashboardContent() {
               <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold text-slate-800">Attendance Report</h1>
-              <p className="text-xs text-slate-500 mt-1">Track and analyze student attendance</p>
+              <h1 className="text-2xl font-extrabold text-slate-800 dark:text-white">Attendance Report</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Track and analyze student attendance</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -779,15 +779,15 @@ function AttendanceDashboardContent() {
         </div>
 
         {/* View Select Tabs */}
-        <div className="bg-gray-200/60 border border-gray-300/40 p-1 rounded-2xl flex max-w-sm">
+        <div className="bg-gray-200/60 dark:bg-slate-800 border border-gray-300/40 dark:border-slate-700 p-1 rounded-2xl flex max-w-sm">
           {(['daily', 'weekly', 'monthly', 'yearly'] as const).map(view => (
             <button
               key={view}
               onClick={() => handleViewChange(view)}
               className={`flex-1 py-2 text-xs font-bold capitalize rounded-xl transition-all ${
                 calendarView === view 
-                  ? 'bg-white text-slate-800 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm' 
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
             >
               {view}
@@ -796,23 +796,23 @@ function AttendanceDashboardContent() {
         </div>
 
         {/* Global Toolbar and Filters */}
-        <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-4 sm:p-5 flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 shadow-sm rounded-xl p-4 sm:p-5 flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
           
           {/* Class Section Selectors */}
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             <div className="relative w-full sm:w-auto">
-              <button className="w-full sm:w-44 px-4 min-h-[44px] bg-white border border-gray-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-gray-50 flex items-center justify-between gap-2 shadow-xs" onClick={() => {
+              <button className="w-full sm:w-44 px-4 min-h-[44px] bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center justify-between gap-2 shadow-xs" onClick={() => {
                 setIsClassDropdownOpen(!isClassDropdownOpen);
                 setIsSectionDropdownOpen(false);
               }}>
                 <span>{classLabelText}</span> <span>▼</span>
               </button>
               {isClassDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1 w-full sm:w-44">
+                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl z-50 py-1 w-full sm:w-44">
                   {classOptions.map(opt => (
                     <div 
                       key={opt.value} 
-                      className={`px-4 py-2.5 text-xs font-semibold cursor-pointer hover:bg-indigo-50/50 ${selectedClass === opt.value ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600'}`}
+                      className={`px-4 py-2.5 text-xs font-semibold cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-slate-700 ${selectedClass === opt.value ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'text-slate-600 dark:text-slate-300'}`}
                       onClick={() => {
                         setSelectedClass(opt.value);
                         setSelectedSection('all');
@@ -828,18 +828,18 @@ function AttendanceDashboardContent() {
             </div>
 
             <div className="relative w-full sm:w-auto">
-              <button className="w-full sm:w-44 px-4 min-h-[44px] bg-white border border-gray-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-gray-50 flex items-center justify-between gap-2 shadow-xs" onClick={() => {
+              <button className="w-full sm:w-44 px-4 min-h-[44px] bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center justify-between gap-2 shadow-xs" onClick={() => {
                 setIsSectionDropdownOpen(!isSectionDropdownOpen);
                 setIsClassDropdownOpen(false);
               }}>
                 <span>{sectionLabelText}</span> <span>▼</span>
               </button>
               {isSectionDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1 w-full sm:w-44">
+                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl z-50 py-1 w-full sm:w-44">
                   {sectionOptions.map(opt => (
                     <div 
                       key={opt.value} 
-                      className={`px-4 py-2.5 text-xs font-semibold cursor-pointer hover:bg-indigo-50/50 ${selectedSection === opt.value ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600'}`}
+                      className={`px-4 py-2.5 text-xs font-semibold cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-slate-700 ${selectedSection === opt.value ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'text-slate-600 dark:text-slate-300'}`}
                       onClick={() => {
                         setSelectedSection(opt.value);
                         setSelectedStudent(null);
@@ -857,12 +857,12 @@ function AttendanceDashboardContent() {
           {/* Autocomplete Student Search (for monthly/yearly) */}
           {(calendarView === 'monthly' || calendarView === 'yearly') && (
             <div className="relative flex-1 min-w-[200px] max-w-xs w-full">
-              <div className="flex items-center bg-white border border-gray-300 rounded-xl px-3 min-h-[44px] focus-within:border-indigo-500 transition-all shadow-xs">
+              <div className="flex items-center bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-3 min-h-[44px] focus-within:border-indigo-500 transition-all shadow-xs">
                 <Search className="w-4 h-4 text-slate-400 mr-2" />
                 <input 
                   type="text" 
                   placeholder="Search student..." 
-                  className="bg-transparent border-none text-xs font-semibold text-slate-800 outline-none w-full placeholder-slate-400"
+                  className="bg-transparent border-none text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none w-full placeholder-slate-400"
                   value={searchTerm}
                   onFocus={() => setShowStudentSearchDropdown(true)}
                   onChange={(e) => {
@@ -907,16 +907,16 @@ function AttendanceDashboardContent() {
 
           {/* Date Picker Navigation */}
           <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
-            <button className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white border border-gray-200 rounded-xl text-slate-500 hover:text-slate-900 transition-colors shadow-xs" onClick={handlePrevious}>
+            <button className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors shadow-xs" onClick={handlePrevious}>
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="text-xs font-bold text-slate-700 min-w-[120px] text-center flex-1 sm:flex-none">
+            <div className="text-xs font-bold text-slate-700 dark:text-slate-100 min-w-[120px] text-center flex-1 sm:flex-none">
               {calendarView === 'daily' && formattedDate}
               {calendarView === 'weekly' && weekRangeText}
               {calendarView === 'monthly' && formattedMonth}
               {calendarView === 'yearly' && currentDate.getFullYear()}
             </div>
-            <button className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white border border-gray-200 rounded-xl text-slate-500 hover:text-slate-900 transition-colors shadow-xs" onClick={handleNext}>
+            <button className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors shadow-xs" onClick={handleNext}>
               <ChevronRight className="w-4 h-4" />
             </button>
 
@@ -928,7 +928,7 @@ function AttendanceDashboardContent() {
                   onChange={handleDateSelect}
                   className="absolute inset-0 opacity-0 cursor-pointer"
                 />
-                <button className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white border border-gray-200 rounded-xl text-slate-500 hover:text-slate-800 transition-colors shadow-xs">
+                <button className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-slate-500 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors shadow-xs">
                   📅
                 </button>
               </div>
@@ -948,52 +948,52 @@ function AttendanceDashboardContent() {
         {!isLoading && calendarView === 'daily' && (
           <div className="space-y-6">
             {overallDailySummary && (
-              <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-around gap-6">
+              <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-around gap-6">
                 <div className="text-center sm:text-left">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Active Date</span>
-                  <span className="text-lg font-black text-slate-800 mt-1 block">{overallDailySummary.dateLabel}</span>
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Active Date</span>
+                  <span className="text-lg font-black text-slate-800 dark:text-white mt-1 block">{overallDailySummary.dateLabel}</span>
                 </div>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Students</span>
-                  <span className="text-2xl font-black text-slate-800 mt-1 block">{overallDailySummary.totalPotential}</span>
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Students</span>
+                  <span className="text-2xl font-black text-slate-800 dark:text-white mt-1 block">{overallDailySummary.totalPotential}</span>
                 </div>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Present Overall</span>
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Present Overall</span>
                   <span className="text-2xl font-black text-emerald-600 mt-1 block">{overallDailySummary.totalPresent}</span>
                 </div>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Absent Overall</span>
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Absent Overall</span>
                   <span className="text-2xl font-black text-rose-600 mt-1 block">{overallDailySummary.totalAbsent}</span>
                 </div>
-                <div className="w-16 h-16 rounded-full bg-indigo-50 border-4 border-indigo-200/50 flex flex-col items-center justify-center">
-                  <span className="text-[9px] font-bold text-indigo-600 leading-none">RATE</span>
-                  <span className="text-sm font-black text-indigo-900 mt-0.5 leading-none">{overallDailySummary.rate}%</span>
+                <div className="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950 border-4 border-indigo-200/50 dark:border-indigo-800 flex flex-col items-center justify-center">
+                  <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 leading-none">RATE</span>
+                  <span className="text-sm font-black text-indigo-900 dark:text-indigo-200 mt-0.5 leading-none">{overallDailySummary.rate}%</span>
                 </div>
               </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {classSectionSummary.map(summary => (
-                <div key={summary.key} className={summary.themeClass}>
+                <div key={summary.key} className="relative attendance-card bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-slate-700 dark:text-slate-100 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm">
                   <div className="flex justify-between items-start border-b border-gray-100 pb-3">
                     <div>
-                      <h3 className="font-bold text-sm text-slate-800">{summary.classValue} - Section {summary.section}</h3>
-                      <p className="text-[10px] text-indigo-600 font-bold mt-0.5">{summary.attendanceRate}% Attendance</p>
+                      <h3 className="font-bold text-sm text-slate-800 dark:text-white">{summary.classValue} - Section {summary.section}</h3>
+                      <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">{summary.attendanceRate}% Attendance</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-                    <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200/80">
-                      <span className="text-[10px] font-bold text-slate-700 block">{summary.totalCount}</span>
-                      <span className="text-[9px] text-slate-500 font-semibold block mt-0.5">TOTAL</span>
+                    <div className="bg-gray-50 dark:bg-slate-800 p-2.5 rounded-lg border border-gray-200 dark:border-slate-700">
+                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 block">{summary.totalCount}</span>
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold block mt-0.5">TOTAL</span>
                     </div>
-                    <div className="bg-emerald-50/50 p-2.5 rounded-lg border border-emerald-100">
+                    <div className="bg-emerald-50/50 dark:bg-emerald-950/50 p-2.5 rounded-lg border border-emerald-100 dark:border-emerald-900">
                       <span className="text-[10px] font-bold text-emerald-600 block">{summary.presentDisplay}</span>
-                      <span className="text-[9px] text-slate-500 font-semibold block mt-0.5">PRESENT</span>
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold block mt-0.5">PRESENT</span>
                     </div>
-                    <div className="stat-box absent bg-rose-50/50 p-2.5 rounded-lg border border-rose-100">
+                    <div className="stat-box absent bg-rose-50/50 dark:bg-rose-950/50 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900">
                       <span className="text-[10px] font-bold text-rose-600 block">{summary.absentCount}</span>
-                      <span className="text-[9px] text-slate-500 font-semibold block mt-0.5">ABSENT</span>
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold block mt-0.5">ABSENT</span>
 
                       {summary.hasAbsentees && (
                         <div className="absentee-tooltip">
