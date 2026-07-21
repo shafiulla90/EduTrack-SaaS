@@ -373,28 +373,39 @@ export default function GradesMarksPage() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 print:hidden"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] print:hidden"
             onClick={() => setActiveReportStudent(null)}
           />
 
-          {/* Modal – fills screen on mobile, centered popup on desktop */}
-          <div className="fixed inset-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg bg-white sm:rounded-2xl shadow-2xl z-50 flex flex-col print:relative print:inset-0 print:translate-x-0 print:translate-y-0 print:w-full print:max-w-none print:shadow-none print:border-none">
+          {/* Modal – fills screen down to bottom nav on mobile, centered popup on desktop */}
+          <div className="fixed inset-x-0 top-0 bottom-16 sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg bg-white sm:rounded-2xl shadow-2xl z-[99999] flex flex-col print:relative print:inset-0 print:translate-x-0 print:translate-y-0 print:w-full print:max-w-none print:shadow-none print:border-none">
 
             {/* Sticky Header */}
-            <div className="flex justify-between items-center px-5 py-4 border-b border-slate-100 shrink-0 print:hidden">
-              <div className="flex items-center gap-3">
+            <div className="flex justify-between items-center px-4 sm:px-5 py-3.5 border-b border-slate-100 shrink-0 print:hidden bg-white sm:rounded-t-2xl">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <Trophy className="w-5 h-5 text-purple-600 shrink-0" />
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base leading-tight">Report Card</h3>
-                  <p className="text-slate-400 text-[11px] font-semibold">{selectedExamName} · {classLabel}</p>
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-800 text-sm sm:text-base leading-tight truncate">Report Card</h3>
+                  <p className="text-slate-400 text-[11px] font-semibold truncate">{selectedExamName} · {classLabel}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setActiveReportStudent(null)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Print button directly in header for instant mobile access */}
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Print PDF</span>
+                  <span className="xs:hidden">Print</span>
+                </button>
+                <button
+                  onClick={() => setActiveReportStudent(null)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Body */}
@@ -493,8 +504,8 @@ export default function GradesMarksPage() {
               </div>
             </div>
 
-            {/* Sticky Footer – always visible */}
-            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-100 shrink-0 bg-white print:hidden">
+            {/* Sticky Footer – always visible above bottom nav bar */}
+            <div className="flex items-center justify-end gap-3 px-4 sm:px-5 py-3 border-t border-slate-100 shrink-0 bg-white sm:rounded-b-2xl print:hidden">
               <button
                 onClick={() => setActiveReportStudent(null)}
                 className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-semibold text-sm transition-colors"
