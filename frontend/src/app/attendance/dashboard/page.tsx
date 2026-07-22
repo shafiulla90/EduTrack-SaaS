@@ -767,7 +767,7 @@ function AttendanceDashboardContent() {
               <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold att-heading-black force-text-black" style={{ color: '#0f172a' }}>Attendance Report</h1>
+              <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Attendance Report</h1>
               <p className="text-xs text-slate-500 mt-1">Track and analyze student attendance</p>
             </div>
           </div>
