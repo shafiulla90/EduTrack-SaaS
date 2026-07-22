@@ -2,6 +2,12 @@
 
 import React, { useCallback, useState, useEffect } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api';
+import dynamic from 'next/dynamic';
+
+const StandardBusMap = dynamic(() => import('./StandardBusMap'), {
+  ssr: false,
+  loading: () => <div className="w-full bg-slate-100 rounded-3xl flex items-center justify-center text-slate-400 font-bold animate-pulse border border-slate-200" style={{ height: '400px' }}>Loading Standard Map...</div>
+});
 
 interface Stop {
   name: string;
@@ -94,13 +100,10 @@ export default function GoogleBusMap({ buses, stops, center, zoom = 14, height =
     }
   }, [buses, map]);
 
-  if (loadError) {
-    return (
-      <div style={{ height }} className="w-full bg-red-50 rounded-3xl flex flex-col items-center justify-center text-red-400 font-bold p-6 text-center border border-red-100">
-        <div>Google Maps Failed to Load</div>
-        <div className="text-xs font-medium text-red-300 mt-2">Please check your NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.</div>
-      </div>
-    );
+  const hasGoogleKey = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+
+  if (loadError || !hasGoogleKey) {
+    return <StandardBusMap buses={buses} stops={stops} center={center} zoom={zoom} height={height} />;
   }
 
   if (!isLoaded) {
@@ -113,17 +116,7 @@ export default function GoogleBusMap({ buses, stops, center, zoom = 14, height =
 
   return (
     <div style={{ height }} className="w-full relative shadow-inner rounded-3xl overflow-hidden bg-slate-50">
-      {/* If API Key is missing, show a prominent overlay */}
-      {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
-        <div className="absolute inset-0 z-10 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-8">
-          <div className="bg-white p-6 rounded-3xl text-center max-w-sm shadow-2xl">
-            <h3 className="text-lg font-black text-slate-900 mb-2">Google Maps Key Required</h3>
-            <p className="text-xs text-slate-500 font-medium">
-              The architecture is fully wired and ready. Please provide the <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in your environment variables to enable the live map view.
-            </p>
-          </div>
-        </div>
-      )}
+
 
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
