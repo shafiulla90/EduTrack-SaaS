@@ -4003,3 +4003,12 @@ body {
         background: white !important;
     }
 }
+
+/* ==================== GLOBAL DARK MODE FORM CONTROLS ==================== */
+/* Fix for native HTML5 date/time picker calendar icons being invisible (black) in dark theme */
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.5);
+}

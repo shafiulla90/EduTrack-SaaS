@@ -1133,7 +1133,7 @@ function NotificationBell() {
               {notifications.some(n => n.isRead) && (
                 <button
                   onClick={handleClearRead}
-                  className="text-[10px] text-red-650 hover:text-red-800 font-bold bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded transition-colors cursor-pointer border border-red-100"
+                  className="text-[10px] text-red-600 dark:text-red-900 hover:text-red-800 dark:hover:text-black font-bold bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded transition-colors cursor-pointer border border-red-100 dark:border-red-300"
                 >
                   Clear Read
                 </button>
