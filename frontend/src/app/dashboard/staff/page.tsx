@@ -429,8 +429,8 @@ export default function SchoolStaffPage() {
           ))}
         </div>
         {activeTab !== 'salary' && (
-          <div className="flex gap-2 pb-3">
-            <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 focus-within:border-blue-500 transition-all">
+          <div className="flex flex-wrap gap-2 pb-3 w-full sm:w-auto">
+            <div className="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 focus-within:border-blue-500 transition-all flex-grow sm:flex-grow-0">
               <Search className="w-3.5 h-3.5 text-slate-400 mr-1.5" />
               <input
                 type="text"

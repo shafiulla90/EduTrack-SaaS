@@ -4012,3 +4012,40 @@ body {
 .dark input[type="month"]::-webkit-calendar-picker-indicator {
   filter: invert(1) brightness(1.5);
 }
+
+/* Fix for search and text inputs displaying an unwanted black background in dark theme */
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover, 
+.dark input:-webkit-autofill:focus, 
+.dark input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #1e293b inset !important;
+    -webkit-text-fill-color: white !important;
+}
+
+.dark input[type="text"],
+.dark input[type="search"],
+.dark input[type="email"],
+.dark input[type="number"],
+.dark input[type="password"] {
+    background-color: transparent !important;
+}
+
+/* ==================== GLOBAL DARK MODE TEXT CONTRAST ==================== */
+/* Automatically invert dark slate text to light slate text in dark mode for better visibility */
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800 {
+    color: #f8fafc !important; /* text-slate-50 */
+}
+
+.dark .text-slate-700 {
+    color: #f1f5f9 !important; /* text-slate-100 */
+}
+
+.dark .text-slate-600 {
+    color: #e2e8f0 !important; /* text-slate-200 */
+}
+
+.dark .text-slate-500 {
+    color: #cbd5e1 !important; /* text-slate-300 */
+}

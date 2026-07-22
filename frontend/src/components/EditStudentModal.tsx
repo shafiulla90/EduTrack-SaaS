@@ -80,7 +80,7 @@ export default function EditStudentModal({ student, onClose, onSave }: EditStude
         </button>
         
         <div className="p-5 border-b border-slate-100 flex-shrink-0">
-          <h2 className="text-lg font-bold text-slate-950">Edit Student Profile</h2>
+          <h2 className="text-lg font-bold text-slate-950 dark:text-white">Edit Student Profile</h2>
           <p className="text-xs text-slate-500 mt-1 font-medium">Update the student's personal and parent details.</p>
         </div>
 

@@ -551,7 +551,7 @@ export default function DashboardLayout({
               className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
               aria-label="Open navigation menu"
             >
-              <svg className="w-6 h-6 stroke-slate-700" viewBox="0 0 24 24" fill="none">
+              <svg className="w-6 h-6 stroke-slate-700 dark:stroke-slate-300" viewBox="0 0 24 24" fill="none">
                 <line x1="3" y1="12" x2="21" y2="12" strokeWidth="2" strokeLinecap="round" />
                 <line x1="3" y1="6" x2="21" y2="6" strokeWidth="2" strokeLinecap="round" />
                 <line x1="3" y1="18" x2="21" y2="18" strokeWidth="2" strokeLinecap="round" />
