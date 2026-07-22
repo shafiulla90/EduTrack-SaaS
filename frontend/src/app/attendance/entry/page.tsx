@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { 
   Calendar, CheckCircle, AlertCircle, RefreshCw, 
-  Search, Lock, X, ChevronRight, BarChart3, Clock 
+  Search, Lock, X, ChevronRight, BarChart3, Clock, ArrowLeft 
 } from 'lucide-react';
 import Link from 'next/link';
 import { dispatchSchoolSetupUpdated } from '@/lib/events';
@@ -408,10 +408,17 @@ function AttendanceEntryContent() {
         <div className="teacher-selection-card">
           <div className="card-fill"></div>
           <div className="card-content">
-            <div className="header">
+            <div className="header flex flex-col items-center relative">
+              <Link 
+                href="/attendance/dashboard" 
+                className="absolute left-0 top-0 p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all shadow-xs flex items-center justify-center min-w-[36px] min-h-[36px]"
+                title="Back to Attendance Dashboard"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Link>
               <div className="teacher-header-icon text-white">📋</div>
-              <h1 className="text-xl font-bold text-slate-800 mt-2">Take Attendance</h1>
-              <p className="text-slate-500 text-xs mt-1">Select your name to get started</p>
+              <h1 className="text-xl font-bold text-slate-800 dark:text-white mt-2">Take Attendance</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Select your name to get started</p>
             </div>
 
             <div className="text-center mb-4">
@@ -552,12 +559,22 @@ function AttendanceEntryContent() {
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200 dark:border-slate-800">
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-800 dark:text-white">Attendance Tracker</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage student attendance efficiently</p>
+          <div className="flex items-center gap-3">
+            <Link 
+              href={`/attendance/dashboard?classVal=${selectedClass}&sectionVal=${selectedSection}&dateVal=${selectedDate}`}
+              className="p-2.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 shadow-xs text-xs font-bold flex items-center gap-2 transition-all min-h-[44px]"
+              title="Back to Attendance Dashboard"
+            >
+              <ArrowLeft className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span className="hidden sm:inline">Back to Dashboard</span>
+            </Link>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 dark:text-white">Attendance Tracker</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage student attendance efficiently</p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            <Link href="/attendance/dashboard" className="flex-1 sm:flex-none justify-center px-4 min-h-[44px] rounded-xl bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 shadow-xs text-xs font-bold flex items-center gap-1.5 transition-all">
+            <Link href={`/attendance/dashboard?classVal=${selectedClass}&sectionVal=${selectedSection}&dateVal=${selectedDate}`} className="flex-1 sm:flex-none justify-center px-4 min-h-[44px] rounded-xl bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 shadow-xs text-xs font-bold flex items-center gap-1.5 transition-all">
               <BarChart3 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               Attendance Report
             </Link>
@@ -697,52 +714,53 @@ function AttendanceEntryContent() {
                 </div>
 
                 {/* Student list Roster */}
-                <div className="bg-white border border-gray-200 text-slate-700 rounded-2xl p-4 sm:p-6 shadow-sm">
-                  <div className="list-header border-b border-gray-200 pb-3 flex justify-between items-center">
+                <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
+                  <div className="list-header border-b border-gray-200 dark:border-slate-800 pb-3 flex justify-between items-center">
                     <div>
-                      <h2 className="text-lg font-bold text-slate-800">Student List</h2>
-                      <span className="text-xs text-slate-500 mt-1 block">
+                      <h2 className="text-lg font-bold text-slate-800 dark:text-white">Student List</h2>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">
                         {isReadOnly ? 'Read-Only View (Historical Record)' : filter === 'Present' ? `Showing Present Students (${stats.present})` : filter === 'Absent' ? `Showing Absent Students (${stats.absent})` : 'Mark students who are absent'}
                       </span>
                     </div>
                     {sessionExists && (
-                      <button className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-slate-500 hover:text-slate-800 flex items-center justify-center border border-gray-200 transition-colors" onClick={handleCloseList} title="Close & Return to Summary">
+                      <button className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center border border-gray-200 dark:border-slate-700 transition-colors" onClick={handleCloseList} title="Close & Return to Summary">
                         ✕
                       </button>
                     )}
                   </div>
 
-                  <div className="students-grid max-h-[500px] overflow-y-auto flex flex-col gap-3 pt-3">
+                  <div className="students-grid max-h-[550px] overflow-y-auto flex flex-col gap-3 pt-3 pr-1">
                     {displayedStudents.map(s => (
                       <div 
                         key={s.id} 
-                        className={`${s.cardClass} flex flex-col md:flex-row md:items-center gap-4 p-4`}
+                        className={`${s.cardClass} flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 sm:p-4 w-full`}
                         onClick={() => {
                           if (window.innerWidth >= 768) {
                             handleStudentClick(s.id);
                           }
                         }}
                       >
-                        <div className="flex items-center w-full md:w-auto">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs mr-4 shadow-inner shrink-0 ${s.isAbsent ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1 w-full md:w-auto">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shadow-inner shrink-0 ${s.isAbsent ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800' : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'}`}>
                             {getInitials(s.name)}
                           </div>
-                          <div className="student-info text-left min-w-0 flex-1">
-                            <h3 className="student-name font-bold text-sm text-slate-800 truncate">{s.name}</h3>
-                            <p className="student-roll text-[11px] text-slate-500 font-mono mt-0.5">Roll No: {s.rollNo || '—'}</p>
+                          <div className="student-info text-left min-w-0 flex-1 pr-2">
+                            <h3 className="student-name font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{s.name}</h3>
+                            <p className="student-roll text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">Roll No: {s.rollNo || '—'}</p>
                           </div>
-                          <div className="hidden md:block ml-auto">
-                            <div className={`status-badge text-[10px] font-bold px-3 py-1 rounded-full border transition-all ${s.isAbsent ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>
-                              {s.status}
-                            </div>
+                        </div>
+
+                        <div className="hidden md:flex items-center ml-auto shrink-0">
+                          <div className={`status-badge text-[10px] font-bold px-3 py-1 rounded-full border transition-all ${s.isAbsent ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800' : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'}`}>
+                            {s.status}
                           </div>
                         </div>
 
                         {/* Mobile view Present/Absent buttons: full width, visible only below md breakpoint */}
-                        <div className="flex md:hidden w-full gap-2 mt-2">
+                        <div className="flex md:hidden w-full gap-2 mt-1">
                           <button
                             type="button"
-                            className={`flex-1 min-h-[44px] rounded-xl font-bold text-xs transition-all border ${!s.isAbsent ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-white text-slate-600 border-slate-200'}`}
+                            className={`flex-1 min-h-[42px] rounded-xl font-bold text-xs transition-all border ${!s.isAbsent ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setStudentAbsentState(s.id, false);
@@ -752,7 +770,7 @@ function AttendanceEntryContent() {
                           </button>
                           <button
                             type="button"
-                            className={`flex-1 min-h-[44px] rounded-xl font-bold text-xs transition-all border ${s.isAbsent ? 'bg-rose-600 text-white border-rose-600 shadow-xs' : 'bg-white text-slate-600 border-slate-200'}`}
+                            className={`flex-1 min-h-[42px] rounded-xl font-bold text-xs transition-all border ${s.isAbsent ? 'bg-rose-600 text-white border-rose-600 shadow-xs' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setStudentAbsentState(s.id, true);
