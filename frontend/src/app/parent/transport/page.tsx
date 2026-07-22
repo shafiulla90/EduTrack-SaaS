@@ -1,19 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import { useParent } from '../ParentContext';
 import { api } from '@/lib/api';
-
-// Dynamically import Leaflet Map to avoid SSR hydration issues
-const LiveBusMap = dynamic(() => import('@/components/LiveBusMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-[400px] w-full bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 font-medium text-xs animate-pulse">
-      Loading Live Interactive Bus Map...
-    </div>
-  ),
-});
+import { socketService } from '@/lib/socket';
+import GoogleBusMap from '@/components/GoogleBusMap';
 
 export default function ParentTransportPage() {
   const { selectedChild } = useParent();
@@ -25,11 +16,41 @@ export default function ParentTransportPage() {
     if (!selectedChild?.id) return;
     try {
       const res = await api.get(`/transport/parent-portal/children/${selectedChild.id}`);
-      console.log('[Parent Portal Telemetry] Received update for child:', selectedChild.name, res.data);
       setTransportData(res.data);
       setError('');
+      
+      // Connect to Socket.IO and join bus room
+      if (res.data?.bus?.id) {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const socket = socketService.connect(token);
+          if (socket) {
+            socket.emit('joinBusRoom', { busId: res.data.bus.id });
+            
+            // Listen for live updates
+            socket.off('busLocationUpdate'); // Remove existing listener to prevent duplicates
+            socket.on('busLocationUpdate', (update: any) => {
+              setTransportData((prev: any) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  bus: {
+                    ...prev.bus,
+                    currentLat: update.currentLat,
+                    currentLng: update.currentLng,
+                    currentSpeed: update.currentSpeed,
+                    currentHeading: update.currentHeading,
+                    dutyStatus: update.dutyStatus,
+                    lastGpsUpdate: update.lastGpsUpdate || new Date().toISOString(),
+                    isOnline: update.dutyStatus !== 'OFFLINE' && update.dutyStatus !== 'OFF_DUTY',
+                  }
+                };
+              });
+            });
+          }
+        }
+      }
     } catch (err: any) {
-      console.error('[Parent Portal Telemetry Error] Failed to fetch transport data:', err);
       setError('Failed to load real-time transport data.');
     } finally {
       setLoading(false);
@@ -38,8 +59,19 @@ export default function ParentTransportPage() {
 
   useEffect(() => {
     fetchTransportData();
-    const interval = setInterval(fetchTransportData, 5000); // 5s live polling
-    return () => clearInterval(interval);
+    
+    // Optional: Keep 30s polling as a fallback
+    const interval = setInterval(fetchTransportData, 30000); 
+    
+    return () => {
+      clearInterval(interval);
+      if (transportData?.bus?.id) {
+        const socket = socketService.getSocket();
+        if (socket) {
+          socket.emit('leaveBusRoom', { busId: transportData.bus.id });
+        }
+      }
+    };
   }, [selectedChild?.id]);
 
   if (loading) {
@@ -81,6 +113,7 @@ export default function ParentTransportPage() {
       lat: bus.currentLat || 18.5204,
       lng: bus.currentLng || 73.8567,
       speed: bus.currentSpeed || 0,
+      heading: bus.currentHeading || 0,
       isOnline,
     },
   ];
@@ -233,11 +266,11 @@ export default function ParentTransportPage() {
               </span>
             </div>
 
-            <LiveBusMap
+            <GoogleBusMap
               buses={busLocations}
               height="420px"
               zoom={14}
-              center={[bus.currentLat || 18.5204, bus.currentLng || 73.8567]}
+              center={{ lat: bus.currentLat || 18.5204, lng: bus.currentLng || 73.8567 }}
               stops={stops}
             />
           </div>
