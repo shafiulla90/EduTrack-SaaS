@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import {
   Settings2, Plus, Trash2, Save, CheckCircle, AlertCircle,
-  ChevronDown, GraduationCap, BarChart3, Info, X,
+  ChevronDown, GraduationCap, BarChart3, Info, X, ChevronRight, Calculator
 } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -16,6 +16,16 @@ interface GradeRange {
   label: string;
 }
 
+interface ExamConfigSubject {
+  id?: string;
+  subjectId: string;
+  subjectType: string;
+  maxMarks: number;
+  passMarks?: number | null;
+  passingPercentage: number;
+  remarks?: string;
+}
+
 interface ExamConfigEntry {
   id: string;
   examTypeName: string | null;
@@ -23,6 +33,10 @@ interface ExamConfigEntry {
   passingPercentage: number;
   maxMarks: number;
   gradeRanges: GradeRange[];
+  academicYearId?: string;
+  classId?: string;
+  className?: string;
+  subjectConfigs?: ExamConfigSubject[];
   updatedAt: string;
 }
 
@@ -36,227 +50,49 @@ const DEFAULT_GRADE_RANGES: GradeRange[] = [
   { min: 0,  max: 34,  grade: 'F',  gpa: 0,  label: 'Fail'        },
 ];
 
-// ── Grade Ranges Editor ───────────────────────────────────────────────────────
-function GradeRangesEditor({
-  ranges, onChange,
-}: {
-  ranges: GradeRange[];
-  onChange: (r: GradeRange[]) => void;
-}) {
-  const update = (idx: number, field: keyof GradeRange, val: string | number) => {
-    const next = [...ranges];
-    (next[idx] as any)[field] = field === 'grade' || field === 'label' ? val : Number(val);
-    onChange(next);
-  };
-
-  return (
-    <div className="space-y-1.5">
-      <div className="grid grid-cols-5 gap-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-400 px-1">
-        <span>Min%</span><span>Max%</span><span>Grade</span><span>GPA</span><span>Label</span>
-      </div>
-      {ranges.map((r, i) => (
-        <div key={i} className="grid grid-cols-5 gap-1.5">
-          {(['min', 'max', 'grade', 'gpa', 'label'] as const).map(f => (
-            <input
-              key={f}
-              type={f === 'grade' || f === 'label' ? 'text' : 'number'}
-              value={r[f]}
-              onChange={e => update(i, f, e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-[#2E5BFF]"
-            />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Config Card ───────────────────────────────────────────────────────────────
-function ConfigCard({
-  entry,
-  examTypes,
-  onSave,
-  onDelete,
-}: {
-  entry: ExamConfigEntry;
-  examTypes: string[];
-  onSave: (id: string, data: Partial<ExamConfigEntry>) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [passPct, setPassPct] = useState(entry.passingPercentage);
-  const [maxMarks, setMaxMarks] = useState(entry.maxMarks);
-  const [ranges, setRanges] = useState<GradeRange[]>(entry.gradeRanges ?? DEFAULT_GRADE_RANGES);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onSave(entry.id, {
-        examTypeName: entry.examTypeName,
-        passingPercentage: passPct,
-        maxMarks,
-        gradeRanges: ranges,
-      });
-      setMsg('Saved!');
-      setTimeout(() => setMsg(''), 2000);
-    } catch {
-      setMsg('Save failed.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className={`bg-white border rounded-2xl overflow-hidden transition-all ${
-      entry.isGlobal ? 'border-[#2E5BFF]/40 shadow-md shadow-blue-500/10' : 'border-slate-200 shadow-sm'
-    }`}>
-      {/* Header row */}
-      <div
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50/60 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          {entry.isGlobal ? (
-            <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 text-[#2E5BFF]" />
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
-              <BarChart3 className="w-4 h-4 text-slate-500" />
-            </div>
-          )}
-          <div>
-            <span className="text-sm font-bold text-slate-800">
-              {entry.isGlobal ? 'Global Default (All Exams)' : entry.examTypeName}
-            </span>
-            {entry.isGlobal && (
-              <span className="ml-2 px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 text-[9px] font-bold rounded-lg uppercase tracking-wider">
-                Fallback
-              </span>
-            )}
-            <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
-              Pass: <strong className="text-slate-700">{passPct}%</strong>
-              &nbsp;·&nbsp;Max Marks: <strong className="text-slate-700">{maxMarks}</strong>
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {!entry.isGlobal && (
-            <button
-              onClick={e => { e.stopPropagation(); onDelete(entry.id); }}
-              className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-        </div>
-      </div>
-
-      {/* Expanded editor */}
-      {expanded && (
-        <div className="border-t border-slate-100 px-5 py-5 space-y-5 bg-slate-50/30">
-          {/* Pass % + Max Marks */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                Passing Percentage (%)
-              </label>
-              <input
-                type="number" min={0} max={100} step={1}
-                value={passPct}
-                onChange={e => setPassPct(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-[#2E5BFF] focus:ring-1 focus:ring-[#2E5BFF]/20"
-              />
-              <p className="text-[10px] text-slate-400 mt-1">
-                A score ≥ {passPct}% = PASS
-              </p>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                Default Maximum Marks (Template)
-              </label>
-              <input
-                type="number" min={1} max={1000} step={1}
-                value={maxMarks}
-                onChange={e => setMaxMarks(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-[#2E5BFF] focus:ring-1 focus:ring-[#2E5BFF]/20"
-              />
-            </div>
-          </div>
-
-          {/* Grade Ranges */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Grade Ranges
-              </label>
-              <button
-                onClick={() => setRanges(DEFAULT_GRADE_RANGES)}
-                className="text-[10px] text-[#2E5BFF] hover:underline font-semibold cursor-pointer"
-              >
-                Reset to Defaults
-              </button>
-            </div>
-            <GradeRangesEditor ranges={ranges} onChange={setRanges} />
-          </div>
-
-          {/* Save button */}
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-5 py-2.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60 shadow-sm"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {saving ? 'Saving...' : 'Save Configuration'}
-            </button>
-            {msg && (
-              <span className={`text-xs font-semibold flex items-center gap-1 ${
-                msg === 'Saved!' ? 'text-emerald-600' : 'text-rose-600'
-              }`}>
-                {msg === 'Saved!' ? <CheckCircle className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                {msg}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ExamConfigPage() {
   const [configs, setConfigs] = useState<ExamConfigEntry[]>([]);
   const [examTypes, setExamTypes] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddOverride, setShowAddOverride] = useState(false);
-  const [newExamType, setNewExamType] = useState('');
-  const [newPassPct, setNewPassPct] = useState(35);
-  const [newMaxMarks, setNewMaxMarks] = useState(100);
-  const [addMsg, setAddMsg] = useState('');
+  const [academicYears, setAcademicYears] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
   const [components, setComponents] = useState<any[]>([]);
+  
+  const [loading, setLoading] = useState(true);
+  
+  const [showAddOverride, setShowAddOverride] = useState(false);
+  const [overrideData, setOverrideData] = useState<{
+    academicYearId: string;
+    classId: string;
+    examTypeName: string;
+    subjectConfigs: ExamConfigSubject[];
+  }>({
+    academicYearId: '',
+    classId: '',
+    examTypeName: '',
+    subjectConfigs: [],
+  });
+  
+  const [saving, setSaving] = useState(false);
   const [newComponent, setNewComponent] = useState('');
 
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const [cfgRes, typeRes, compRes] = await Promise.all([
+      const [cfgRes, typeRes, compRes, ayRes, classRes, subRes] = await Promise.all([
         api.get('/exam-config'),
         api.get('/exams/exam-types'),
         api.get('/exam-config/components'),
+        api.get('/academics/academic-years'),
+        api.get('/academics/classes'),
+        api.get('/academics/subjects'),
       ]);
       setConfigs(cfgRes.data);
       setExamTypes(typeRes.data);
       setComponents(compRes.data);
-
-      // Pre-select first unused exam type
-      const usedTypes = new Set(cfgRes.data.map((c: ExamConfigEntry) => c.examTypeName).filter(Boolean));
-      const unused = typeRes.data.find((t: string) => !usedTypes.has(t));
-      if (unused) setNewExamType(unused);
+      setAcademicYears(ayRes.data);
+      setClasses(classRes.data);
+      setSubjects(subRes.data);
     } catch (err) {
       console.error('Failed to load exam config:', err);
     } finally {
@@ -265,6 +101,28 @@ export default function ExamConfigPage() {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Handle auto-populating subject configs when Academic Year, Class, and Exam Type are selected
+  useEffect(() => {
+    if (showAddOverride && overrideData.academicYearId && overrideData.classId && overrideData.examTypeName && overrideData.subjectConfigs.length === 0) {
+      // Find global config passing percentage
+      const globalCfg = configs.find(c => c.isGlobal);
+      const passPct = globalCfg ? globalCfg.passingPercentage : 35;
+      const maxM = globalCfg ? globalCfg.maxMarks : 100;
+      const calcPassM = Math.round((passPct / 100) * maxM);
+
+      // We populate all subjects in the system as default.
+      // In a more complex setup, we'd fetch subjects assigned to this specific class.
+      const initialConfigs = subjects.map(s => ({
+        subjectId: s.id,
+        subjectType: 'Theory',
+        maxMarks: maxM,
+        passingPercentage: passPct,
+        passMarks: calcPassM,
+      }));
+      setOverrideData(prev => ({ ...prev, subjectConfigs: initialConfigs }));
+    }
+  }, [overrideData.academicYearId, overrideData.classId, overrideData.examTypeName, showAddOverride, subjects, configs]);
 
   const handleAddComponent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,144 +146,381 @@ export default function ExamConfigPage() {
     }
   };
 
-  const handleSave = async (_id: string, data: Partial<ExamConfigEntry>) => {
-    await api.post('/exam-config', {
-      examTypeName: data.examTypeName ?? null,
-      passingPercentage: data.passingPercentage,
-      maxMarks: data.maxMarks,
-      gradeRanges: data.gradeRanges,
-    });
-    await fetchAll();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this exam-specific configuration? The global default will be used as fallback.')) return;
-    await api.delete(`/exam-config/${id}`);
-    await fetchAll();
-  };
-
-  const handleAddOverride = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddMsg('');
-    if (!newExamType) { setAddMsg('Please select an exam type.'); return; }
+  const handleDeleteConfig = async (id: string) => {
+    if (!confirm('Delete this configuration?')) return;
     try {
-      await api.post('/exam-config', {
-        examTypeName: newExamType,
-        passingPercentage: newPassPct,
-        maxMarks: newMaxMarks,
-        gradeRanges: null,
-      });
-      setShowAddOverride(false);
-      setAddMsg('');
+      await api.delete(`/exam-config/${id}`);
       await fetchAll();
     } catch (err: any) {
-      setAddMsg(err.response?.data?.message || 'Failed to add override.');
+      alert(err.response?.data?.message || 'Failed to delete config');
     }
   };
 
-  // Ensure global config entry exists in the list
-  const globalEntry = configs.find(c => c.isGlobal);
-  const examSpecific = configs.filter(c => !c.isGlobal);
-  const usedTypes = new Set(examSpecific.map(c => c.examTypeName));
-  const availableTypes = examTypes.filter(t => !usedTypes.has(t));
+  const handleSaveOverride = async () => {
+    if (!overrideData.examTypeName) return alert('Please select Exam Type');
+    
+    // Validate subject configs
+    if (overrideData.academicYearId && overrideData.classId) {
+      if (overrideData.subjectConfigs.length === 0) return alert('No subjects configured.');
+    }
+
+    setSaving(true);
+    try {
+      await api.post('/exam-config', {
+        examTypeName: overrideData.examTypeName,
+        passingPercentage: 35, // Global default, class overrides use subject level
+        maxMarks: 100,
+        gradeRanges: null, // Inherits global
+        classId: overrideData.classId || undefined,
+        academicYearId: overrideData.academicYearId || undefined,
+        subjectConfigs: overrideData.subjectConfigs,
+      });
+      setShowAddOverride(false);
+      setOverrideData({
+        academicYearId: '',
+        classId: '',
+        examTypeName: '',
+        subjectConfigs: [],
+      });
+      await fetchAll();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to save configuration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateSubjectConfig = (idx: number, field: keyof ExamConfigSubject, val: number | string) => {
+    setOverrideData(prev => {
+      const next = [...prev.subjectConfigs];
+      const row = { ...next[idx] };
+      (row as any)[field] = val;
+
+      // Auto calculate Pass Marks if Passing Percentage changes
+      if (field === 'passingPercentage') {
+        const p = Number(val) || 0;
+        row.passMarks = Number(((p / 100) * row.maxMarks).toFixed(2));
+      }
+      
+      // Auto calculate Passing Percentage if Pass Marks changes
+      if (field === 'passMarks') {
+        const pm = Number(val) || 0;
+        if (row.maxMarks > 0) {
+          row.passingPercentage = Number(((pm / row.maxMarks) * 100).toFixed(2));
+        }
+      }
+
+      // Re-calculate Pass Marks if Max Marks changes
+      if (field === 'maxMarks') {
+        const m = Number(val) || 0;
+        row.passMarks = Number(((row.passingPercentage / 100) * m).toFixed(2));
+      }
+
+      next[idx] = row;
+      return { ...prev, subjectConfigs: next };
+    });
+  };
+
+  const addSubjectComponent = (subjectId: string) => {
+    setOverrideData(prev => {
+      const next = [...prev.subjectConfigs];
+      // Insert after the last component for this subject
+      const lastIdx = next.map(x => x.subjectId).lastIndexOf(subjectId);
+      next.splice(lastIdx + 1, 0, {
+        subjectId,
+        subjectType: 'Practical', // Default new component
+        maxMarks: 25,
+        passingPercentage: 35,
+        passMarks: 8.75,
+      });
+      return { ...prev, subjectConfigs: next };
+    });
+  };
+
+  const removeSubjectComponent = (idx: number) => {
+    setOverrideData(prev => {
+      const next = [...prev.subjectConfigs];
+      next.splice(idx, 1);
+      return { ...prev, subjectConfigs: next };
+    });
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
-        <div className="w-8 h-8 border-4 border-t-[#2E5BFF] border-r-[#2E5BFF] border-b-transparent border-l-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-[#2E5BFF] border-b-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  const globalEntry = configs.find(c => c.isGlobal);
+  const classSpecific = configs.filter(c => c.classId);
+
   return (
-    <div className="space-y-6 animate-in max-w-3xl">
+    <div className="space-y-6 max-w-5xl animate-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
+      <div className="flex justify-between items-center border-b border-slate-200 pb-5">
         <div>
-          <h2 className="text-[28px] font-bold text-slate-900 leading-none flex items-center gap-2">
+          <h2 className="text-[28px] font-bold text-slate-900 flex items-center gap-2">
             <Settings2 className="w-7 h-7 text-[#2E5BFF]" />
             Exam Configuration
           </h2>
-          <p className="text-slate-500 text-[13px] font-medium mt-2">
-            Configure pass criteria, max marks, and grade ranges for each examination type.
+          <p className="text-slate-500 text-[13px] mt-2">
+            Configure examination rules, pass marks, and grade ranges globally or per class.
           </p>
         </div>
         <button
           onClick={() => setShowAddOverride(true)}
-          disabled={availableTypes.length === 0}
-          className="px-4 py-2.5 rounded-xl bg-[#2E5BFF] hover:bg-blue-600 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+          className="px-5 py-2.5 bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          Add Exam Override
+          Add Class Template
         </button>
       </div>
 
-      {/* Info callout */}
-      <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800">
-        <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-        <p>
-          <strong>How it works:</strong> If an exam-specific configuration exists, it is used. Otherwise the{' '}
-          <strong>Global Default</strong> applies. Changing the pass percentage instantly updates PASS/FAIL
-          status across the Teacher Portal and Parent Report Cards — no code changes needed.
-        </p>
-      </div>
-
-      {/* Global Default */}
+      {/* Global Config */}
       <div className="space-y-2">
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">
-          Global Default Configuration
-        </h3>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Global Default</h3>
         {globalEntry ? (
-          <ConfigCard
-            key={globalEntry.id}
-            entry={globalEntry}
-            examTypes={examTypes}
-            onSave={handleSave}
-            onDelete={handleDelete}
-          />
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="bg-blue-100 text-blue-700 font-bold text-xs px-2.5 py-1 rounded-md">Global Exam Config</span>
+                <div className="flex gap-4 mt-3 text-sm text-slate-600 font-medium">
+                  <div>Max Marks: <strong className="text-slate-900">{globalEntry.maxMarks}</strong></div>
+                  <div>Passing: <strong className="text-slate-900">{globalEntry.passingPercentage}%</strong></div>
+                </div>
+              </div>
+              <button
+                onClick={() => handleDeleteConfig(globalEntry.id)}
+                className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         ) : (
-          <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-6 text-center space-y-3">
-            <p className="text-xs text-slate-500 font-medium">No global configuration yet. Using system default: <strong>35% pass</strong>, 100 max marks.</p>
+          <div className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-6 text-center">
+            <p className="text-sm text-slate-500">No global config. Defaults to 35% pass, 100 max marks.</p>
             <button
               onClick={() => api.post('/exam-config', { examTypeName: null, passingPercentage: 35, maxMarks: 100 }).then(fetchAll)}
-              className="px-4 py-2 bg-[#2E5BFF] text-white text-xs font-bold rounded-xl hover:bg-blue-600 cursor-pointer inline-flex items-center gap-2"
+              className="mt-3 px-4 py-2 bg-blue-100 text-blue-700 text-xs font-bold rounded-xl cursor-pointer hover:bg-blue-200"
             >
-              <Plus className="w-3.5 h-3.5" />
-              Create Global Configuration
+              Create Global Config
             </button>
           </div>
         )}
       </div>
 
-      {/* Exam-specific overrides */}
-      {examSpecific.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">
-            Exam-Specific Overrides ({examSpecific.length})
-          </h3>
-          <div className="space-y-3">
-            {examSpecific.map(entry => (
-              <ConfigCard
-                key={entry.id}
-                entry={entry}
-                examTypes={examTypes}
-                onSave={handleSave}
-                onDelete={handleDelete}
-              />
+      {/* Class Specific Configs */}
+      {classSpecific.length > 0 && (
+        <div className="space-y-2 pt-4">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Class Templates</h3>
+          <div className="grid gap-4">
+            {classSpecific.map(c => (
+              <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                      <GraduationCap className="w-5 h-5 text-indigo-500" />
+                      {c.className} <ChevronRight className="w-4 h-4 text-slate-400" /> {c.examTypeName}
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1">{c.subjectConfigs?.length} subject components configured</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteConfig(c.id)}
+                    className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Subject Components */}
+      {/* Add Class Template Modal */}
+      {showAddOverride && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-800">Add Class Exam Template</h3>
+              <button onClick={() => setShowAddOverride(false)} className="p-2 hover:bg-slate-100 rounded-full cursor-pointer text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+              {/* Selectors */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Academic Year</label>
+                  <select 
+                    value={overrideData.academicYearId}
+                    onChange={e => setOverrideData({...overrideData, academicYearId: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#2E5BFF]"
+                  >
+                    <option value="">Select Year...</option>
+                    {academicYears.map(ay => (
+                      <option key={ay.id} value={ay.id}>{ay.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Class</label>
+                  <select 
+                    value={overrideData.classId}
+                    onChange={e => setOverrideData({...overrideData, classId: e.target.value})}
+                    disabled={!overrideData.academicYearId}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#2E5BFF] disabled:opacity-50"
+                  >
+                    <option value="">Select Class...</option>
+                    {classes.filter(c => c.academicYearId === overrideData.academicYearId).map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Exam Type</label>
+                  <select 
+                    value={overrideData.examTypeName}
+                    onChange={e => setOverrideData({...overrideData, examTypeName: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold outline-none focus:border-[#2E5BFF]"
+                  >
+                    <option value="">Select Exam Type...</option>
+                    {examTypes.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Subject Grid */}
+              {overrideData.subjectConfigs.length > 0 && (
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-bold text-slate-800 text-lg">Subject-wise Marking Scheme</h4>
+                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                      Auto-calculates pass marks/percentages
+                    </span>
+                  </div>
+                  
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          <th className="p-3 border-b border-slate-200">Subject</th>
+                          <th className="p-3 border-b border-slate-200">Component</th>
+                          <th className="p-3 border-b border-slate-200 w-24">Max Marks</th>
+                          <th className="p-3 border-b border-slate-200 w-24">Pass Pct (%)</th>
+                          <th className="p-3 border-b border-slate-200 w-24">Pass Marks</th>
+                          <th className="p-3 border-b border-slate-200 w-12 text-center">Act</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {overrideData.subjectConfigs.map((cfg, idx) => {
+                          const subject = subjects.find(s => s.id === cfg.subjectId);
+                          // Determine if this is the first component of a subject to render subject name & Add button
+                          const isFirstOfSubject = overrideData.subjectConfigs.findIndex(x => x.subjectId === cfg.subjectId) === idx;
+                          
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
+                              <td className="p-3 border-b border-slate-100">
+                                {isFirstOfSubject && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-slate-700">{subject?.name}</span>
+                                    <button 
+                                      onClick={() => addSubjectComponent(cfg.subjectId)}
+                                      title="Add Component"
+                                      className="w-5 h-5 rounded bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-3 border-b border-slate-100">
+                                <select 
+                                  value={cfg.subjectType}
+                                  onChange={e => updateSubjectConfig(idx, 'subjectType', e.target.value)}
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none focus:border-blue-400"
+                                >
+                                  <option value="Theory">Theory</option>
+                                  {components.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                </select>
+                              </td>
+                              <td className="p-3 border-b border-slate-100">
+                                <input 
+                                  type="number" min={1}
+                                  value={cfg.maxMarks || ''}
+                                  onChange={e => updateSubjectConfig(idx, 'maxMarks', e.target.value ? Number(e.target.value) : 0)}
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-400"
+                                />
+                              </td>
+                              <td className="p-3 border-b border-slate-100">
+                                <input 
+                                  type="number" min={0} max={100} step="0.01"
+                                  value={cfg.passingPercentage || ''}
+                                  onChange={e => updateSubjectConfig(idx, 'passingPercentage', e.target.value ? Number(e.target.value) : 0)}
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-blue-400"
+                                />
+                              </td>
+                              <td className="p-3 border-b border-slate-100">
+                                <input 
+                                  type="number" min={0} step="0.01"
+                                  value={cfg.passMarks === null || cfg.passMarks === undefined ? '' : cfg.passMarks}
+                                  onChange={e => updateSubjectConfig(idx, 'passMarks', e.target.value ? Number(e.target.value) : 0)}
+                                  className="w-full bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 text-xs font-bold text-blue-900 outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              <td className="p-3 border-b border-slate-100 text-center">
+                                {!isFirstOfSubject && (
+                                  <button onClick={() => removeSubjectComponent(idx)} className="p-1 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded cursor-pointer">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-3xl">
+              <button 
+                onClick={() => setShowAddOverride(false)}
+                className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSaveOverride}
+                disabled={saving || overrideData.subjectConfigs.length === 0}
+                className="px-6 py-2.5 bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Saving...' : 'Save Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Component Management */}
       <div className="space-y-4 pt-6 mt-6 border-t border-slate-200">
         <div>
           <h3 className="text-sm font-bold text-slate-800">Subject Component Types</h3>
           <p className="text-[11px] text-slate-500 font-medium mt-1">
-            Define custom components (e.g. Theory, Practical, Viva, Lab) to apply different passing criteria within the same subject.
+            Define custom components (e.g. Practical, Viva, Lab) to apply different passing criteria within the same subject. "Theory" is always included by default.
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5 shadow-sm">
           <form onSubmit={handleAddComponent} className="flex gap-3">
             <input 
               type="text" 
@@ -453,62 +548,6 @@ export default function ExamConfigPage() {
           )}
         </div>
       </div>
-
-      {/* Add Override Modal */}
-      {showAddOverride && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl shadow-xl p-6 space-y-5">
-            <div className="flex justify-between items-center">
-              <h3 className="text-sm font-bold text-slate-800">Add Exam-Specific Override</h3>
-              <button onClick={() => setShowAddOverride(false)} className="p-1.5 hover:bg-slate-100 rounded-xl cursor-pointer">
-                <X className="w-4 h-4 text-slate-400" />
-              </button>
-            </div>
-
-            {addMsg && (
-              <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs font-semibold text-rose-700 flex items-center gap-2">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {addMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleAddOverride} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                  Exam Type
-                </label>
-                <select
-                  value={newExamType}
-                  onChange={e => setNewExamType(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-[#2E5BFF]"
-                >
-                  <option value="">Select exam type...</option>
-                  {availableTypes.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Default Pass %</label>
-                  <input type="number" min={0} max={100} value={newPassPct} onChange={e => setNewPassPct(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-[#2E5BFF]" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Default Max Marks</label>
-                  <input type="number" min={1} max={1000} value={newMaxMarks} onChange={e => setNewMaxMarks(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-[#2E5BFF]" />
-                </div>
-              </div>
-              <button type="submit"
-                className="w-full py-2.5 bg-[#2E5BFF] hover:bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm">
-                <Plus className="w-3.5 h-3.5" />
-                Add Override
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

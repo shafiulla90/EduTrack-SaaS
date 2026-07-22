@@ -41,12 +41,18 @@ export class ExamConfigController {
     @Body('passingPercentage') passingPercentage: number,
     @Body('maxMarks') maxMarks: number | undefined,
     @Body('gradeRanges') gradeRanges: GradeRange[] | undefined,
+    @Body('classId') classId: string | undefined,
+    @Body('academicYearId') academicYearId: string | undefined,
+    @Body('subjectConfigs') subjectConfigs: any[] | undefined,
   ) {
     return this.examConfigService.upsertConfig({
       examTypeName: examTypeName ?? null,
       passingPercentage: Number(passingPercentage),
       maxMarks: maxMarks ? Number(maxMarks) : undefined,
       gradeRanges,
+      classId,
+      academicYearId,
+      subjectConfigs,
     });
   }
 
