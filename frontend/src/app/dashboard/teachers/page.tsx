@@ -1685,13 +1685,13 @@ export default function TeacherClassManagement() {
                 <button onClick={() => setShowAddSubject(true)} className="action-pill action-pill-primary">
                   <BookOpen className="w-3.5 h-3.5 stroke-[2.5]" /> Add Subject
                 </button>
-                <button onClick={() => setShowCreateClass(true)} className="action-pill action-pill-secondary">
+                <button onClick={() => setShowCreateClass(true)} className="action-pill action-pill-primary">
                   <Grid3X3 className="w-3.5 h-3.5 stroke-[2.5]" /> Create Class
                 </button>
-                <button onClick={() => setShowCreateSection(true)} className="action-pill action-pill-secondary">
+                <button onClick={() => setShowCreateSection(true)} className="action-pill action-pill-primary">
                   <Layers className="w-3.5 h-3.5 stroke-[2.5]" /> Create Section
                 </button>
-                <button onClick={() => setIsManageTypesOpen(true)} className="action-pill action-pill-secondary">
+                <button onClick={() => setIsManageTypesOpen(true)} className="action-pill action-pill-primary">
                   <Award className="w-3.5 h-3.5 stroke-[2.5]" /> Manage Exam Types
                 </button>
                 <button onClick={enterSetupWizard} className="action-pill action-pill-timetable action-pill-primary">
