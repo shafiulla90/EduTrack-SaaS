@@ -57,6 +57,7 @@ export class DashboardService {
       expenseAgg,
       sessions,
       marks,
+      examSubjectsConfig,
       leavesList
     ] = await Promise.all([
       // 1. Total Students
@@ -121,7 +122,13 @@ export class DashboardService {
       // 7. Avg. Academic Score
       this.prisma.examMark.findMany({
         where: { tenantId },
-        select: { marksObtained: true },
+        select: { examId: true, subjectId: true, subjectType: true, marksObtained: true },
+      }),
+      
+      // 7.1 Exam Subjects for Max Marks
+      this.prisma.examSubject.findMany({
+        where: { tenantId },
+        select: { examId: true, subjectId: true, subjectType: true, maxMarks: true },
       }),
 
       // 7b. Leave requests
@@ -252,8 +259,15 @@ export class DashboardService {
     const totalRoster = sessions.reduce((sum, s) => sum + s.totalStudents, 0);
     const attendanceRate = totalRoster > 0 ? Math.round((totalPresent / totalRoster) * 1000) / 10 : 0;
 
+    const examSubMap = new Map(examSubjectsConfig.map(es => [`${es.examId}_${es.subjectId}_${es.subjectType}`, es.maxMarks]));
+    let totalPct = 0;
+    marks.forEach(m => {
+      const max = examSubMap.get(`${m.examId}_${m.subjectId}_${m.subjectType}`) || 100;
+      totalPct += max > 0 ? (Number(m.marksObtained) / max) * 100 : 0;
+    });
+
     const academicAverage = marks.length > 0
-      ? Math.round((marks.reduce((sum, m) => sum + Number(m.marksObtained), 0) / (marks.length)) * 10) / 10
+      ? Math.round((totalPct / marks.length) * 10) / 10
       : 0;
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -465,11 +479,18 @@ export class DashboardService {
     }
 
     // 3. Grading Averages & Mark Distribution curve
-    const marks = await this.prisma.examMark.findMany({
-      where: marksWhere
-    });
+    const [marks, examSubjects] = await Promise.all([
+      this.prisma.examMark.findMany({
+        where: marksWhere
+      }),
+      this.prisma.examSubject.findMany({
+        where: { tenantId }
+      })
+    ]);
+    
+    const subjectConfigMap = new Map(examSubjects.map(es => [`${es.examId}_${es.subjectId}_${es.subjectType}`, es]));
 
-    let totalMarksObtained = 0;
+    let totalPctScore = 0;
     let passedCount = 0;
     let failedCount = 0;
     const distribution = {
@@ -482,22 +503,27 @@ export class DashboardService {
 
     marks.forEach(m => {
       const score = Number(m.marksObtained);
-      totalMarksObtained += score;
+      const es = subjectConfigMap.get(`${m.examId}_${m.subjectId}_${m.subjectType}`);
+      const maxMarks = es ? es.maxMarks : 100;
+      const passingPct = es ? Number(es.passingPercentage) : 35;
+      
+      const pct = maxMarks > 0 ? (score / maxMarks) * 100 : 0;
+      totalPctScore += pct;
 
-      if (score < 35) {
+      if (pct < passingPct) {
         failedCount++;
         distribution.failed++;
       } else {
         passedCount++;
-        if (score >= 35 && score < 60) distribution.belowAverage++;
-        else if (score >= 60 && score < 75) distribution.average++;
-        else if (score >= 75 && score < 90) distribution.firstDivision++;
-        else if (score >= 90) distribution.highDistinction++;
+        if (pct >= passingPct && pct < 60) distribution.belowAverage++;
+        else if (pct >= 60 && pct < 75) distribution.average++;
+        else if (pct >= 75 && pct < 90) distribution.firstDivision++;
+        else if (pct >= 90) distribution.highDistinction++;
       }
     });
 
     const totalMarksEntries = marks.length;
-    const averageScore = totalMarksEntries > 0 ? (totalMarksObtained / totalMarksEntries) : 0;
+    const averageScore = totalMarksEntries > 0 ? (totalPctScore / totalMarksEntries) : 0;
     const passRate = totalMarksEntries > 0 ? (passedCount / totalMarksEntries) * 100 : 0;
 
     const grading = {
@@ -617,22 +643,35 @@ export class DashboardService {
       }
     }
 
-    const marks = await this.prisma.examMark.findMany({
-      where: marksWhere,
-      include: {
-        student: { include: { user: { select: { name: true } } } },
-        subject: { select: { name: true } },
-        exam: { select: { type: true } }
-      }
-    });
+    const [marks, examSubjects] = await Promise.all([
+      this.prisma.examMark.findMany({
+        where: marksWhere,
+        include: {
+          student: { include: { user: { select: { name: true } } } },
+          subject: { select: { name: true } },
+          exam: { select: { type: true } }
+        }
+      }),
+      this.prisma.examSubject.findMany({
+        where: { tenantId }
+      })
+    ]);
+    
+    const subjectConfigMap = new Map(examSubjects.map(es => [`${es.examId}_${es.subjectId}_${es.subjectType}`, es]));
 
-    return marks.map(m => ({
-      studentName: m.student?.user.name || 'Student',
-      rollNo: m.student?.rollNo || 'N/A',
-      subject: m.subject?.name || 'Subject',
-      examType: m.exam?.type || 'Exam',
-      marksObtained: Number(m.marksObtained),
-      maxMarks: 100
-    }));
+    return marks.map(m => {
+      const es = subjectConfigMap.get(`${m.examId}_${m.subjectId}_${m.subjectType}`);
+      const maxMarks = es ? es.maxMarks : 100;
+      
+      return {
+        studentName: m.student?.user.name || 'Student',
+        rollNo: m.student?.rollNo || 'N/A',
+        subject: m.subject?.name || 'Subject',
+        subjectType: m.subjectType,
+        examType: m.exam?.type || 'Exam',
+        marksObtained: Number(m.marksObtained),
+        maxMarks: maxMarks
+      };
+    });
   }
 }

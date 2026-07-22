@@ -176,7 +176,7 @@ function ConfigCard({
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                Maximum Marks per Subject
+                Default Maximum Marks (Template)
               </label>
               <input
                 type="number" min={1} max={1000} step={1}
@@ -238,16 +238,20 @@ export default function ExamConfigPage() {
   const [newPassPct, setNewPassPct] = useState(35);
   const [newMaxMarks, setNewMaxMarks] = useState(100);
   const [addMsg, setAddMsg] = useState('');
+  const [components, setComponents] = useState<any[]>([]);
+  const [newComponent, setNewComponent] = useState('');
 
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const [cfgRes, typeRes] = await Promise.all([
+      const [cfgRes, typeRes, compRes] = await Promise.all([
         api.get('/exam-config'),
         api.get('/exams/exam-types'),
+        api.get('/exam-config/components'),
       ]);
       setConfigs(cfgRes.data);
       setExamTypes(typeRes.data);
+      setComponents(compRes.data);
 
       // Pre-select first unused exam type
       const usedTypes = new Set(cfgRes.data.map((c: ExamConfigEntry) => c.examTypeName).filter(Boolean));
@@ -261,6 +265,28 @@ export default function ExamConfigPage() {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const handleAddComponent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComponent.trim()) return;
+    try {
+      await api.post('/exam-config/components', { name: newComponent.trim() });
+      setNewComponent('');
+      await fetchAll();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to add component');
+    }
+  };
+
+  const handleDeleteComponent = async (id: string) => {
+    if (!confirm('Delete this subject component type?')) return;
+    try {
+      await api.delete(`/exam-config/components/${id}`);
+      await fetchAll();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete component');
+    }
+  };
 
   const handleSave = async (_id: string, data: Partial<ExamConfigEntry>) => {
     await api.post('/exam-config', {
@@ -391,6 +417,43 @@ export default function ExamConfigPage() {
         </div>
       )}
 
+      {/* Subject Components */}
+      <div className="space-y-4 pt-6 mt-6 border-t border-slate-200">
+        <div>
+          <h3 className="text-sm font-bold text-slate-800">Subject Component Types</h3>
+          <p className="text-[11px] text-slate-500 font-medium mt-1">
+            Define custom components (e.g. Theory, Practical, Viva, Lab) to apply different passing criteria within the same subject.
+          </p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5">
+          <form onSubmit={handleAddComponent} className="flex gap-3">
+            <input 
+              type="text" 
+              placeholder="e.g. Practical"
+              value={newComponent}
+              onChange={e => setNewComponent(e.target.value)}
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-[#2E5BFF]"
+            />
+            <button type="submit" disabled={!newComponent.trim()} className="px-5 py-2.5 bg-[#2E5BFF] hover:bg-blue-600 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
+              Add Component
+            </button>
+          </form>
+
+          {components.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {components.map(comp => (
+                <div key={comp.id} className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  <span className="text-xs font-bold text-slate-700">{comp.name}</span>
+                  <button onClick={() => handleDeleteComponent(comp.id)} className="p-1 hover:bg-rose-100 rounded-md text-slate-400 hover:text-rose-600 cursor-pointer transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Add Override Modal */}
       {showAddOverride && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
@@ -427,12 +490,12 @@ export default function ExamConfigPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Pass %</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Default Pass %</label>
                   <input type="number" min={0} max={100} value={newPassPct} onChange={e => setNewPassPct(Number(e.target.value))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-[#2E5BFF]" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Max Marks</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Default Max Marks</label>
                   <input type="number" min={1} max={1000} value={newMaxMarks} onChange={e => setNewMaxMarks(Number(e.target.value))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-[#2E5BFF]" />
                 </div>

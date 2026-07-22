@@ -42,6 +42,8 @@ export default function ExamsAndMarksPage() {
   const [selectedClassSectionId, setSelectedClassSectionId] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [selectedExamName, setSelectedExamName] = useState('');
+  const [selectedSubjectType, setSelectedSubjectType] = useState('');
+  const [components, setComponents] = useState<any[]>([]);
 
   // Roster & marks list
   const [roster, setRoster] = useState<StudentMarkRow[]>([]);
@@ -143,6 +145,14 @@ export default function ExamsAndMarksPage() {
         setSelectedSubjectId(subRes.data[0].id);
       }
 
+      const compRes = await api.get('/exam-config/components');
+      setComponents(compRes.data);
+      if (compRes.data.length > 0) {
+        setSelectedSubjectType(compRes.data[0].name);
+      } else {
+        setSelectedSubjectType('Theory');
+      }
+
       const typeRes = await api.get('/exams/exam-types');
       setExamTypes(typeRes.data);
       if (typeRes.data.length > 0) {
@@ -168,10 +178,10 @@ export default function ExamsAndMarksPage() {
   }, [selectedExamName]);
 
   useEffect(() => {
-    if (selectedClassSectionId && selectedSubjectId && selectedExamName) {
+    if (selectedClassSectionId && selectedSubjectId && selectedExamName && selectedSubjectType) {
       fetchRoster();
     }
-  }, [selectedClassSectionId, selectedSubjectId, selectedExamName]);
+  }, [selectedClassSectionId, selectedSubjectId, selectedExamName, selectedSubjectType]);
 
   const fetchRoster = async () => {
     setIsLoading(true);
@@ -180,9 +190,12 @@ export default function ExamsAndMarksPage() {
       const res = await api.get(
         `/exams/marks-entry?classSectionId=${selectedClassSectionId}&subjectId=${selectedSubjectId}&examName=${encodeURIComponent(
           selectedExamName
-        )}`
+        )}&subjectType=${encodeURIComponent(selectedSubjectType)}`
       );
-      setRoster(res.data);
+      setRoster(res.data.roster || []);
+      if (res.data.config) {
+        setExamConfig(res.data.config);
+      }
     } catch (err: any) {
       console.error('Error fetching marks entry list:', err);
       setErrorMsg(err.response?.data?.message || 'Failed to load students roster for mark entry.');
@@ -207,7 +220,7 @@ export default function ExamsAndMarksPage() {
       prev.map(item => {
         if (item.studentId === studentId) {
           const cur = item.marksObtained === null ? 0 : item.marksObtained;
-          return { ...item, marksObtained: Math.min(100, cur + 1) };
+          return { ...item, marksObtained: Math.min(examConfig.maxMarks, cur + 1) };
         }
         return item;
       })
@@ -241,6 +254,7 @@ export default function ExamsAndMarksPage() {
         examName: selectedExamName,
         classSectionId: selectedClassSectionId,
         subjectId: selectedSubjectId,
+        subjectType: selectedSubjectType,
       });
 
       setSaveSuccess(true);
@@ -468,16 +482,14 @@ export default function ExamsAndMarksPage() {
                           >
                             <MinusCircle className="w-4.5 h-4.5 text-slate-450" />
                           </button>
-                          
                           <input
                             type="number"
                             min="0"
-                            max="100"
+                            max={examConfig.maxMarks}
                             value={mark === null ? '' : mark}
                             onChange={(e) => handleScoreChange(s.studentId, e.target.value)}
                             className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-mono text-xs text-slate-800 font-extrabold focus:outline-none focus:border-blue-600"
                           />
-                          
                           <button
                             onClick={() => handleIncrement(s.studentId)}
                             className="p-1 rounded-lg border border-slate-200 hover:bg-slate-100 hover:text-emerald-600"

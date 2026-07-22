@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { Prisma } from '@prisma/client';
@@ -160,5 +160,137 @@ export class ExamConfigService {
   // ── Get default grade ranges (for frontend) ───────────────────────────────
   getDefaultGradeRanges(): GradeRange[] {
     return DEFAULT_GRADE_RANGES;
+  }
+
+  // ── Subject Component Management ──────────────────────────────────────────
+  async listComponents() {
+    const tenantId = this.getTenantId();
+    return this.prisma.subjectComponent.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createComponent(name: string) {
+    const tenantId = this.getTenantId();
+    if (!name || name.trim() === '') throw new BadRequestException('Component name cannot be empty');
+    const existing = await this.prisma.subjectComponent.findUnique({
+      where: { name_tenantId: { name: name.trim(), tenantId } },
+    });
+    if (existing) throw new BadRequestException('Component already exists');
+    return this.prisma.subjectComponent.create({
+      data: { name: name.trim(), tenantId },
+    });
+  }
+
+  async deleteComponent(id: string) {
+    const tenantId = this.getTenantId();
+    const comp = await this.prisma.subjectComponent.findUnique({ where: { id } });
+    if (!comp || comp.tenantId !== tenantId) throw new NotFoundException('Component not found');
+    return this.prisma.subjectComponent.delete({ where: { id } });
+  }
+
+  // ── ExamSubject Runtime Architecture ──────────────────────────────────────
+  async getOrInitializeExamSubject(examId: string, subjectId: string, subjectType: string = 'Theory', tenantId?: string) {
+    const tid = tenantId ?? this.getTenantId();
+    
+    let examSubject = await this.prisma.examSubject.findUnique({
+      where: { examId_subjectId_subjectType: { examId, subjectId, subjectType } },
+    });
+
+    if (!examSubject) {
+      const exam = await this.prisma.exam.findUnique({
+        where: { id: examId },
+      });
+      if (!exam) throw new NotFoundException('Exam not found');
+
+      const cfg = await this.resolveConfig(exam.type, tid);
+
+      examSubject = await this.prisma.examSubject.create({
+        data: {
+          tenantId: tid,
+          examId,
+          subjectId,
+          subjectType,
+          maxMarks: cfg.maxMarks,
+          passingPercentage: cfg.passingPercentage,
+          passMarks: Math.round((cfg.passingPercentage / 100) * cfg.maxMarks),
+        }
+      });
+    }
+
+    return examSubject;
+  }
+  
+  async getExamSubjects(examId: string) {
+    const tenantId = this.getTenantId();
+    return this.prisma.examSubject.findMany({
+      where: { examId, tenantId },
+      include: { subject: true },
+      orderBy: [
+        { subject: { name: 'asc' } },
+        { subjectType: 'asc' }
+      ]
+    });
+  }
+
+  async updateExamSubject(id: string, dto: { maxMarks?: number; passMarks?: number; passingPercentage?: number; subjectType?: string; remarks?: string; }) {
+    const tenantId = this.getTenantId();
+    const examSubject = await this.prisma.examSubject.findUnique({ where: { id } });
+    if (!examSubject || examSubject.tenantId !== tenantId) throw new NotFoundException('Exam Subject not found');
+
+    // If max marks change or subject type change, ensure no marks exist
+    if ((dto.maxMarks !== undefined && dto.maxMarks !== examSubject.maxMarks) || 
+        (dto.subjectType !== undefined && dto.subjectType !== examSubject.subjectType)) {
+      const existingMarks = await this.prisma.examMark.findFirst({
+        where: { examId: examSubject.examId, subjectId: examSubject.subjectId, subjectType: examSubject.subjectType }
+      });
+      if (existingMarks) {
+        throw new BadRequestException('Cannot modify Max Marks or Component Type because student marks have already been recorded for this component.');
+      }
+    }
+
+    const updateData: any = {};
+    if (dto.maxMarks !== undefined) updateData.maxMarks = dto.maxMarks;
+    if (dto.passingPercentage !== undefined) updateData.passingPercentage = dto.passingPercentage;
+    if (dto.passMarks !== undefined) updateData.passMarks = dto.passMarks;
+    if (dto.subjectType !== undefined) updateData.subjectType = dto.subjectType;
+    if (dto.remarks !== undefined) updateData.remarks = dto.remarks;
+
+    return this.prisma.examSubject.update({
+      where: { id },
+      data: updateData,
+    });
+  }
+
+  async createExamSubjectsForExam(examId: string, classSectionId: string, tenantId?: string) {
+    const tid = tenantId ?? this.getTenantId();
+    const exam = await this.prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) return;
+
+    // Get all subjects assigned to the class section
+    const classSubjects = await this.prisma.classSubject.findMany({
+      where: { classSectionId },
+    });
+
+    // Resolve template config for this exam type
+    const cfg = await this.resolveConfig(exam.type, tid);
+
+    // Eagerly create default 'Theory' component for all subjects
+    for (const cs of classSubjects) {
+      await this.prisma.examSubject.upsert({
+        where: { examId_subjectId_subjectType: { examId, subjectId: cs.subjectId, subjectType: 'Theory' } },
+        create: {
+          tenantId: tid,
+          examId,
+          subjectId: cs.subjectId,
+          subjectType: 'Theory',
+          maxMarks: cfg.maxMarks,
+          passingPercentage: cfg.passingPercentage,
+          passMarks: Math.round((cfg.passingPercentage / 100) * cfg.maxMarks),
+        },
+        update: {} // do nothing if it already exists
+      });
+    }
   }
 }

@@ -141,6 +141,8 @@ model Tenant {
   staffProfiles   StaffProfile[]
   examTypes       ExamType[]
   examConfigs     ExamConfig[]
+  subjectComponents SubjectComponent[]
+  examSubjects    ExamSubject[]
   homeworks       Homework[]
   leaveRequests   LeaveRequest[]
   statusHistories StatusHistory[]
@@ -381,6 +383,7 @@ model Subject {
   classSubjects  ClassSubject[]
   teacherAssigns TeacherAssignment[]
   examMarks      ExamMark[]
+  examSubjects   ExamSubject[]
   periods        Period[]
   teacherSkills  TeacherSkill[]
   homeworks      Homework[]
@@ -469,6 +472,7 @@ model Exam {
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   examMarks ExamMark[]
+  examSubjects ExamSubject[]
 
   @@index([tenantId])
   @@index([classSectionId])
@@ -483,12 +487,13 @@ model ExamMark {
   student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subjectId     String
   subject       Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectType   String         @default("Theory")
   marksObtained Decimal        @db.Decimal(5, 2)
   remarks       String?
   tenantId      String
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([examId, studentId, subjectId])
+  @@unique([examId, studentId, subjectId, subjectType])
   @@index([tenantId])
   @@index([studentId])
 }
@@ -1252,3 +1257,34 @@ model BusGpsLog {
   @@index([tripId])
 }
 
+model SubjectComponent {
+  id        String   @id @default(uuid())
+  name      String   // e.g. "Theory", "Practical"
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([name, tenantId])
+}
+
+model ExamSubject {
+  id                String   @id @default(uuid())
+  examId            String
+  exam              Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subjectId         String
+  subject           Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectType       String   @default("Theory")
+  maxMarks          Int      @default(100)
+  passMarks         Decimal? @db.Decimal(5, 2)
+  passingPercentage Decimal  @default(35) @db.Decimal(5, 2)
+  remarks           String?
+  
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([examId, subjectId, subjectType])
+  @@index([tenantId])
+}

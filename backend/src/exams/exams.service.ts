@@ -1,14 +1,17 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { TenantContext } from '../tenants/tenant.context';
 import { Role } from '@prisma/client';
 import { RoleFilterHelper } from '../common/role-filter.helper';
+import { ExamConfigService } from '../exam-config/exam-config.service';
 
 @Injectable()
 export class ExamsService {
   constructor(
     private prisma: PrismaService,
     private roleFilterHelper: RoleFilterHelper,
+    @Inject(forwardRef(() => ExamConfigService))
+    private examConfigService: ExamConfigService,
   ) {}
 
   private getTenantId(): string {
@@ -23,7 +26,7 @@ export class ExamsService {
 
   async createExam(name: string, type: string, classSectionId: string, date: Date) {
     const tenantId = this.getTenantId();
-    return this.prisma.exam.create({
+    const exam = await this.prisma.exam.create({
       data: {
         name,
         type,
@@ -32,6 +35,11 @@ export class ExamsService {
         tenantId,
       },
     });
+
+    // Eagerly initialize exam subjects configuration templates
+    await this.examConfigService.createExamSubjectsForExam(exam.id, classSectionId, tenantId);
+
+    return exam;
   }
 
   async getExams(classSectionId?: string) {
@@ -232,6 +240,7 @@ export class ExamsService {
     examId?: string,
     userId?: string,
     role?: string,
+    subjectType: string = 'Theory',
   ) {
     const tenantId = this.getTenantId();
     let resolvedExamId = examId;
@@ -287,30 +296,46 @@ export class ExamsService {
 
     // If resolvedExamId exists, load current marks
     const marksMap = new Map<string, any>();
+    let maxMarks = 100;
+    
+    let passingPercentage = 35;
+    
     if (resolvedExamId) {
       const currentMarks = await this.prisma.examMark.findMany({
         where: {
           tenantId,
           examId: resolvedExamId,
           subjectId,
+          subjectType,
         },
       });
       for (const m of currentMarks) {
         marksMap.set(m.studentId, m);
       }
+      
+      const examSub = await this.examConfigService.getOrInitializeExamSubject(resolvedExamId, subjectId, subjectType, tenantId);
+      maxMarks = examSub.maxMarks;
+      passingPercentage = Number(examSub.passingPercentage);
+    } else {
+      const cfg = await this.examConfigService.resolveConfig(examName, tenantId);
+      maxMarks = cfg.maxMarks;
+      passingPercentage = cfg.passingPercentage;
     }
 
-    return students.map(s => {
-      const markRecord = marksMap.get(s.id);
-      return {
-        studentId: s.id,
-        name: s.user.name,
-        rollNo: s.rollNo || 'N/A',
-        hasMarks: !!markRecord,
-        marksObtained: markRecord ? Number(markRecord.marksObtained) : null,
-        remarks: markRecord ? markRecord.remarks : '',
-      };
-    });
+    return {
+      roster: students.map(s => {
+        const markRecord = marksMap.get(s.id);
+        return {
+          studentId: s.id,
+          name: s.user.name,
+          rollNo: s.rollNo || 'N/A',
+          hasMarks: !!markRecord,
+          marksObtained: markRecord ? Number(markRecord.marksObtained) : null,
+          remarks: markRecord ? markRecord.remarks : '',
+        };
+      }),
+      config: { maxMarks, passingPercentage }
+    };
   }
 
 
@@ -321,6 +346,7 @@ export class ExamsService {
     subjectId: string,
     userId?: string,
     role?: string,
+    subjectType: string = 'Theory',
   ) {
     const tenantId = this.getTenantId();
 
@@ -356,22 +382,32 @@ export class ExamsService {
               tenantId,
             },
           });
+          await this.examConfigService.createExamSubjectsForExam(exam.id, classSectionId, tenantId);
         }
+        
+        const examSub = await this.examConfigService.getOrInitializeExamSubject(exam.id, subjectId, subjectType, tenantId);
+
 
         // Run upsert operations concurrently to speed up marks saving and avoid timeouts
-        const upsertPromises = marksDataList.map((row) =>
-          tx.examMark.upsert({
+        const upsertPromises = marksDataList.map((row) => {
+          const mObs = row.marksObtained;
+          if (mObs !== null && mObs > examSub.maxMarks) {
+            throw new BadRequestException(`Marks obtained (${mObs}) cannot exceed maximum marks (${examSub.maxMarks}) for ${subjectType}`);
+          }
+          return tx.examMark.upsert({
             where: {
-              examId_studentId_subjectId: {
+              examId_studentId_subjectId_subjectType: {
                 examId: exam.id,
                 studentId: row.studentId,
                 subjectId,
+                subjectType,
               },
             },
             create: {
               examId: exam.id,
               studentId: row.studentId,
               subjectId,
+              subjectType,
               marksObtained: row.marksObtained,
               remarks: row.remarks || null,
               tenantId,
@@ -380,8 +416,8 @@ export class ExamsService {
               marksObtained: row.marksObtained,
               remarks: row.remarks || null,
             },
-          }),
-        );
+          });
+        });
 
         return Promise.all(upsertPromises);
       },
@@ -436,8 +472,8 @@ export class ExamsService {
       classSectionId: string;
       scores: { [subjectName: string]: number };
       totalMarks: number;
-      subjectsCount: number;
-      subjectsList: { name: string; score: number; max: number }[];
+      totalMaxMarks: number;
+      subjectsList: { name: string; score: number; max: number; type: string }[];
     }>();
 
     for (const m of marks) {
@@ -449,24 +485,28 @@ export class ExamsService {
           classSectionId,
           scores: {},
           totalMarks: 0,
-          subjectsCount: 0,
+          totalMaxMarks: 0,
           subjectsList: [],
         });
       }
       const record = studentGrades.get(m.studentId)!;
       const score = Number(m.marksObtained);
-      record.scores[m.subject.name] = score;
+      
+      const examSub = await this.examConfigService.getOrInitializeExamSubject(exam.id, m.subjectId, m.subjectType, tenantId);
+      
+      record.scores[`${m.subject.name} (${m.subjectType})`] = score;
       record.totalMarks += score;
-      record.subjectsCount += 1;
+      record.totalMaxMarks += examSub.maxMarks;
       record.subjectsList.push({
         name: m.subject.name,
+        type: m.subjectType,
         score,
-        max: 100,
+        max: examSub.maxMarks,
       });
     }
 
     const reportRows = Array.from(studentGrades.values()).map(r => {
-      const avg = r.subjectsCount > 0 ? r.totalMarks / r.subjectsCount : 0;
+      const avg = r.totalMaxMarks > 0 ? (r.totalMarks / r.totalMaxMarks) * 100 : 0;
       const { grade, gpa } = this.calculateGradeAndGPA(avg);
       return {
         ...r,

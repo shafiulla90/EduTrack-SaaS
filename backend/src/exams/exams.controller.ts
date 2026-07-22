@@ -68,6 +68,7 @@ export class ExamsController {
     @Query('examName') examName: string,
     @Query('classSectionId') classSectionId?: string,
     @Query('examId') examId?: string,
+    @Query('subjectType') subjectType?: string,
   ) {
     return this.examsService.getStudentsForMarksEntry(
       subjectId,
@@ -76,6 +77,7 @@ export class ExamsController {
       examId,
       req.user.sub,
       req.user.role,
+      subjectType,
     );
   }
 
@@ -86,6 +88,7 @@ export class ExamsController {
     @Body('examName') examName: string,
     @Body('classSectionId') classSectionId: string,
     @Body('subjectId') subjectId: string,
+    @Body('subjectType') subjectType?: string,
   ) {
     if (!Array.isArray(marks)) {
       throw new Error('Marks must be an array');
@@ -97,6 +100,7 @@ export class ExamsController {
       subjectId,
       req.user.sub,
       req.user.role,
+      subjectType,
     );
   }
 

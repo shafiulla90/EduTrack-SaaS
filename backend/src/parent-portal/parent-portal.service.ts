@@ -557,8 +557,10 @@ export class ParentPortalService {
 
         // Resolve pass criteria from ExamConfigService
         const cfg = await this.examConfigService.resolveConfig(examName, exam.tenantId);
-        const passingPct = cfg.passingPercentage;
-        const maxMarksPerSubject = cfg.maxMarks;
+        
+        // Eagerly load ExamSubjects for all components in this exam
+        const examSubjects = await this.examConfigService.getExamSubjects(exam.id);
+        const subjectConfigMap = new Map<string, any>(examSubjects.map(es => [`${es.subjectId}_${es.subjectType}`, es]));
 
         // Fetch ALL marks in this exam+section to compute rank
         const allMarks = await this.prisma.examMark.findMany({
@@ -584,7 +586,15 @@ export class ParentPortalService {
         }
 
         // Build subject rows
-        const subjectRows = subjects.map(m => {
+        const subjectRows = await Promise.all(subjects.map(async (m) => {
+          let es = subjectConfigMap.get(`${m.subjectId}_${m.subjectType}`);
+          if (!es) {
+             es = await this.examConfigService.getOrInitializeExamSubject(exam.id, m.subjectId, m.subjectType, exam.tenantId);
+             subjectConfigMap.set(`${m.subjectId}_${m.subjectType}`, es);
+          }
+          const maxMarksPerSubject = es.maxMarks;
+          const passingPct = Number(es.passingPercentage);
+
           const marks = Number(m.marksObtained);
           const pct = maxMarksPerSubject > 0 ? (marks / maxMarksPerSubject) * 100 : 0;
           const gradeInfo = this.examConfigService.calculateGrade(pct, cfg.gradeRanges);
@@ -592,6 +602,7 @@ export class ParentPortalService {
           return {
             id: m.id,
             subject: m.subject.name,
+            subjectType: m.subjectType,
             marksObtained: marks,
             maxMarks: maxMarksPerSubject,
             percentage: Math.round(pct * 10) / 10,
@@ -600,10 +611,10 @@ export class ParentPortalService {
             result: pass ? 'PASS' : 'FAIL',
             remarks: m.remarks || 'Good performance',
           };
-        });
+        }));
 
         const totalObtained = subjectRows.reduce((s, r) => s + r.marksObtained, 0);
-        const totalMax = subjectRows.length * maxMarksPerSubject;
+        const totalMax = subjectRows.reduce((s, r) => s + r.maxMarks, 0);
         const overallPct = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
         const overallGradeInfo = this.examConfigService.calculateGrade(overallPct, cfg.gradeRanges);
         // Any single subject FAIL → overall FAIL
@@ -620,7 +631,7 @@ export class ParentPortalService {
           overallGrade: overallGradeInfo.grade,
           overallGpa: overallGradeInfo.gpa,
           overallResult,
-          passingPercentage: passingPct,
+          passingPercentage: cfg.passingPercentage, // Overall passing criteria for display purposes
           configSource: cfg.source,
           subjects: subjectRows,
         };

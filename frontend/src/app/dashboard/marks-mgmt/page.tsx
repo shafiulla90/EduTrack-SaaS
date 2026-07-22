@@ -13,6 +13,9 @@ export default function MarksMgmtPage() {
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedExam, setSelectedExam] = useState('');
+  const [selectedSubjectType, setSelectedSubjectType] = useState('');
+  const [components, setComponents] = useState<any[]>([]);
+  const [examConfig, setExamConfig] = useState<{ maxMarks: number; passingPercentage: number }>({ maxMarks: 100, passingPercentage: 35 });
 
   // UI state
   const [loading, setLoading] = useState(true);
@@ -33,14 +36,18 @@ export default function MarksMgmtPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [clsRes, subRes, examRes] = await Promise.all([
+        const [clsRes, subRes, examRes, compRes] = await Promise.all([
           api.get('/teacher-portal/classes'),
           api.get('/exams/subjects'),
           api.get('/exams/exam-types'),
+          api.get('/exam-config/components'),
         ]);
         setClasses(clsRes.data);
         setSubjects(subRes.data);
         setExamTypes(examRes.data);
+        setComponents(compRes.data);
+        if (compRes.data.length > 0) setSelectedSubjectType(compRes.data[0].name);
+        else setSelectedSubjectType('Theory');
       } catch (err) {
         console.error('Failed to load initial data:', err);
       } finally {
@@ -57,11 +64,13 @@ export default function MarksMgmtPage() {
     try {
       // Find classSectionId from selectedClass
       const cls = classes.find(c => c.classSectionId === selectedClass);
-      const res = await api.get(`/teacher-portal/marks/entry?subjectId=${selectedSubject}&examName=${encodeURIComponent(selectedExam)}&classSectionId=${selectedClass}`);
-      setStudents(res.data);
+      const res = await api.get(`/teacher-portal/marks/entry?subjectId=${selectedSubject}&examName=${encodeURIComponent(selectedExam)}&classSectionId=${selectedClass}&subjectType=${encodeURIComponent(selectedSubjectType)}`);
+      setStudents(res.data.roster || res.data);
+      if (res.data.config) setExamConfig(res.data.config);
 
       const initialSheet: { [id: string]: { score: string; remarks: string } } = {};
-      res.data.forEach((s: any) => {
+      const rosterData = res.data.roster || res.data;
+      rosterData.forEach((s: any) => {
         initialSheet[s.studentId] = {
           score: s.marksObtained !== null ? String(s.marksObtained) : '',
           remarks: s.remarks || '',
@@ -109,6 +118,7 @@ export default function MarksMgmtPage() {
           examName: selectedExam,
           classSectionId: selectedClass,
           subjectId: selectedSubject,
+          subjectType: selectedSubjectType,
         });
         setAutosaveStatus('All changes saved');
       } catch (err) {
@@ -172,6 +182,7 @@ export default function MarksMgmtPage() {
         examName: selectedExam,
         classSectionId: selectedClass,
         subjectId: selectedSubject,
+        subjectType: selectedSubjectType,
       });
       setAutosaveStatus('All changes saved');
       setMessage({ type: 'success', text: 'All marks saved successfully!' });
@@ -255,7 +266,7 @@ export default function MarksMgmtPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Subject</label>
               <select
@@ -289,6 +300,19 @@ export default function MarksMgmtPage() {
               >
                 <option value="">Select...</option>
                 {examTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Component</label>
+              <select
+                value={selectedSubjectType}
+                onChange={(e) => {
+                  setSelectedSubjectType(e.target.value);
+                  setStudents([]);
+                }}
+                className="block w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2E5BFF] text-sm"
+              >
+                {components.length > 0 ? components.map(c => <option key={c.id} value={c.name}>{c.name}</option>) : <option value="Theory">Theory</option>}
               </select>
             </div>
           </div>
@@ -340,9 +364,11 @@ export default function MarksMgmtPage() {
 
                 <div className="grid grid-cols-3 gap-3 items-center">
                   <div className="col-span-1">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Score (Max 100)</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Score (Max {examConfig.maxMarks})</label>
                     <input
                       type="number"
+                      min={0}
+                      max={examConfig.maxMarks}
                       value={marksSheet[s.studentId]?.score || ''}
                       onChange={(e) => handleMarkChange(s.studentId, e.target.value)}
                       placeholder="--"

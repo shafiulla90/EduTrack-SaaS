@@ -56,4 +56,40 @@ export class ExamConfigController {
   async deleteConfig(@Param('id') id: string) {
     return this.examConfigService.deleteConfig(id);
   }
+
+  // ── Subject Component Endpoints ───────────────────────────────────────────
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
+  @Get('components')
+  async listComponents() {
+    return this.examConfigService.listComponents();
+  }
+
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
+  @Post('components')
+  async createComponent(@Body('name') name: string) {
+    return this.examConfigService.createComponent(name);
+  }
+
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
+  @Delete('components/:id')
+  async deleteComponent(@Param('id') id: string) {
+    return this.examConfigService.deleteComponent(id);
+  }
+
+  // ── ExamSubject Endpoints ─────────────────────────────────────────────────
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
+  @Get('exam-subjects')
+  async getExamSubjects(@Query('examId') examId: string) {
+    if (!examId) return [];
+    return this.examConfigService.getExamSubjects(examId);
+  }
+
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
+  @Post('exam-subjects/:id')
+  async updateExamSubject(
+    @Param('id') id: string,
+    @Body() dto: { maxMarks?: number; passMarks?: number; passingPercentage?: number; subjectType?: string; remarks?: string; }
+  ) {
+    return this.examConfigService.updateExamSubject(id, dto);
+  }
 }
