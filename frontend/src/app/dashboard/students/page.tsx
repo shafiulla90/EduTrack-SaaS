@@ -263,7 +263,7 @@ export default function StudentsDirectory() {
 
   const loadStudentDetails = async (studentId: string, yearId: string) => {
     const key = `${studentId}-${yearId}`;
-    if (loadedDetailsKey === key) return;
+    if (loadedDetailsKey === key && activeStudent?.id === studentId) return;
     
     try {
       const [detailsRes, casesRes] = await Promise.all([
