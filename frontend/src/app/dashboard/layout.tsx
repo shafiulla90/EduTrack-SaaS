@@ -47,6 +47,17 @@ export default function DashboardLayout({
     return () => window.removeEventListener('announcementRead', fetchUnreadAnnouncements);
   }, [currentUser?.id]);
 
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-white z-[99999]">
