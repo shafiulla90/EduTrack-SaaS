@@ -61,7 +61,7 @@ export class AuthService {
         }
       });
 
-      const isAdmin = users.some(u => u.role === Role.SCHOOL_ADMIN || u.role === Role.ADMIN);
+      const isAdmin = users.some(u => u.role === Role.SCHOOL_ADMIN || u.role === Role.SUPER_ADMIN || (u.role as string) === 'ADMIN');
       const isTeacher = users.some(u => u.role === Role.TEACHER || u.role === Role.STAFF);
       const isParent = users.some(u => u.role === Role.PARENT) || matchingStudents.length > 0;
       const userExists = users.length > 0 || matchingStudents.length > 0;
@@ -314,14 +314,12 @@ export class AuthService {
         user = await this.prisma.user.findFirst({
           where: {
             phone: { endsWith: normalizedPhone },
-            role: { in: [Role.SCHOOL_ADMIN, Role.ADMIN] }
+            role: { in: [Role.SCHOOL_ADMIN, Role.SUPER_ADMIN] }
           },
         });
       }
-    }
-
-    if (!user) {
-      // Fallback role selection
+    } else {
+      // Fallback role selection when no portal param is provided
       user = await this.prisma.user.findFirst({
         where: {
           phone: { endsWith: normalizedPhone }
