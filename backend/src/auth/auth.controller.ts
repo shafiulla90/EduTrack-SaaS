@@ -8,19 +8,23 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('send-otp')
-  async sendOtp(@Body('phone') phone: string) {
+  async sendOtp(@Body('phone') phone: string, @Body('portal') portal?: string) {
     if (!phone) {
       throw new BadRequestException('Phone number is required');
     }
-    return this.authService.sendOtp(phone);
+    return this.authService.sendOtp(phone, portal);
   }
 
   @Post('verify-otp')
-  async verifyOtp(@Body('phone') phone: string, @Body('otpCode') otpCode: string) {
+  async verifyOtp(
+    @Body('phone') phone: string, 
+    @Body('otpCode') otpCode: string,
+    @Body('portal') portal?: string
+  ) {
     if (!phone || !otpCode) {
       throw new BadRequestException('Phone number and OTP code are required');
     }
-    return this.authService.verifyOtp(phone, otpCode);
+    return this.authService.verifyOtp(phone, otpCode, portal);
   }
 
   @Post('login')

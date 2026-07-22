@@ -1,59 +1,83 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Phone, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Phone, ArrowRight, Loader2, AlertCircle, ArrowLeft, ShieldAlert } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useTenant } from '../../providers/TenantContext';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const portal = searchParams.get('portal') || 'admin';
   const { refresh } = useTenant();
+
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; portal: string; message: string } | null>(null);
+
+  const portalTitle = 
+    portal === 'teacher' ? 'Teacher Portal' :
+    portal === 'parent' ? 'Parent Portal' :
+    portal === 'student' ? 'Student Desk' :
+    'School Administrator';
+
+  const portalSubtitle = 
+    portal === 'teacher' ? 'Enter your registered mobile phone number to access the Teacher Portal.' :
+    portal === 'parent' ? 'Enter your registered mobile phone number to access the Parent Portal.' :
+    portal === 'student' ? 'Enter your registered mobile phone number to access the Student Desk.' :
+    'Enter your mobile phone number to log in or register a new school.';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotFoundInfo(null);
 
-    // Basic Indian/International mobile number validation
+    // Basic mobile number validation
     const cleanedPhone = phone.trim().replace(/[\s\-()]/g, '');
     if (!cleanedPhone || cleanedPhone.length < 10) {
       setError('Please enter a valid 10-digit mobile number');
       return;
     }
 
-    // Check if session is already active for this phone number
+    // Check if session is already active for this phone number and matching role
     const adminToken = localStorage.getItem('admin_token');
     const adminPhone = localStorage.getItem('admin_userPhone');
     const teacherToken = localStorage.getItem('teacher_token');
     const teacherPhone = localStorage.getItem('teacher_userPhone');
+    const parentToken = localStorage.getItem('parent_token');
+    const parentPhone = localStorage.getItem('parent_userPhone');
 
     let matchingToken = null;
     let matchingRole = '';
 
     const normCleaned = cleanedPhone.slice(-10);
 
-    if (adminToken && adminPhone) {
+    if (portal === 'admin' && adminToken && adminPhone) {
       const normCached = adminPhone.replace(/\D/g, '').slice(-10);
       if (normCleaned === normCached) {
         matchingToken = adminToken;
         matchingRole = 'SCHOOL_ADMIN';
       }
-    }
-    if (!matchingToken && teacherToken && teacherPhone) {
+    } else if (portal === 'teacher' && teacherToken && teacherPhone) {
       const normCached = teacherPhone.replace(/\D/g, '').slice(-10);
       if (normCleaned === normCached) {
         matchingToken = teacherToken;
         matchingRole = 'TEACHER';
+      }
+    } else if ((portal === 'parent' || portal === 'student') && parentToken && parentPhone) {
+      const normCached = parentPhone.replace(/\D/g, '').slice(-10);
+      if (normCleaned === normCached) {
+        matchingToken = parentToken;
+        matchingRole = 'PARENT';
       }
     }
 
     if (matchingToken) {
       setLoading(true);
       try {
-        // Verify token validity by calling profile endpoint
         await api.get('/auth/profile', {
           headers: {
             'Authorization': `Bearer ${matchingToken}`
@@ -62,20 +86,27 @@ export default function LoginPage() {
         
         sessionStorage.setItem('active_role', matchingRole);
         
-        // Session is valid, load tenant branding and go directly to dashboard
         try {
           await refresh();
         } catch (e) {
           console.error('Failed to pre-fetch school profile:', e);
         }
-        router.push('/dashboard');
+
+        if (matchingRole === 'PARENT') {
+          router.push('/parent');
+        } else {
+          router.push('/dashboard');
+        }
         return;
       } catch (err) {
-        // Token is expired or invalid, clear specific cache and proceed to normal OTP flow
         if (matchingRole === 'TEACHER') {
           localStorage.removeItem('teacher_token');
           localStorage.removeItem('teacher_tenantId');
           localStorage.removeItem('teacher_userPhone');
+        } else if (matchingRole === 'PARENT') {
+          localStorage.removeItem('parent_token');
+          localStorage.removeItem('parent_tenantId');
+          localStorage.removeItem('parent_userPhone');
         } else {
           localStorage.removeItem('admin_token');
           localStorage.removeItem('admin_tenantId');
@@ -88,21 +119,32 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const response = await api.post('/auth/send-otp', { phone: cleanedPhone });
-      // In development, the API will return the OTP code for convenience
-      const otpCode = response.data?.otpCode;
-      const schoolName = response.data?.schoolName || '';
-      const logoUrl = response.data?.logoUrl || '';
+      const response = await api.post('/auth/send-otp', { phone: cleanedPhone, portal });
+      const data = response.data;
 
-      // Store schoolName and logoUrl in sessionStorage to prevent HTTP 431 on large base64 data URIs
+      if (data.notFound) {
+        if (data.redirectToRegister) {
+          router.push('/register-school');
+          return;
+        }
+        setNotFoundInfo({
+          isNotFound: true,
+          portal: data.portal || portal,
+          message: data.message || `${portalTitle} account not found. Please contact your School Administrator.`
+        });
+        return;
+      }
+
+      const otpCode = data?.otpCode;
+      const schoolName = data?.schoolName || '';
+      const logoUrl = data?.logoUrl || '';
+
       sessionStorage.setItem('otp_schoolName', schoolName);
       sessionStorage.setItem('otp_logoUrl', logoUrl);
 
-      // Build OTP page URL
-      let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}`;
+      let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}&portal=${encodeURIComponent(portal)}`;
       if (otpCode) otpUrl += `&dev_otp=${otpCode}`;
 
-      // Navigate to verification screen
       router.push(otpUrl);
     } catch (err: any) {
       console.error('Send OTP error:', err);
@@ -111,6 +153,42 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (notFoundInfo?.isNotFound) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+        <div className="absolute top-[20%] left-[10%] w-[300px] h-[300px] rounded-full bg-brand-500/10 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[20%] right-[10%] w-[300px] h-[300px] rounded-full bg-indigo-500/10 blur-[100px] pointer-events-none" />
+
+        <div className="w-full max-w-md z-10">
+          <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl text-center space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                {portal === 'teacher' ? 'Teacher Account Not Found' : 'Parent Account Not Found'}
+              </h2>
+              <p className="text-slate-300 text-sm mt-3 leading-relaxed font-light">
+                {notFoundInfo.message}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setNotFoundInfo(null);
+                setPhone('');
+                setError('');
+              }}
+              className="w-full py-3 px-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-semibold text-sm hover:from-brand-500 hover:to-indigo-500 shadow-lg shadow-brand-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Login
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden">
@@ -133,10 +211,19 @@ export default function LoginPage() {
         </div>
 
         <div className="glass-card p-8 rounded-3xl border border-slate-900/50 bg-slate-900/40 backdrop-blur-xl relative">
+          <div className="flex justify-between items-center mb-6">
+            <Link href="/" className="text-xs font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1">
+              <ArrowLeft className="w-3.5 h-3.5" /> Portal Selection
+            </Link>
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 uppercase tracking-wider">
+              {portalTitle}
+            </span>
+          </div>
+
           <div className="mb-6 text-center">
-            <h2 className="text-2xl font-bold text-white tracking-tight">OTP Authentication</h2>
+            <h2 className="text-2xl font-bold text-white tracking-tight">{portalTitle}</h2>
             <p className="text-slate-400 text-sm mt-1.5 font-light">
-              Enter your mobile phone number to log in or register.
+              {portalSubtitle}
             </p>
           </div>
 
@@ -189,5 +276,17 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex justify-center items-center">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

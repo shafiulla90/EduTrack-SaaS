@@ -11,6 +11,7 @@ function OtpContent() {
   
   const phone = searchParams.get('phone') || '';
   const devOtp = searchParams.get('dev_otp') || '';
+  const portal = searchParams.get('portal') || 'admin';
   const [schoolName, setSchoolName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   
@@ -70,21 +71,21 @@ function OtpContent() {
       const response = await api.post('/auth/verify-otp', {
         phone,
         otpCode: codeStr,
+        portal
       });
 
       const data = response.data;
       if (data.registered) {
-        setSuccessMsg('Authenticated! Loading school profile...');
-        // Store JWT token and Tenant ID in role-isolated local storage namespaces
+        setSuccessMsg('Authenticated! Loading profile...');
         const role = data.user.role;
-        if (role === 'TEACHER') {
+        if (role === 'TEACHER' || role === 'STAFF') {
           localStorage.setItem('teacher_token', data.access_token);
           localStorage.setItem('teacher_tenantId', data.user.tenantId);
           if (data.user.phone) {
             localStorage.setItem('teacher_userPhone', data.user.phone);
           }
           sessionStorage.setItem('active_role', 'TEACHER');
-          setSuccessMsg('Authenticated! Redirecting...');
+          setSuccessMsg('Authenticated! Redirecting to Teacher Dashboard...');
           setTimeout(() => {
             router.push('/dashboard');
           }, 500);
@@ -112,8 +113,11 @@ function OtpContent() {
           }, 500);
         }
       } else {
+        if (portal !== 'admin') {
+          setError('Account not found for the selected portal. Please contact your School Administrator.');
+          return;
+        }
         setSuccessMsg('Verification successful! Opening registration wizard...');
-        // Redirect to School Onboarding Wizard
         setTimeout(() => {
           router.push(`/register-school?phone=${encodeURIComponent(phone)}`);
         }, 800);
@@ -137,12 +141,11 @@ function OtpContent() {
     setError('');
     setSuccessMsg('Resending OTP...');
     try {
-      const response = await api.post('/auth/send-otp', { phone });
+      const response = await api.post('/auth/send-otp', { phone, portal });
       setSuccessMsg('OTP resent successfully.');
       const newDevOtp = response.data?.otpCode;
       if (newDevOtp) {
-        // Update URL with new dev OTP
-        router.replace(`/auth/otp?phone=${encodeURIComponent(phone)}&dev_otp=${newDevOtp}`);
+        router.replace(`/auth/otp?phone=${encodeURIComponent(phone)}&portal=${encodeURIComponent(portal)}&dev_otp=${newDevOtp}`);
       }
     } catch (err: any) {
       setError('Failed to resend OTP. Please try again.');

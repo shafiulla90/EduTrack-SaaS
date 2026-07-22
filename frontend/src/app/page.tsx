@@ -11,24 +11,28 @@ export default function LandingPage() {
       description: 'Manage admissions, billing, accounts, and overall school operations.',
       icon: Shield,
       color: 'from-purple-500 to-indigo-500',
+      portal: 'admin',
     },
     {
       title: 'Teacher Portal',
       description: 'Take attendance, input marks, manage schedules, and coordinate timetables.',
       icon: BookOpen,
       color: 'from-blue-500 to-cyan-500',
+      portal: 'teacher',
     },
     {
       title: 'Student Desk',
       description: 'Check class schedules, exam reports, attendance, and library books.',
       icon: GraduationCap,
       color: 'from-emerald-500 to-teal-500',
+      portal: 'student',
     },
     {
       title: 'Parent Portal',
       description: 'Track your child\'s grades, review fee statements, and pay invoices.',
       icon: Users,
       color: 'from-amber-500 to-orange-500',
+      portal: 'parent',
     },
   ];
 
@@ -75,7 +79,7 @@ export default function LandingPage() {
             return (
               <Link
                 key={idx}
-                href="/auth/login"
+                href={`/auth/login?portal=${role.portal}`}
                 className="glass-card p-6 rounded-2xl text-left flex gap-5 cursor-pointer relative group"
               >
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-tr ${role.color} flex items-center justify-center text-white shrink-0 shadow-md group-hover:scale-105 transition-transform`}>

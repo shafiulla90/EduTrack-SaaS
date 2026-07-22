@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -41,8 +41,72 @@ export class AuthService {
     };
   }
 
-  async sendOtp(phone: string): Promise<{ success: boolean; message: string; otpCode?: string; schoolName?: string; logoUrl?: string }> {
+  async sendOtp(phone: string, portal?: string): Promise<any> {
     const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+
+    // If portal parameter is provided, validate role match before dispatching OTP
+    if (portal) {
+      const users = await this.prisma.user.findMany({
+        where: { phone: { endsWith: normalizedPhone } }
+      });
+
+      const matchingStudents = await this.prisma.studentProfile.findMany({
+        where: {
+          OR: [
+            { user: { phone: { endsWith: normalizedPhone } } },
+            { fatherPhone: { endsWith: normalizedPhone } },
+            { motherPhone: { endsWith: normalizedPhone } },
+            { guardianPhone: { endsWith: normalizedPhone } }
+          ]
+        }
+      });
+
+      const isAdmin = users.some(u => u.role === Role.SCHOOL_ADMIN || u.role === Role.ADMIN);
+      const isTeacher = users.some(u => u.role === Role.TEACHER || u.role === Role.STAFF);
+      const isParent = users.some(u => u.role === Role.PARENT) || matchingStudents.length > 0;
+      const userExists = users.length > 0 || matchingStudents.length > 0;
+
+      const p = portal.toLowerCase();
+
+      if (p === 'admin') {
+        if (userExists && !isAdmin) {
+          throw new BadRequestException('This mobile number is not authorized for the selected portal. Please log in through the appropriate portal.');
+        }
+        if (!userExists) {
+          return {
+            success: false,
+            notFound: true,
+            redirectToRegister: true,
+            message: 'School Administrator account not found. Redirecting to School Registration page...'
+          };
+        }
+      } else if (p === 'teacher') {
+        if (userExists && !isTeacher) {
+          throw new BadRequestException('This mobile number is not authorized for the selected portal. Please log in through the appropriate portal.');
+        }
+        if (!userExists || !isTeacher) {
+          return {
+            success: false,
+            notFound: true,
+            portal: 'teacher',
+            message: 'Teacher account not found. Please contact your School Administrator to obtain Teacher Portal access.'
+          };
+        }
+      } else if (p === 'parent' || p === 'student') {
+        if (userExists && !isParent) {
+          throw new BadRequestException('This mobile number is not authorized for the selected portal. Please log in through the appropriate portal.');
+        }
+        if (!userExists || !isParent) {
+          return {
+            success: false,
+            notFound: true,
+            portal: 'parent',
+            message: 'Parent account not found. Please contact your School Administrator to obtain Parent Portal access.'
+          };
+        }
+      }
+    }
+
     const otpCode = process.env.NODE_ENV === 'production'
       ? Math.floor(100000 + Math.random() * 900000).toString()
       : '123456'; // Static fallback for dev/testing
@@ -98,7 +162,7 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(phone: string, otpCode: string): Promise<any> {
+  async verifyOtp(phone: string, otpCode: string, portal?: string): Promise<any> {
     const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
     const request = await this.prisma.otpRequest.findFirst({
       where: {
@@ -227,16 +291,37 @@ export class AuthService {
       }
     }
 
-    // Attempt to login as PARENT user first
-    let user = await this.prisma.user.findFirst({
-      where: {
-        phone: { endsWith: normalizedPhone },
-        role: Role.PARENT
-      },
-    });
+    // Determine target role based on selected portal
+    let user: any = null;
+
+    if (portal) {
+      const p = portal.toLowerCase();
+      if (p === 'parent' || p === 'student') {
+        user = await this.prisma.user.findFirst({
+          where: {
+            phone: { endsWith: normalizedPhone },
+            role: Role.PARENT
+          },
+        });
+      } else if (p === 'teacher') {
+        user = await this.prisma.user.findFirst({
+          where: {
+            phone: { endsWith: normalizedPhone },
+            role: { in: [Role.TEACHER, Role.STAFF] }
+          },
+        });
+      } else if (p === 'admin') {
+        user = await this.prisma.user.findFirst({
+          where: {
+            phone: { endsWith: normalizedPhone },
+            role: { in: [Role.SCHOOL_ADMIN, Role.ADMIN] }
+          },
+        });
+      }
+    }
 
     if (!user) {
-      // Fallback
+      // Fallback role selection
       user = await this.prisma.user.findFirst({
         where: {
           phone: { endsWith: normalizedPhone }
@@ -245,6 +330,9 @@ export class AuthService {
     }
 
     if (!user) {
+      if (portal && portal.toLowerCase() !== 'admin') {
+        throw new BadRequestException('Account not found for the selected portal. Please contact your School Administrator.');
+      }
       return {
         registered: false,
         phone,
