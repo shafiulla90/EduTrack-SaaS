@@ -282,7 +282,7 @@ function LeaveMgmtContent() {
       'Status', 'Reviewed By', 'Reviewed Date'
     ];
 
-    const rows = leaves.map(l => {
+    const rows = calculatedLeaves.map(l => {
       const isStudent = l.applicantType === 'STUDENT' || !!l.student;
       const applicantName = isStudent ? (l.student?.user?.name || 'Student') : (l.teacher?.user?.name || 'Teacher');
       const applicantType = isStudent ? 'Parent' : 'Teacher';

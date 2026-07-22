@@ -36,40 +36,50 @@ export class LeaveManagementService {
     const whereClause: any = { tenantId };
 
     if (query) {
+      const andConditions: any[] = [];
+
       if (query.status && query.status !== 'ALL') {
-        whereClause.status = query.status.toUpperCase();
+        andConditions.push({ status: query.status.toUpperCase() });
       }
       if (query.applicantType && query.applicantType !== 'ALL') {
-        if (query.applicantType.toUpperCase() === 'TEACHER') {
-          whereClause.teacherId = { not: null };
-        } else if (query.applicantType.toUpperCase() === 'PARENT') {
-          whereClause.studentId = { not: null };
+        const appType = query.applicantType.toUpperCase();
+        if (appType === 'STUDENT' || appType === 'PARENT') {
+          andConditions.push({ applicantType: 'STUDENT' });
+        } else if (appType === 'TEACHER' || appType === 'STAFF') {
+          andConditions.push({ applicantType: 'STAFF' });
         }
       }
       if (query.leaveType && query.leaveType !== 'ALL') {
-        whereClause.leaveType = query.leaveType;
+        andConditions.push({ leaveType: query.leaveType });
       }
       if (query.startDate) {
-        whereClause.startDate = { gte: new Date(query.startDate) };
+        andConditions.push({ startDate: { gte: new Date(query.startDate) } });
       }
       if (query.endDate) {
-        whereClause.endDate = { ...whereClause.endDate, lte: new Date(query.endDate) };
+        andConditions.push({ endDate: { lte: new Date(query.endDate) } });
       }
       if (query.search) {
         const sTerm = query.search;
-        whereClause.OR = [
-          { teacher: { user: { name: { contains: sTerm, mode: 'insensitive' } } } },
-          { teacher: { employeeId: { contains: sTerm, mode: 'insensitive' } } },
-          { student: { user: { name: { contains: sTerm, mode: 'insensitive' } } } },
-          { student: { rollNo: { contains: sTerm, mode: 'insensitive' } } },
-        ];
+        andConditions.push({
+          OR: [
+            { teacher: { user: { name: { contains: sTerm, mode: 'insensitive' } } } },
+            { teacher: { employeeId: { contains: sTerm, mode: 'insensitive' } } },
+            { student: { user: { name: { contains: sTerm, mode: 'insensitive' } } } },
+            { student: { rollNo: { contains: sTerm, mode: 'insensitive' } } },
+          ]
+        });
       }
       if (query.academicYearId && query.academicYearId !== 'ALL') {
-        whereClause.OR = [
-          ...(whereClause.OR || []),
-          { student: { classSection: { class: { academicYearId: query.academicYearId } } } },
-          { teacher: { classSections: { some: { class: { academicYearId: query.academicYearId } } } } }
-        ];
+        andConditions.push({
+          OR: [
+            { student: { classSection: { class: { academicYearId: query.academicYearId } } } },
+            { teacher: { classSections: { some: { class: { academicYearId: query.academicYearId } } } } }
+          ]
+        });
+      }
+
+      if (andConditions.length > 0) {
+        whereClause.AND = andConditions;
       }
     }
 
