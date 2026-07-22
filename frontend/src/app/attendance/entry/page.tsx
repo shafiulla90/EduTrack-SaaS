@@ -404,7 +404,7 @@ function AttendanceEntryContent() {
   // ─── SETUP SCREEN (TEACHER SELECTION LANDING PAGE) ───────────────────────────────────
   if (showTeacherSelection) {
     return (
-      <main className="min-h-[85vh] flex items-center justify-center bg-slate-50 text-slate-800 font-sans p-4">
+      <main className="min-h-[85vh] flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans p-4">
         <div className="teacher-selection-card">
           <div className="card-fill"></div>
           <div className="card-content">
@@ -547,28 +547,28 @@ function AttendanceEntryContent() {
 
   // ─── ATTENDANCE TRACKER VIEW ────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-[#f3f4f6] text-slate-800 p-4 sm:p-8 font-sans">
+    <main className="min-h-screen bg-[#f3f4f6] dark:bg-slate-950 text-slate-800 dark:text-slate-100 p-4 sm:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200 dark:border-slate-800">
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-800">Attendance Tracker</h1>
-            <p className="text-xs text-slate-500 mt-1">Manage student attendance efficiently</p>
+            <h1 className="text-2xl font-extrabold text-slate-800 dark:text-white">Attendance Tracker</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage student attendance efficiently</p>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            <Link href="/attendance/dashboard" className="flex-1 sm:flex-none justify-center px-4 min-h-[44px] rounded-xl bg-white hover:bg-gray-50 text-slate-700 border border-gray-200 shadow-xs text-xs font-bold flex items-center gap-1.5 transition-all">
-              <BarChart3 className="w-3.5 h-3.5 text-indigo-600" />
+            <Link href="/attendance/dashboard" className="flex-1 sm:flex-none justify-center px-4 min-h-[44px] rounded-xl bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 shadow-xs text-xs font-bold flex items-center gap-1.5 transition-all">
+              <BarChart3 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               Attendance Report
             </Link>
-            <button className="flex-1 sm:flex-none justify-center px-4 min-h-[44px] rounded-xl bg-white hover:bg-gray-50 text-slate-700 border border-gray-200 shadow-xs text-xs font-bold transition-all" onClick={() => setShowTeacherSelection(true)}>
+            <button className="flex-1 sm:flex-none justify-center px-4 min-h-[44px] rounded-xl bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 shadow-xs text-xs font-bold transition-all" onClick={() => setShowTeacherSelection(true)}>
               Change Teacher
             </button>
           </div>
         </div>
 
         {/* Controls Card */}
-        <div className="bg-white border border-gray-200 text-slate-700 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-3 gap-4 shadow-sm">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-3 gap-4 shadow-sm">
           <div className="control-group">
             <label className="text-xs font-bold text-slate-500 block mb-1">Date</label>
             <input 

@@ -452,7 +452,7 @@ function AttendanceDashboardContent() {
           presentCount,
           absentCount: dayAbsences,
           rate: filteredStudents.length > 0 ? Math.round((presentCount / filteredStudents.length) * 100) : 0,
-          cardClass: `week-day-card bg-white border border-gray-200 p-4 rounded-xl text-center relative shadow-xs ${isToday ? 'border-indigo-500 bg-indigo-50/50' : ''}`,
+          cardClass: `week-day-card bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-xl text-center relative shadow-xs ${isToday ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40' : ''}`,
           dayKey: `wd-${i}`,
           isHoliday: false
         });
@@ -463,7 +463,7 @@ function AttendanceDashboardContent() {
           presentCount: '-',
           absentCount: '-',
           rate: '-',
-          cardClass: `week-day-card holiday bg-gray-50 border border-gray-200 p-4 rounded-xl text-center opacity-65 ${isToday ? 'border-indigo-500' : ''}`,
+          cardClass: `week-day-card holiday bg-gray-50 dark:bg-slate-900/40 border border-gray-200 dark:border-slate-800 p-4 rounded-xl text-center opacity-75 ${isToday ? 'border-indigo-500' : ''}`,
           dayKey: `wd-${i}`,
           isHoliday: true,
           holidayLabel: day > new Date() ? 'No Session' : 'No attendance'
@@ -576,7 +576,7 @@ function AttendanceDashboardContent() {
       const todayStr = toLocalDateString();
       const isToday = dateStr === todayStr;
 
-      let cellClass = `day-cell bg-white relative h-16 border border-gray-200 rounded-xl p-2 flex flex-col justify-between text-xs transition-colors `;
+      let cellClass = `day-cell bg-white dark:bg-slate-900 relative h-16 border border-gray-200 dark:border-slate-800 rounded-xl p-2 flex flex-col justify-between text-xs transition-colors `;
       if (isPresent) cellClass += 'is-present ';
       if (isAbsent) cellClass += 'is-absent ';
       if (isWeekend) cellClass += 'weekend ';
@@ -686,8 +686,8 @@ function AttendanceDashboardContent() {
           absent: 0,
           rate: 0,
           workingDays: 0,
-          cardClass: `month-card bg-gray-50 border border-gray-200 text-slate-400 rounded-xl p-4 opacity-50 ${isCurrentMonth ? 'border-indigo-500' : ''}`,
-          rateClass: 'text-xs text-slate-400 font-bold',
+          cardClass: `month-card bg-gray-50 dark:bg-slate-900/40 border border-gray-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 rounded-xl p-4 opacity-75 ${isCurrentMonth ? 'border-indigo-500' : ''}`,
+          rateClass: 'text-xs text-slate-400 dark:text-slate-500 font-bold',
           isCurrentMonth
         });
         continue;
@@ -711,8 +711,8 @@ function AttendanceDashboardContent() {
       totalPossible += mTotalPossible;
       totalAbsences += monthAbsences;
 
-      const rateClass = mRate >= 90 ? 'text-emerald-600' : mRate >= 75 ? 'text-amber-600' : 'text-rose-600';
-      const borderClass = mRate >= 90 ? 'border-emerald-200 bg-emerald-50/30' : mRate >= 75 ? 'border-amber-200 bg-amber-50/30' : 'border-rose-200 bg-rose-50/30';
+      const rateClass = mRate >= 90 ? 'text-emerald-600 dark:text-emerald-400' : mRate >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400';
+      const borderClass = mRate >= 90 ? 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/30 dark:bg-emerald-950/20' : mRate >= 75 ? 'border-amber-200 dark:border-amber-800/60 bg-amber-50/30 dark:bg-amber-950/20' : 'border-rose-200 dark:border-rose-800/60 bg-rose-50/30 dark:bg-rose-950/20';
 
       months.push({
         monthName,
@@ -720,7 +720,7 @@ function AttendanceDashboardContent() {
         absent: monthAbsences,
         rate: mRate,
         workingDays: mWorkingDays,
-        cardClass: `month-card bg-white border ${borderClass} text-slate-700 rounded-xl p-4 flex flex-col justify-between shadow-xs ${isCurrentMonth ? 'border-indigo-500 ring-2 ring-indigo-500/10' : ''}`,
+        cardClass: `month-card bg-white dark:bg-slate-900 border ${borderClass} text-slate-700 dark:text-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-xs ${isCurrentMonth ? 'border-indigo-500 ring-2 ring-indigo-500/10' : ''}`,
         rateClass: `${rateClass} text-lg font-black mt-1`,
         isCurrentMonth
       });
@@ -948,52 +948,52 @@ function AttendanceDashboardContent() {
         {!isLoading && calendarView === 'daily' && (
           <div className="space-y-6">
             {overallDailySummary && (
-              <div className="att-summary-strip bg-white border border-gray-200 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-around gap-6">
+              <div className="att-summary-strip bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-around gap-6">
                 <div className="text-center sm:text-left">
-                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Active Date</span>
-                  <span className="att-value-dark text-lg font-black force-text-black mt-1 block" style={{ color: '#0f172a' }}>{overallDailySummary.dateLabel}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Active Date</span>
+                  <span className="att-value-dark text-lg font-black text-slate-900 dark:text-white mt-1 block">{overallDailySummary.dateLabel}</span>
                 </div>
                 <div className="text-center">
-                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Total Students</span>
-                  <span className="att-value-dark text-2xl font-black force-text-black mt-1 block" style={{ color: '#0f172a' }}>{overallDailySummary.totalPotential}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Total Students</span>
+                  <span className="att-value-dark text-2xl font-black text-slate-900 dark:text-white mt-1 block">{overallDailySummary.totalPotential}</span>
                 </div>
                 <div className="text-center">
-                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Present Overall</span>
-                  <span className="text-2xl font-black force-text-green mt-1 block" style={{ color: '#047857' }}>{overallDailySummary.totalPresent}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Present Overall</span>
+                  <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{overallDailySummary.totalPresent}</span>
                 </div>
                 <div className="text-center">
-                  <span className="att-label text-[10px] font-bold text-slate-600 uppercase tracking-wider block">Absent Overall</span>
-                  <span className="text-2xl font-black force-text-red mt-1 block" style={{ color: '#be123c' }}>{overallDailySummary.totalAbsent}</span>
+                  <span className="att-label text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Absent Overall</span>
+                  <span className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 block">{overallDailySummary.totalAbsent}</span>
                 </div>
-                <div className="w-16 h-16 rounded-full bg-indigo-50 border-4 border-indigo-200/50 flex flex-col items-center justify-center">
-                  <span className="text-[9px] font-bold text-indigo-600 leading-none">RATE</span>
-                  <span className="text-sm font-black text-indigo-900 mt-0.5 leading-none">{overallDailySummary.rate}%</span>
+                <div className="w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/40 border-4 border-indigo-200/50 dark:border-indigo-800/50 flex flex-col items-center justify-center">
+                  <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 leading-none">RATE</span>
+                  <span className="text-sm font-black text-indigo-900 dark:text-indigo-200 mt-0.5 leading-none">{overallDailySummary.rate}%</span>
                 </div>
               </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {classSectionSummary.map(summary => (
-                <div key={summary.key} className="att-card-light relative attendance-card bg-white border border-gray-200 text-slate-700 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm">
-                  <div className="flex justify-between items-start border-b border-gray-100 pb-3">
+                <div key={summary.key} className="att-card-light relative attendance-card bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 p-5 rounded-xl transition-all hover:translate-y-[-2px] hover:z-50 shadow-sm">
+                  <div className="flex justify-between items-start border-b border-gray-100 dark:border-slate-800 pb-3">
                     <div>
-                      <h3 className="att-card-title font-bold text-sm force-text-black" style={{ color: '#0f172a' }}>{summary.classValue} - Section {summary.section}</h3>
-                      <p className="text-[10px] text-indigo-600 font-bold mt-0.5">{summary.attendanceRate}% Attendance</p>
+                      <h3 className="att-card-title font-bold text-sm text-slate-900 dark:text-white">{summary.classValue} - Section {summary.section}</h3>
+                      <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">{summary.attendanceRate}% Attendance</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-                    <div className="att-stat-box-total bg-white p-2.5 rounded-lg border border-gray-300">
-                      <span className="att-stat-total force-text-black text-[12px] font-black block" style={{ color: '#0f172a' }}>{summary.totalCount}</span>
-                      <span className="att-stat-label force-text-black text-[9px] font-bold block mt-0.5" style={{ color: '#0f172a' }}>TOTAL</span>
+                    <div className="att-stat-box-total bg-white dark:bg-slate-800 p-2.5 rounded-lg border border-gray-300 dark:border-slate-700">
+                      <span className="att-stat-total text-slate-900 dark:text-white text-[12px] font-black block">{summary.totalCount}</span>
+                      <span className="att-stat-label text-slate-600 dark:text-slate-400 text-[9px] font-bold block mt-0.5">TOTAL</span>
                     </div>
-                    <div className="att-stat-box-present bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
-                      <span className="att-stat-present force-text-green text-[12px] font-black block" style={{ color: '#047857' }}>{summary.presentDisplay}</span>
-                      <span className="att-stat-label force-text-green text-[9px] font-bold block mt-0.5" style={{ color: '#047857' }}>PRESENT</span>
+                    <div className="att-stat-box-present bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800/60">
+                      <span className="att-stat-present text-emerald-600 dark:text-emerald-400 text-[12px] font-black block">{summary.presentDisplay}</span>
+                      <span className="att-stat-label text-emerald-700 dark:text-emerald-400 text-[9px] font-bold block mt-0.5">PRESENT</span>
                     </div>
-                    <div className="att-stat-box-absent stat-box absent bg-rose-50 p-2.5 rounded-lg border border-rose-200">
-                      <span className="att-stat-absent force-text-red text-[12px] font-black block" style={{ color: '#be123c' }}>{summary.absentCount}</span>
-                      <span className="att-stat-label force-text-red text-[9px] font-bold block mt-0.5" style={{ color: '#be123c' }}>ABSENT</span>
+                    <div className="att-stat-box-absent stat-box absent bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-lg border border-rose-200 dark:border-rose-800/60">
+                      <span className="att-stat-absent text-rose-600 dark:text-rose-400 text-[12px] font-black block">{summary.absentCount}</span>
+                      <span className="att-stat-label text-rose-700 dark:text-rose-400 text-[9px] font-bold block mt-0.5">ABSENT</span>
 
                       {summary.hasAbsentees && (
                         <div className="absentee-tooltip">

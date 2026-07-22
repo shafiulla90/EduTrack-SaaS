@@ -4049,3 +4049,190 @@ body {
 .dark .text-slate-500 {
     color: #cbd5e1 !important; /* text-slate-300 */
 }
+
+/* ==================== ATTENDANCE & COMPONENTS DARK THEME ENHANCEMENTS ==================== */
+.dark .teacher-selection-card {
+  background: #0f172a !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark .teacher-selection-card .header h1 {
+  color: #f8fafc !important;
+}
+
+.dark .teacher-selection-card .header p {
+  color: #94a3b8 !important;
+}
+
+.dark .field-label {
+  color: #cbd5e1 !important;
+}
+
+.dark .search-wrap {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+.dark .search-input {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark .search-input::placeholder {
+  color: #64748b !important;
+}
+
+.dark .teacher-search-wrapper .dropdown {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark .dropdown-inner {
+  background: #1e293b !important;
+}
+
+.dark .d-item {
+  border-bottom-color: #334155 !important;
+}
+
+.dark .d-item:hover {
+  background: #334155 !important;
+}
+
+.dark .d-name {
+  color: #f8fafc !important;
+}
+
+.dark .d-sub {
+  color: #94a3b8 !important;
+}
+
+.dark .selected-preview {
+  background: rgba(99, 102, 241, 0.15) !important;
+  border-color: #6366f1 !important;
+}
+
+.dark .sel-name {
+  color: #818cf8 !important;
+}
+
+.dark .sel-sub {
+  color: #a5b4fc !important;
+}
+
+.dark .sel-change {
+  background: #1e293b !important;
+  border-color: #6366f1 !important;
+  color: #818cf8 !important;
+}
+
+.dark .sel-change:hover {
+  background: #6366f1 !important;
+  color: #ffffff !important;
+}
+
+.dark .carousel-container {
+  background: rgba(99, 102, 241, 0.1) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.dark .carousel-item {
+  background: #1e293b !important;
+  color: #818cf8 !important;
+  border-color: #334155 !important;
+}
+
+.dark .btn-proceed:disabled {
+  background: #334155 !important;
+  color: #64748b !important;
+}
+
+.dark .success-card {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.dark .success-title {
+  color: #f8fafc !important;
+}
+
+.dark .teacher-success-badge {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+}
+
+.dark .teacher-success-badge .teacher-name {
+  color: #f8fafc !important;
+}
+
+/* Calendar Cells in Dark Mode */
+.dark .day-cell {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.dark .day-cell.is-present {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  border-color: #10b981 !important;
+  color: #34d399 !important;
+}
+
+.dark .day-cell.is-absent {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  border-color: #ef4444 !important;
+  color: #f87171 !important;
+}
+
+.dark .day-cell.weekend {
+  background-color: rgba(30, 41, 59, 0.4) !important;
+  border-color: #334155 !important;
+  color: #64748b !important;
+}
+
+.dark .day-cell.holiday {
+  background-color: rgba(30, 41, 59, 0.3) !important;
+  border-color: #334155 !important;
+  color: #64748b !important;
+  opacity: 0.7 !important;
+}
+
+/* Student & Stat Cards in Dark Mode */
+.dark .student-card {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+.dark .student-card.present {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: #10b981 !important;
+}
+
+.dark .student-card.absent {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: #ef4444 !important;
+}
+
+.dark .stat-card {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+.dark .stat-card.active-filter.total {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: #3b82f6 !important;
+}
+
+.dark .stat-card.active-filter.present {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: #10b981 !important;
+}
+
+.dark .stat-card.active-filter.absent {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: #ef4444 !important;
+}
