@@ -90,82 +90,112 @@
   color: #94a3b8 !important; /* slate-400 */
 }
 
-/* ── Attendance Dashboard: force white card + black text even in dark mode ── */
-html.dark .force-text-black,
-body.dark .force-text-black,
-.dark .force-text-black,
-html.dark .att-force-black,
-body.dark .att-force-black,
-.dark .att-force-black,
-html.dark .att-card-title,
-body.dark .att-card-title,
-.dark .att-card-title,
-html.dark .att-heading-black,
-body.dark .att-heading-black,
-.dark .att-heading-black,
-html.dark .att-stat-total,
-body.dark .att-stat-total,
-.dark .att-stat-total {
-  color: #0f172a !important; /* Slate 900 Black */
+/* ── Attendance Dashboard: Ash/Grey layout (light mode) and dark slate (dark mode) ── */
+
+/* --- Light Mode (Default) --- */
+.att-card-light,
+.att-summary-strip {
+  background-color: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
 }
 
-html.dark .force-text-green,
-body.dark .force-text-green,
-.dark .force-text-green,
-html.dark .att-stat-present,
-body.dark .att-stat-present,
-.dark .att-stat-present {
-  color: #047857 !important; /* Emerald 700 Dark Green */
+.att-stat-box-total {
+  background-color: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
 }
 
-html.dark .force-text-red,
-body.dark .force-text-red,
-.dark .force-text-red,
-html.dark .att-stat-absent,
-body.dark .att-stat-absent,
-.dark .att-stat-absent {
-  color: #be123c !important; /* Rose 700 Dark Red */
-}
-
-html.dark .att-card-light,
-body.dark .att-card-light,
-.dark .att-card-light {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
-}
-
-html.dark .att-summary-strip,
-body.dark .att-summary-strip,
-.dark .att-summary-strip {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
-}
-
-html.dark .att-stat-box-total,
-body.dark .att-stat-box-total,
-.dark .att-stat-box-total {
-  background-color: #f8fafc !important;
-  border-color: #cbd5e1 !important;
-}
-
-html.dark .att-stat-box-present,
-body.dark .att-stat-box-present,
-.dark .att-stat-box-present {
+.att-stat-box-present {
   background-color: #ecfdf5 !important;
   border-color: #a7f3d0 !important;
 }
 
-html.dark .att-stat-box-absent,
-body.dark .att-stat-box-absent,
-.dark .att-stat-box-absent {
+.att-stat-box-absent {
   background-color: #fff1f2 !important;
   border-color: #fecdd3 !important;
 }
 
+.att-card-title,
+.att-stat-total,
+.att-heading-black,
+.force-text-black,
+.att-force-black {
+  color: #0F172A !important;
+}
+
+.att-label,
+.force-text-secondary {
+  color: #475569 !important;
+}
+
+.att-stat-present,
+.force-text-green {
+  color: #047857 !important;
+}
+
+.att-stat-absent,
+.force-text-red {
+  color: #be123c !important;
+}
+
+/* --- Dark Mode Overrides (.dark) --- */
+.dark .att-card-light,
+html.dark .att-card-light,
+.dark .att-summary-strip,
+html.dark .att-summary-strip {
+  background-color: #1E293B !important;
+  border-color: #334155 !important;
+}
+
+.dark .att-stat-box-total,
+html.dark .att-stat-box-total {
+  background-color: #0F172A !important;
+  border-color: #334155 !important;
+}
+
+.dark .att-stat-box-present,
+html.dark .att-stat-box-present {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  border-color: #065f46 !important;
+}
+
+.dark .att-stat-box-absent,
+html.dark .att-stat-box-absent {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+  border-color: #9f1239 !important;
+}
+
+.dark .att-card-title,
+html.dark .att-card-title,
+.dark .att-stat-total,
+html.dark .att-stat-total,
+.dark .att-heading-black,
+html.dark .att-heading-black,
+.dark .force-text-black,
+html.dark .force-text-black,
+.dark .att-force-black,
+html.dark .att-force-black {
+  color: #F8FAFC !important;
+}
+
+.dark .att-label,
 html.dark .att-label,
-body.dark .att-label,
-.dark .att-label {
-  color: #475569 !important; /* Slate 600 */
+.dark .force-text-secondary,
+html.dark .force-text-secondary {
+  color: #CBD5E1 !important;
+}
+
+.dark .att-stat-present,
+html.dark .att-stat-present,
+.dark .force-text-green,
+html.dark .force-text-green {
+  color: #10b981 !important;
+}
+
+.dark .att-stat-absent,
+html.dark .att-stat-absent,
+.dark .force-text-red,
+html.dark .force-text-red {
+  color: #f43f5e !important;
 }
 
 
