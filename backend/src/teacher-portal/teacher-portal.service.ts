@@ -617,7 +617,7 @@ export class TeacherPortalService {
   }
 
   // 5. Marks & Exam Management (Strict permission checked proxy to existing service)
-  async getExamMarksEntryList(userId: string, tenantId: string, subjectId: string, examName: string, classSectionId: string) {
+  async getExamMarksEntryList(userId: string, tenantId: string, subjectId: string, examName: string, classSectionId: string, subjectType?: string) {
     const staff = await this.getStaffProfile(userId, tenantId);
     
     // 1. Verify ClassSection exists
@@ -676,7 +676,7 @@ export class TeacherPortalService {
       throw new BadRequestException('No students found for the selected class and section.');
     }
 
-    return this.examsService.getStudentsForMarksEntry(subjectId, examName, classSectionId);
+    return this.examsService.getStudentsForMarksEntry(subjectId, examName, classSectionId, undefined, userId, Role.TEACHER, subjectType);
   }
 
   async saveExamMarksList(userId: string, tenantId: string, data: any) {
@@ -709,7 +709,7 @@ export class TeacherPortalService {
       throw new BadRequestException('The selected exam is not available.');
     }
 
-    const result = await this.examsService.saveMarks(data.marks, data.examName, data.classSectionId, data.subjectId);
+    const result = await this.examsService.saveMarks(data.marks, data.examName, data.classSectionId, data.subjectId, userId, Role.TEACHER, data.subjectType);
     await this.logAction(userId, tenantId, 'RECORD_UPDATE', 'ExamMark', undefined, {
       examName: data.examName,
       classSectionId: data.classSectionId,

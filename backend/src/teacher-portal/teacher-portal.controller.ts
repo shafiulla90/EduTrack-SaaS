@@ -87,8 +87,9 @@ export class TeacherPortalController {
     @Query('subjectId') subjectId: string,
     @Query('examName') examName: string,
     @Query('classSectionId') classSectionId: string,
+    @Query('subjectType') subjectType?: string,
   ) {
-    return this.portalService.getExamMarksEntryList(req.user.sub, req.user.tenantId, subjectId, examName, classSectionId);
+    return this.portalService.getExamMarksEntryList(req.user.sub, req.user.tenantId, subjectId, examName, classSectionId, subjectType);
   }
 
   @Post('marks/save')

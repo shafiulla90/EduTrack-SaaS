@@ -58,7 +58,7 @@ export class ExamConfigController {
   }
 
   // ── Subject Component Endpoints ───────────────────────────────────────────
-  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
   @Get('components')
   async listComponents() {
     return this.examConfigService.listComponents();

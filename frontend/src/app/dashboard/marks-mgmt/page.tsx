@@ -129,10 +129,10 @@ export default function MarksMgmtPage() {
   };
 
   const handleMarkChange = (studentId: string, value: string) => {
-    // Basic validation: max marks 100
+    // Basic validation: max marks
     const valNum = parseFloat(value);
-    if (!isNaN(valNum) && (valNum < 0 || valNum > 100)) {
-      alert('Score must be between 0 and 100.');
+    if (!isNaN(valNum) && (valNum < 0 || valNum > examConfig.maxMarks)) {
+      alert(`Score must be between 0 and ${examConfig.maxMarks}.`);
       return;
     }
 
