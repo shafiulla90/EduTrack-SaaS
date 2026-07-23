@@ -3,12 +3,17 @@ import { PrismaService } from '../prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
+import * as crypto from 'crypto';
+import { SmsService } from './sms.service';
 
 @Injectable()
 export class AuthService {
+  private failedAttemptsMap = new Map<string, { count: number; blockedUntil: Date }>();
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private smsService: SmsService,
   ) {}
 
   async hashPassword(password: string): Promise<string> {
@@ -107,9 +112,49 @@ export class AuthService {
       }
     }
 
-    const otpCode = process.env.NODE_ENV === 'production'
-      ? Math.floor(100000 + Math.random() * 900000).toString()
-      : '123456'; // Static fallback for dev/testing
+    // Cooldown check (60 seconds)
+    const lastRequest = await this.prisma.otpRequest.findFirst({
+      where: { phone: normalizedPhone },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (lastRequest) {
+      const now = new Date();
+      const diffMs = now.getTime() - lastRequest.createdAt.getTime();
+      if (diffMs < 60 * 1000) {
+        const remainingSec = Math.ceil((60 * 1000 - diffMs) / 1000);
+        throw new BadRequestException(`Please wait ${remainingSec} seconds before requesting a new OTP.`);
+      }
+    }
+
+    // Hourly rate limit check (max 5 requests per hour)
+    const oneHourAgo = new Date();
+    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+    const hourlyRequestCount = await this.prisma.otpRequest.count({
+      where: {
+        phone: normalizedPhone,
+        createdAt: { gte: oneHourAgo },
+      },
+    });
+    if (hourlyRequestCount >= 5) {
+      throw new BadRequestException('Too many OTP requests. Maximum 5 requests per hour. Please try again later.');
+    }
+
+    // Invalidate previous OTP requests by setting their expiry to the past
+    await this.prisma.otpRequest.updateMany({
+      where: { phone: normalizedPhone, expiresAt: { gt: new Date() } },
+      data: { expiresAt: new Date(0) }
+    }).catch(() => {});
+
+    // Cleanup old expired OTP requests (older than 24 hours) to keep the table clean
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    await this.prisma.otpRequest.deleteMany({
+      where: { phone: normalizedPhone, createdAt: { lt: oneDayAgo } }
+    }).catch(() => {});
+
+    // Generate secure 6-digit OTP code
+    const otpCode = crypto.randomInt(100000, 999999).toString();
+    const hashedOtp = crypto.createHash('sha256').update(otpCode).digest('hex');
 
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
@@ -117,12 +162,13 @@ export class AuthService {
     await this.prisma.otpRequest.create({
       data: {
         phone: normalizedPhone,
-        otpCode,
+        otpCode: hashedOtp,
         expiresAt,
       },
     });
 
-    console.log(`[OTP DISPATCH] Phone: ${phone} (Normalized: ${normalizedPhone}) | Code: ${otpCode}`);
+    // Send the OTP via SMS using SmsService
+    await this.smsService.sendOtpSms(phone, otpCode);
 
     // Look up if there is a registered user with this phone → return their school branding
     let schoolName: string | undefined;
@@ -156,7 +202,6 @@ export class AuthService {
     return {
       success: true,
       message: 'OTP sent successfully',
-      otpCode,
       ...(schoolName ? { schoolName } : {}),
       ...(logoUrl ? { logoUrl } : {}),
     };
@@ -164,18 +209,41 @@ export class AuthService {
 
   async verifyOtp(phone: string, otpCode: string, portal?: string): Promise<any> {
     const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+
+    // Check brute-force block status
+    const blockInfo = this.failedAttemptsMap.get(normalizedPhone);
+    if (blockInfo && blockInfo.blockedUntil > new Date()) {
+      const remainingMin = Math.ceil((blockInfo.blockedUntil.getTime() - new Date().getTime()) / 60000);
+      throw new UnauthorizedException(`Too many failed attempts. This number is locked for another ${remainingMin} minutes.`);
+    }
+
+    const hashedInput = crypto.createHash('sha256').update(otpCode).digest('hex');
+
     const request = await this.prisma.otpRequest.findFirst({
       where: {
         phone: normalizedPhone,
-        otpCode,
+        otpCode: hashedInput,
         expiresAt: { gt: new Date() },
       },
       orderBy: { createdAt: 'desc' },
     });
 
     if (!request) {
-      throw new UnauthorizedException('Invalid or expired OTP');
+      const currentAttempts = blockInfo ? blockInfo.count + 1 : 1;
+      if (currentAttempts >= 5) {
+        const blockedUntil = new Date();
+        blockedUntil.setMinutes(blockedUntil.getMinutes() + 15);
+        this.failedAttemptsMap.set(normalizedPhone, { count: currentAttempts, blockedUntil });
+        throw new UnauthorizedException('Too many failed attempts. This phone number has been locked for 15 minutes.');
+      } else {
+        const blockedUntil = new Date(0);
+        this.failedAttemptsMap.set(normalizedPhone, { count: currentAttempts, blockedUntil });
+        throw new UnauthorizedException(`Invalid or expired OTP. ${5 - currentAttempts} attempts remaining.`);
+      }
     }
+
+    // Success -> clear failed attempts
+    this.failedAttemptsMap.delete(normalizedPhone);
 
     // Clean up used OTP
     await this.prisma.otpRequest.delete({
