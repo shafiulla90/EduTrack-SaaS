@@ -46,7 +46,7 @@ export class FirebaseAdminService implements OnModuleInit {
         return;
       }
 
-      // Dynamic require to prevent top-level packaging/module resolution crashes in Vercel Serverless environment
+      // Require firebase-admin root package
       const admin = require('firebase-admin');
 
       // Reuse existing app instance if already initialized to prevent duplicate app errors
@@ -55,12 +55,12 @@ export class FirebaseAdminService implements OnModuleInit {
         this.logger.log('Firebase Admin: Reusing already initialized Firebase App instance.');
       } else {
         this.firebaseApp = admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+          credential: admin.cert(serviceAccount),
         });
         this.logger.log('Firebase Admin: SDK successfully initialized.');
       }
     } catch (error: any) {
-      this.logger.error('Firebase Admin Initialization Failure:', error.message);
+      this.logger.error('Firebase Admin Initialization Failure:', error.stack || error.message);
     }
   }
 
@@ -70,8 +70,8 @@ export class FirebaseAdminService implements OnModuleInit {
     }
 
     try {
-      const admin = require('firebase-admin');
-      const decodedToken = await admin.auth(this.firebaseApp).verifyIdToken(idToken);
+      const { getAuth } = require('firebase-admin/auth');
+      const decodedToken = await getAuth(this.firebaseApp).verifyIdToken(idToken);
       const phone = decodedToken.phone_number;
       if (!phone) {
         throw new UnauthorizedException('Firebase token verified, but no phone number found in claims.');
