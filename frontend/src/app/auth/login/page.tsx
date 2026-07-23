@@ -173,21 +173,10 @@ function LoginContent() {
         throw new Error('reCAPTCHA has not been initialized. Please refresh the page and try again.');
       }
 
-      console.log('[FIREBASE AUDIT] RecaptchaVerifier object:', {
-        verifier: recaptchaVerifierRef.current,
-        auth: (recaptchaVerifierRef.current as any).auth,
-        type: typeof recaptchaVerifierRef.current,
-      });
-
       let formattedPhone = cleanedPhone;
       if (!formattedPhone.startsWith('+')) {
         formattedPhone = `+91${formattedPhone}`;
       }
-
-      console.log('[FIREBASE AUDIT] Calling signInWithPhoneNumber...', {
-        phone: formattedPhone,
-        authApp: auth.app.name,
-      });
 
       const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
       setConfirmationResult(confirmationResult);
@@ -196,13 +185,7 @@ function LoginContent() {
       let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}&portal=${encodeURIComponent(portal)}`;
       router.push(otpUrl);
     } catch (err: any) {
-      console.error('[FIREBASE AUDIT ERROR] Detailed error object:', {
-        code: err.code || 'N/A',
-        message: err.message || 'N/A',
-        customData: err.customData || null,
-        stack: err.stack || 'N/A',
-        rawError: err,
-      });
+      console.error('Send OTP error:', err);
       let userFriendlyMessage = 'Failed to send OTP. Please try again.';
       if (err.code === 'auth/invalid-phone-number') {
         userFriendlyMessage = 'Invalid mobile number format.';
