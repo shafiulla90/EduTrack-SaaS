@@ -302,16 +302,21 @@ function AttendanceDashboardContent() {
     const groups: Record<string, { classValue: string; className: string; section: string; studentsList: Student[] }> = {};
     
     students.forEach(s => {
-      const key = `${s.classValue}-${s.section}`;
-      if (!groups[key]) {
-        groups[key] = {
-          classValue: s.classValue,
-          className: s.className,
-          section: s.section,
-          studentsList: []
-        };
+      const matchesClass = selectedClass === 'all' || s.className === selectedClass;
+      const matchesSection = selectedSection === 'all' || s.section === selectedSection;
+
+      if (matchesClass && matchesSection) {
+        const key = `${s.classValue}-${s.section}`;
+        if (!groups[key]) {
+          groups[key] = {
+            classValue: s.classValue,
+            className: s.className,
+            section: s.section,
+            studentsList: []
+          };
+        }
+        groups[key].studentsList.push(s);
       }
-      groups[key].studentsList.push(s);
     });
 
     return Object.values(groups).map((group, index) => {
@@ -369,7 +374,7 @@ function AttendanceDashboardContent() {
       if (classDiff !== 0) return classDiff;
       return a.section.localeCompare(b.section);
     });
-  }, [calendarView, currentDate, students, maps]);
+  }, [calendarView, currentDate, students, selectedClass, selectedSection, maps]);
 
   const overallDailySummary = useMemo(() => {
     if (classSectionSummary.length === 0) return null;
