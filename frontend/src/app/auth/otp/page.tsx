@@ -4,13 +4,15 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
+import { auth } from '@/lib/firebase';
+import { getConfirmationResult, setConfirmationResult } from '@/lib/firebaseAuthStore';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 function OtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
   const phone = searchParams.get('phone') || '';
-  const devOtp = searchParams.get('dev_otp') || '';
   const portal = searchParams.get('portal') || 'admin';
   const [schoolName, setSchoolName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
@@ -19,6 +21,26 @@ function OtpContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible',
+        });
+      } catch (err) {
+        console.error('Failed to initialize RecaptchaVerifier on OTP page:', err);
+      }
+    }
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear();
+        recaptchaVerifierRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -68,9 +90,19 @@ function OtpContent() {
 
     setLoading(true);
     try {
+      const confirmationResult = getConfirmationResult();
+      if (!confirmationResult) {
+        throw new Error('Authentication session lost. Please log in again.');
+      }
+
+      // Step 1: Confirm OTP via Firebase
+      const credential = await confirmationResult.confirm(codeStr);
+      const idToken = await credential.user.getIdToken();
+
+      // Step 2: Send ID Token to backend for application JWT generation
       const response = await api.post('/auth/verify-otp', {
         phone,
-        otpCode: codeStr,
+        otpCode: idToken, // Send the idToken as the otpCode to preserve backend body contract
         portal
       });
 
@@ -124,7 +156,20 @@ function OtpContent() {
       }
     } catch (err: any) {
       console.error('Verify OTP error:', err);
-      setError(err.response?.data?.message || 'Invalid or expired OTP. Please try again.');
+      let userFriendlyMessage = 'Invalid or expired OTP. Please try again.';
+      if (err.code === 'auth/invalid-verification-code') {
+        userFriendlyMessage = 'Incorrect OTP code entered.';
+      } else if (err.code === 'auth/code-expired') {
+        userFriendlyMessage = 'OTP code has expired. Please resend a new OTP.';
+      } else if (err.response?.data?.message) {
+        userFriendlyMessage = err.response.data.message;
+      } else if (err.message) {
+        userFriendlyMessage = err.message;
+      }
+      setError(userFriendlyMessage);
+      // Auto-clear inputs on invalid code
+      setOtpCode(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
     }
@@ -140,15 +185,42 @@ function OtpContent() {
   const handleResend = async () => {
     setError('');
     setSuccessMsg('Resending OTP...');
+    setLoading(true);
     try {
-      const response = await api.post('/auth/send-otp', { phone, portal });
-      setSuccessMsg('OTP resent successfully.');
-      const newDevOtp = response.data?.otpCode;
-      if (newDevOtp) {
-        router.replace(`/auth/otp?phone=${encodeURIComponent(phone)}&portal=${encodeURIComponent(portal)}&dev_otp=${newDevOtp}`);
+      // Step 1: Validate with backend to register cooldown & rate limits
+      await api.post('/auth/send-otp', { phone, portal });
+
+      // Step 2: Trigger Firebase signInWithPhoneNumber
+      if (!recaptchaVerifierRef.current) {
+        throw new Error('reCAPTCHA has not been initialized. Please refresh the page.');
       }
+
+      let formattedPhone = phone;
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = `+91${formattedPhone}`;
+      }
+
+      const newConfirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
+      setConfirmationResult(newConfirmationResult);
+
+      setSuccessMsg('OTP resent successfully.');
     } catch (err: any) {
-      setError('Failed to resend OTP. Please try again.');
+      console.error('Resend OTP error:', err);
+      let userFriendlyMessage = 'Failed to resend OTP. Please try again.';
+      if (err.code === 'auth/invalid-phone-number') {
+        userFriendlyMessage = 'Invalid mobile number format.';
+      } else if (err.code === 'auth/quota-exceeded') {
+        userFriendlyMessage = 'SMS quota exceeded. Please try again tomorrow.';
+      } else if (err.code === 'auth/too-many-requests') {
+        userFriendlyMessage = 'Too many requests. Please wait a few minutes.';
+      } else if (err.response?.data?.message) {
+        userFriendlyMessage = err.response.data.message;
+      } else if (err.message) {
+        userFriendlyMessage = err.message;
+      }
+      setError(userFriendlyMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -208,13 +280,6 @@ function OtpContent() {
             </div>
           )}
 
-          {/* Development Helper Banner */}
-          {devOtp && (
-            <div className="mb-6 p-3 bg-brand-500/10 border border-brand-500/30 rounded-xl text-center text-xs text-brand-300">
-              Development Helper OTP Code: <strong className="text-white text-sm ml-1 select-all">{devOtp}</strong>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="flex justify-between gap-2.5">
               {otpCode.map((digit, idx) => (
@@ -233,6 +298,8 @@ function OtpContent() {
                 />
               ))}
             </div>
+
+            <div id="recaptcha-container"></div>
 
             <button
               type="submit"

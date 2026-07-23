@@ -6,7 +6,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaService } from '../prisma.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { SmsService } from './sms.service';
+import { FirebaseAdminService } from './firebase-admin.service';
 
 @Module({
   imports: [
@@ -22,8 +22,8 @@ import { SmsService } from './sms.service';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy, PrismaService, SmsService],
+  providers: [AuthService, JwtStrategy, PrismaService, FirebaseAdminService],
   controllers: [AuthController],
-  exports: [AuthService, PassportModule, SmsService],
+  exports: [AuthService, PassportModule, FirebaseAdminService],
 })
 export class AuthModule {}

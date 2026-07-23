@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 import * as crypto from 'crypto';
-import { SmsService } from './sms.service';
+import { FirebaseAdminService } from './firebase-admin.service';
 
 @Injectable()
 export class AuthService {
@@ -13,7 +13,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private smsService: SmsService,
+    private firebaseAdminService: FirebaseAdminService,
   ) {}
 
   async hashPassword(password: string): Promise<string> {
@@ -152,23 +152,17 @@ export class AuthService {
       where: { phone: normalizedPhone, createdAt: { lt: oneDayAgo } }
     }).catch(() => {});
 
-    // Generate secure 6-digit OTP code
-    const otpCode = crypto.randomInt(100000, 999999).toString();
-    const hashedOtp = crypto.createHash('sha256').update(otpCode).digest('hex');
-
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 5);
 
+    // Create tracking record for rate limiting with "FIREBASE_PENDING" placeholder
     await this.prisma.otpRequest.create({
       data: {
         phone: normalizedPhone,
-        otpCode: hashedOtp,
+        otpCode: 'FIREBASE_PENDING',
         expiresAt,
       },
     });
-
-    // Send the OTP via SMS using SmsService
-    await this.smsService.sendOtpSms(phone, otpCode);
 
     // Look up if there is a registered user with this phone → return their school branding
     let schoolName: string | undefined;
@@ -201,7 +195,7 @@ export class AuthService {
 
     return {
       success: true,
-      message: 'OTP sent successfully',
+      message: 'OTP request authorized successfully',
       ...(schoolName ? { schoolName } : {}),
       ...(logoUrl ? { logoUrl } : {}),
     };
@@ -217,18 +211,12 @@ export class AuthService {
       throw new UnauthorizedException(`Too many failed attempts. This number is locked for another ${remainingMin} minutes.`);
     }
 
-    const hashedInput = crypto.createHash('sha256').update(otpCode).digest('hex');
-
-    const request = await this.prisma.otpRequest.findFirst({
-      where: {
-        phone: normalizedPhone,
-        otpCode: hashedInput,
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!request) {
+    let verifiedPhoneRaw: string;
+    try {
+      // The otpCode parameter now contains the client-side Firebase ID token
+      verifiedPhoneRaw = await this.firebaseAdminService.verifyIdToken(otpCode);
+    } catch (error) {
+      // Handle lockout on verification failures
       const currentAttempts = blockInfo ? blockInfo.count + 1 : 1;
       if (currentAttempts >= 5) {
         const blockedUntil = new Date();
@@ -238,14 +226,32 @@ export class AuthService {
       } else {
         const blockedUntil = new Date(0);
         this.failedAttemptsMap.set(normalizedPhone, { count: currentAttempts, blockedUntil });
-        throw new UnauthorizedException(`Invalid or expired OTP. ${5 - currentAttempts} attempts remaining.`);
+        throw error;
       }
+    }
+
+    const verifiedPhone = verifiedPhoneRaw.replace(/\D/g, '').slice(-10);
+    if (verifiedPhone !== normalizedPhone) {
+      throw new UnauthorizedException('Phone number verification mismatch.');
+    }
+
+    const request = await this.prisma.otpRequest.findFirst({
+      where: {
+        phone: normalizedPhone,
+        otpCode: 'FIREBASE_PENDING',
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!request) {
+      throw new UnauthorizedException('No active authentication request found. Please request a new verification code.');
     }
 
     // Success -> clear failed attempts
     this.failedAttemptsMap.delete(normalizedPhone);
 
-    // Clean up used OTP
+    // Clean up used OTP tracker
     await this.prisma.otpRequest.delete({
       where: { id: request.id },
     }).catch(() => {}); // ignore cleanup error if any

@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, ArrowRight, Loader2, AlertCircle, ArrowLeft, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useTenant } from '../../providers/TenantContext';
+import { auth } from '@/lib/firebase';
+import { signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
+import { setConfirmationResult, setSavedPhone } from '@/lib/firebaseAuthStore';
 
 function LoginContent() {
   const router = useRouter();
@@ -17,6 +20,29 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notFoundInfo, setNotFoundInfo] = useState<{ isNotFound: boolean; portal: string; message: string } | null>(null);
+
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible',
+          callback: () => {
+            // reCAPTCHA solved
+          }
+        });
+      } catch (err) {
+        console.error('Failed to initialize RecaptchaVerifier:', err);
+      }
+    }
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear();
+        recaptchaVerifierRef.current = null;
+      }
+    };
+  }, []);
 
   const portalTitle = 
     portal === 'teacher' ? 'Teacher Portal' :
@@ -119,6 +145,7 @@ function LoginContent() {
 
     setLoading(true);
     try {
+      // Step 1: Backend Phone & Role verification (also registers rate limit)
       const response = await api.post('/auth/send-otp', { phone: cleanedPhone, portal });
       const data = response.data;
 
@@ -135,20 +162,43 @@ function LoginContent() {
         return;
       }
 
-      const otpCode = data?.otpCode;
       const schoolName = data?.schoolName || '';
       const logoUrl = data?.logoUrl || '';
 
       sessionStorage.setItem('otp_schoolName', schoolName);
       sessionStorage.setItem('otp_logoUrl', logoUrl);
 
-      let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}&portal=${encodeURIComponent(portal)}`;
-      if (otpCode) otpUrl += `&dev_otp=${otpCode}`;
+      // Step 2: Trigger Firebase Phone Authentication
+      if (!recaptchaVerifierRef.current) {
+        throw new Error('reCAPTCHA has not been initialized. Please refresh the page and try again.');
+      }
 
+      let formattedPhone = cleanedPhone;
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = `+91${formattedPhone}`;
+      }
+
+      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
+      setConfirmationResult(confirmationResult);
+      setSavedPhone(cleanedPhone);
+
+      let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}&portal=${encodeURIComponent(portal)}`;
       router.push(otpUrl);
     } catch (err: any) {
       console.error('Send OTP error:', err);
-      setError(err.response?.data?.message || 'Failed to send OTP. Please try again.');
+      let userFriendlyMessage = 'Failed to send OTP. Please try again.';
+      if (err.code === 'auth/invalid-phone-number') {
+        userFriendlyMessage = 'Invalid mobile number format.';
+      } else if (err.code === 'auth/quota-exceeded') {
+        userFriendlyMessage = 'SMS quota exceeded. Please try again tomorrow.';
+      } else if (err.code === 'auth/too-many-requests') {
+        userFriendlyMessage = 'Too many requests. Please wait a few minutes before trying again.';
+      } else if (err.response?.data?.message) {
+        userFriendlyMessage = err.response.data.message;
+      } else if (err.message) {
+        userFriendlyMessage = err.message;
+      }
+      setError(userFriendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -254,6 +304,8 @@ function LoginContent() {
                 />
               </div>
             </div>
+
+            <div id="recaptcha-container"></div>
 
             <button
               type="submit"
