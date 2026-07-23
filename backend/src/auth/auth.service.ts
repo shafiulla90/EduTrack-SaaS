@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 import * as crypto from 'crypto';
 import { FirebaseAdminService } from './firebase-admin.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +15,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private firebaseAdminService: FirebaseAdminService,
+    private configService: ConfigService,
   ) {}
 
   async hashPassword(password: string): Promise<string> {
@@ -112,31 +114,35 @@ export class AuthService {
       }
     }
 
-    // Cooldown check (60 seconds)
-    const lastRequest = await this.prisma.otpRequest.findFirst({
-      where: { phone: normalizedPhone },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (lastRequest) {
-      const now = new Date();
-      const diffMs = now.getTime() - lastRequest.createdAt.getTime();
-      if (diffMs < 60 * 1000) {
-        const remainingSec = Math.ceil((60 * 1000 - diffMs) / 1000);
-        throw new BadRequestException(`Please wait ${remainingSec} seconds before requesting a new OTP.`);
-      }
-    }
+    const isSecurityDisabled = this.configService.get<string>('DISABLE_OTP_SECURITY') === 'true';
 
-    // Hourly rate limit check (max 5 requests per hour)
-    const oneHourAgo = new Date();
-    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
-    const hourlyRequestCount = await this.prisma.otpRequest.count({
-      where: {
-        phone: normalizedPhone,
-        createdAt: { gte: oneHourAgo },
-      },
-    });
-    if (hourlyRequestCount >= 5) {
-      throw new BadRequestException('Too many OTP requests. Maximum 5 requests per hour. Please try again later.');
+    if (!isSecurityDisabled) {
+      // Cooldown check (60 seconds)
+      const lastRequest = await this.prisma.otpRequest.findFirst({
+        where: { phone: normalizedPhone },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (lastRequest) {
+        const now = new Date();
+        const diffMs = now.getTime() - lastRequest.createdAt.getTime();
+        if (diffMs < 60 * 1000) {
+          const remainingSec = Math.ceil((60 * 1000 - diffMs) / 1000);
+          throw new BadRequestException(`Please wait ${remainingSec} seconds before requesting a new OTP.`);
+        }
+      }
+
+      // Hourly rate limit check (max 5 requests per hour)
+      const oneHourAgo = new Date();
+      oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+      const hourlyRequestCount = await this.prisma.otpRequest.count({
+        where: {
+          phone: normalizedPhone,
+          createdAt: { gte: oneHourAgo },
+        },
+      });
+      if (hourlyRequestCount >= 5) {
+        throw new BadRequestException('Too many OTP requests. Maximum 5 requests per hour. Please try again later.');
+      }
     }
 
     // Invalidate previous OTP requests by setting their expiry to the past
@@ -203,10 +209,11 @@ export class AuthService {
 
   async verifyOtp(phone: string, otpCode: string, portal?: string): Promise<any> {
     const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+    const isSecurityDisabled = this.configService.get<string>('DISABLE_OTP_SECURITY') === 'true';
 
-    // Check brute-force block status
+    // Check brute-force block status (only if security is active)
     const blockInfo = this.failedAttemptsMap.get(normalizedPhone);
-    if (blockInfo && blockInfo.blockedUntil > new Date()) {
+    if (!isSecurityDisabled && blockInfo && blockInfo.blockedUntil > new Date()) {
       const remainingMin = Math.ceil((blockInfo.blockedUntil.getTime() - new Date().getTime()) / 60000);
       throw new UnauthorizedException(`Too many failed attempts. This number is locked for another ${remainingMin} minutes.`);
     }
@@ -216,6 +223,9 @@ export class AuthService {
       // The otpCode parameter now contains the client-side Firebase ID token
       verifiedPhoneRaw = await this.firebaseAdminService.verifyIdToken(otpCode);
     } catch (error) {
+      if (isSecurityDisabled) {
+        throw error;
+      }
       // Handle lockout on verification failures
       const currentAttempts = blockInfo ? blockInfo.count + 1 : 1;
       if (currentAttempts >= 5) {
@@ -235,26 +245,31 @@ export class AuthService {
       throw new UnauthorizedException('Phone number verification mismatch.');
     }
 
-    const request = await this.prisma.otpRequest.findFirst({
-      where: {
-        phone: normalizedPhone,
-        otpCode: 'FIREBASE_PENDING',
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    if (!isSecurityDisabled) {
+      const request = await this.prisma.otpRequest.findFirst({
+        where: {
+          phone: normalizedPhone,
+          otpCode: 'FIREBASE_PENDING',
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
-    if (!request) {
-      throw new UnauthorizedException('No active authentication request found. Please request a new verification code.');
+      if (!request) {
+        throw new UnauthorizedException('No active authentication request found. Please request a new verification code.');
+      }
+
+      // Success -> clear failed attempts
+      this.failedAttemptsMap.delete(normalizedPhone);
+
+      // Clean up used OTP tracker
+      await this.prisma.otpRequest.delete({
+        where: { id: request.id },
+      }).catch(() => {}); // ignore cleanup error if any
+    } else {
+      // Success under disabled security -> still clear local map to be safe
+      this.failedAttemptsMap.delete(normalizedPhone);
     }
-
-    // Success -> clear failed attempts
-    this.failedAttemptsMap.delete(normalizedPhone);
-
-    // Clean up used OTP tracker
-    await this.prisma.otpRequest.delete({
-      where: { id: request.id },
-    }).catch(() => {}); // ignore cleanup error if any
 
     // --- AUTO-ASSOCIATION FOR PARENTS AND STUDENTS ---
     // Search for students linked to this phone number
