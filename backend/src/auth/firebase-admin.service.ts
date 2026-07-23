@@ -1,14 +1,12 @@
 import { Injectable, OnModuleInit, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { initializeApp, cert, App } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
 export class FirebaseAdminService implements OnModuleInit {
   private readonly logger = new Logger(FirebaseAdminService.name);
-  private firebaseApp: App | null = null;
+  private firebaseApp: any = null;
 
   constructor(private configService: ConfigService) {}
 
@@ -44,14 +42,24 @@ export class FirebaseAdminService implements OnModuleInit {
       }
 
       if (!serviceAccount) {
-        throw new Error('No valid Firebase service account credentials found. Please set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_CREDENTIALS_PATH.');
+        this.logger.warn('No valid Firebase credentials found. Firebase Admin SDK will not be initialized.');
+        return;
       }
 
-      this.firebaseApp = initializeApp({
-        credential: cert(serviceAccount),
-      });
-      this.logger.log('Firebase Admin: SDK successfully initialized.');
-    } catch (error) {
+      // Dynamic require to prevent top-level packaging/module resolution crashes in Vercel Serverless environment
+      const admin = require('firebase-admin');
+
+      // Reuse existing app instance if already initialized to prevent duplicate app errors
+      if (admin.apps && admin.apps.length > 0) {
+        this.firebaseApp = admin.apps[0];
+        this.logger.log('Firebase Admin: Reusing already initialized Firebase App instance.');
+      } else {
+        this.firebaseApp = admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+        this.logger.log('Firebase Admin: SDK successfully initialized.');
+      }
+    } catch (error: any) {
       this.logger.error('Firebase Admin Initialization Failure:', error.message);
     }
   }
@@ -62,7 +70,8 @@ export class FirebaseAdminService implements OnModuleInit {
     }
 
     try {
-      const decodedToken = await getAuth(this.firebaseApp).verifyIdToken(idToken);
+      const admin = require('firebase-admin');
+      const decodedToken = await admin.auth(this.firebaseApp).verifyIdToken(idToken);
       const phone = decodedToken.phone_number;
       if (!phone) {
         throw new UnauthorizedException('Firebase token verified, but no phone number found in claims.');
