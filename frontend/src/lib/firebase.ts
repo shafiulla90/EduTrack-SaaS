@@ -15,8 +15,10 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 if (typeof window !== 'undefined') {
+  const key = firebaseConfig.apiKey || '';
   console.log('[FIREBASE DEBUG] Initialized with config:', {
-    apiKey: firebaseConfig.apiKey ? `${firebaseConfig.apiKey.substring(0, 10)}... (Length: ${firebaseConfig.apiKey.length})` : 'undefined',
+    apiKey: key ? `${key.substring(0, 10)}... (Length: ${key.length})` : 'undefined',
+    apiKeyFirstLast: key ? `FirstChar: [${key[0]}] (Code: ${key.charCodeAt(0)}), LastChar: [${key[key.length - 1]}] (Code: ${key.charCodeAt(key.length - 1)})` : 'n/a',
     authDomain: firebaseConfig.authDomain || 'undefined',
     projectId: firebaseConfig.projectId || 'undefined',
     appId: firebaseConfig.appId || 'undefined',
