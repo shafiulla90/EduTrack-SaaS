@@ -13,6 +13,16 @@ const firebaseConfig = {
 
 // Initialize Firebase app only once
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+if (typeof window !== 'undefined') {
+  console.log('[FIREBASE DEBUG] Initialized with config:', {
+    apiKey: firebaseConfig.apiKey ? `${firebaseConfig.apiKey.substring(0, 10)}... (Length: ${firebaseConfig.apiKey.length})` : 'undefined',
+    authDomain: firebaseConfig.authDomain || 'undefined',
+    projectId: firebaseConfig.projectId || 'undefined',
+    appId: firebaseConfig.appId || 'undefined',
+  });
+}
+
 const auth = getAuth(app);
 
 export { app, auth };
