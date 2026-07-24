@@ -207,7 +207,7 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(phone: string, otpCode: string, portal?: string): Promise<any> {
+  async verifyOtp(phone: string, otpCode: string, portal?: string, generateCode?: boolean): Promise<any> {
     const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
     const isSecurityDisabled = this.configService.get<string>('DISABLE_OTP_SECURITY') === 'true';
 
@@ -220,23 +220,27 @@ export class AuthService {
 
     let verifiedPhoneRaw: string;
     try {
-      // The otpCode parameter now contains the client-side Firebase ID token
-      verifiedPhoneRaw = await this.firebaseAdminService.verifyIdToken(otpCode);
+      if (isSecurityDisabled && otpCode === 'MOCK_FIREBASE_ID_TOKEN') {
+        verifiedPhoneRaw = normalizedPhone;
+      } else {
+        verifiedPhoneRaw = await this.firebaseAdminService.verifyIdToken(otpCode);
+      }
     } catch (error) {
       if (isSecurityDisabled) {
-        throw error;
-      }
-      // Handle lockout on verification failures
-      const currentAttempts = blockInfo ? blockInfo.count + 1 : 1;
-      if (currentAttempts >= 5) {
-        const blockedUntil = new Date();
-        blockedUntil.setMinutes(blockedUntil.getMinutes() + 15);
-        this.failedAttemptsMap.set(normalizedPhone, { count: currentAttempts, blockedUntil });
-        throw new UnauthorizedException('Too many failed attempts. This phone number has been locked for 15 minutes.');
+        verifiedPhoneRaw = normalizedPhone;
       } else {
-        const blockedUntil = new Date(0);
-        this.failedAttemptsMap.set(normalizedPhone, { count: currentAttempts, blockedUntil });
-        throw error;
+        // Handle lockout on verification failures
+        const currentAttempts = blockInfo ? blockInfo.count + 1 : 1;
+        if (currentAttempts >= 5) {
+          const blockedUntil = new Date();
+          blockedUntil.setMinutes(blockedUntil.getMinutes() + 15);
+          this.failedAttemptsMap.set(normalizedPhone, { count: currentAttempts, blockedUntil });
+          throw new UnauthorizedException('Too many failed attempts. This phone number has been locked for 15 minutes.');
+        } else {
+          const blockedUntil = new Date(0);
+          this.failedAttemptsMap.set(normalizedPhone, { count: currentAttempts, blockedUntil });
+          throw error;
+        }
       }
     }
 
@@ -427,10 +431,52 @@ export class AuthService {
     }
 
     const loginResult = await this.login(user);
+    if (generateCode) {
+      const codePayload = {
+        type: 'auth_code',
+        userId: user.id,
+        tenantId: user.tenantId,
+        access_token: loginResult.access_token,
+        user: loginResult.user
+      };
+      const code = this.jwtService.sign(codePayload, { expiresIn: '30s' });
+      return {
+        registered: true,
+        code
+      };
+    }
+
     return {
       registered: true,
       ...loginResult,
     };
+  }
+
+  private usedCodes = new Set<string>();
+
+  async exchangeCode(code: string): Promise<any> {
+    if (this.usedCodes.has(code)) {
+      throw new UnauthorizedException('Authorization code has already been used.');
+    }
+
+    try {
+      const payload = this.jwtService.verify(code);
+      if (payload.type !== 'auth_code') {
+        throw new UnauthorizedException('Invalid authorization code.');
+      }
+
+      this.usedCodes.add(code);
+      setTimeout(() => {
+        this.usedCodes.delete(code);
+      }, 35000);
+
+      return {
+        access_token: payload.access_token,
+        user: payload.user
+      };
+    } catch (e: any) {
+      throw new UnauthorizedException(`Authorization code validation failed: ${e.message}`);
+    }
   }
 
   async register(data: any, tenantId: string) {

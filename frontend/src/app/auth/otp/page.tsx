@@ -100,13 +100,25 @@ function OtpContent() {
       const idToken = await credential.user.getIdToken();
 
       // Step 2: Send ID Token to backend for application JWT generation
+      const tenant = searchParams.get('tenant') || '';
+      const returnUrl = searchParams.get('returnUrl') || '';
       const response = await api.post('/auth/verify-otp', {
         phone,
         otpCode: idToken, // Send the idToken as the otpCode to preserve backend body contract
-        portal
+        portal,
+        generateCode: !!tenant
       });
 
       const data = response.data;
+      if (data.code && returnUrl) {
+        setSuccessMsg('Authenticated! Redirecting back to school portal...');
+        setTimeout(() => {
+          const dest = `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}code=${encodeURIComponent(data.code)}`;
+          window.location.href = dest;
+        }, 500);
+        return;
+      }
+
       if (data.registered) {
         setSuccessMsg('Authenticated! Loading profile...');
         const role = data.user.role;

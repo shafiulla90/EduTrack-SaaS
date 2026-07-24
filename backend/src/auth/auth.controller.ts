@@ -19,12 +19,21 @@ export class AuthController {
   async verifyOtp(
     @Body('phone') phone: string, 
     @Body('otpCode') otpCode: string,
-    @Body('portal') portal?: string
+    @Body('portal') portal?: string,
+    @Body('generateCode') generateCode?: boolean
   ) {
     if (!phone || !otpCode) {
       throw new BadRequestException('Phone number and OTP code are required');
     }
-    return this.authService.verifyOtp(phone, otpCode, portal);
+    return this.authService.verifyOtp(phone, otpCode, portal, generateCode);
+  }
+
+  @Post('exchange-code')
+  async exchangeCode(@Body('code') code: string) {
+    if (!code) {
+      throw new BadRequestException('Authorization code is required');
+    }
+    return this.authService.exchangeCode(code);
   }
 
   @Post('login')

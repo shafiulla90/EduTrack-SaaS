@@ -16,6 +16,44 @@ function LoginContent() {
   const portal = searchParams.get('portal') || 'admin';
   const { refresh } = useTenant();
 
+  // Redirect to central Auth Hub if we are on a subdomain
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const hostParts = hostname.split('.');
+      const isVercelApp = hostname.includes('vercel.app');
+      const isEdutrackDomain = hostname.includes('edutrack.com');
+      
+      let isSubdomain = false;
+      let tenant = '';
+      
+      if (isEdutrackDomain) {
+        if (hostParts.length > 2 && hostParts[0] !== 'www') {
+          isSubdomain = true;
+          tenant = hostParts[0];
+        }
+      } else if (isVercelApp) {
+        if (hostParts.length > 4) {
+          isSubdomain = true;
+          tenant = hostParts[0];
+        }
+      } else {
+        // Localhost: school1.localhost -> length = 2, localhost -> length = 1
+        if (hostParts.length > 1 && !hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+          isSubdomain = true;
+          tenant = hostParts[0];
+        }
+      }
+
+      if (isSubdomain && tenant) {
+        // Redirect to central Auth Hub
+        const authHubUrl = process.env.NEXT_PUBLIC_AUTH_HUB_URL || 'https://edu-track-saa-s-orcin.vercel.app';
+        const returnUrl = window.location.href.replace('/auth/login', '/auth/callback');
+        window.location.href = `${authHubUrl}/auth/login?portal=${portal}&tenant=${tenant}&returnUrl=${encodeURIComponent(returnUrl)}`;
+      }
+    }
+  }, [portal]);
+
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -182,7 +220,11 @@ function LoginContent() {
       setConfirmationResult(confirmationResult);
       setSavedPhone(cleanedPhone);
 
+      const tenant = searchParams.get('tenant') || '';
+      const returnUrl = searchParams.get('returnUrl') || '';
       let otpUrl = `/auth/otp?phone=${encodeURIComponent(cleanedPhone)}&portal=${encodeURIComponent(portal)}`;
+      if (tenant) otpUrl += `&tenant=${encodeURIComponent(tenant)}`;
+      if (returnUrl) otpUrl += `&returnUrl=${encodeURIComponent(returnUrl)}`;
       router.push(otpUrl);
     } catch (err: any) {
       console.error('Send OTP error:', err);
