@@ -75,6 +75,7 @@ export class AppModule implements NestModule {
         'auth/login',
         'auth/send-otp',
         'auth/verify-otp',
+        'auth/exchange-code',
         'tenant/register',
       )
       .forRoutes('*');
