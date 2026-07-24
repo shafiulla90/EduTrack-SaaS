@@ -151,7 +151,7 @@ function LoginContent() {
 
       if (data.notFound) {
         if (data.redirectToRegister) {
-          router.push('/register-school');
+          router.push(`/register-school?phone=${encodeURIComponent(cleanedPhone)}`);
           return;
         }
         setNotFoundInfo({
