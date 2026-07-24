@@ -175,8 +175,12 @@ export default function SchoolStaffPage() {
           avatarUrl: t.user?.avatarUrl || null,
           employeeId: t.employeeId || `EMP-T-${t.id.substring(0, 4).toUpperCase()}`,
           designation: t.designation || 'Teacher',
-          department: t.designation?.toLowerCase().includes('teacher') ? 'Teaching' : 'Administration',
-          staffType: t.user?.role === 'STAFF' ? 'Non-Teaching' : 'Teaching',
+          department: t.designation?.toLowerCase().includes('teacher') ? 'Teaching' : 
+                      t.designation?.toLowerCase().includes('driver') ? 'Transport' : 
+                      t.designation?.toLowerCase().includes('librarian') ? 'Library' :
+                      t.designation?.toLowerCase().includes('account') ? 'Finance' : 
+                      t.designation?.toLowerCase().includes('security') ? 'Security' : 'Administration',
+          staffType: (t.user?.role === 'STAFF' || t.user?.role === 'DRIVER') ? 'Non-Teaching' : 'Teaching',
           subject: t.subjectsTaught?.[0] || 'General',
           basicSalary: Number(t.basicSalary) || 25000,
           hra: Number(t.allowances) || 0,
@@ -447,7 +451,7 @@ export default function SchoolStaffPage() {
             >
               <option value="">All Departments</option>
               <option>Science</option><option>Mathematics</option><option>General Knowledge</option>
-              <option>Finance</option><option>Library</option><option>Security</option>
+              <option>Transport</option><option>Finance</option><option>Library</option><option>Security</option><option>Administration</option><option>Maintenance / Support</option>
             </select>
             <select
               value={statusFilter}
@@ -1094,7 +1098,7 @@ export default function SchoolStaffPage() {
                   <select value={editingStaff.designation} onChange={e => setEditingStaff({...editingStaff, designation: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
                     {editingStaff.staffType === 'Teaching'
                       ? ['Principal', 'Vice Principal', 'Senior Teacher', 'Teacher', 'Sports Coach'].map(d => <option key={d}>{d}</option>)
-                      : ['Accountant', 'Librarian', 'Security Guard', 'Clerk'].map(d => <option key={d}>{d}</option>)
+                      : ['Accountant', 'Librarian', 'Security Guard', 'Driver', 'Bus Attendant', 'Transport Manager', 'Administrative Staff', 'Clerk'].map(d => <option key={d}>{d}</option>)
                     }
                   </select>
                 </div>
@@ -1103,7 +1107,7 @@ export default function SchoolStaffPage() {
                   <select value={editingStaff.department} onChange={e => setEditingStaff({...editingStaff, department: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 outline-none">
                     {editingStaff.staffType === 'Teaching'
                       ? ['Science', 'Mathematics', 'English', 'Social Studies', 'General Knowledge'].map(d => <option key={d}>{d}</option>)
-                      : ['Finance', 'Library', 'Security', 'Administration'].map(d => <option key={d}>{d}</option>)
+                      : ['Transport', 'Finance', 'Library', 'Security', 'Administration', 'Operations', 'Maintenance / Support'].map(d => <option key={d}>{d}</option>)
                     }
                   </select>
                 </div>
@@ -1300,7 +1304,7 @@ export default function SchoolStaffPage() {
                     <option value="">Select Designation</option>
                     {formType === 'Teaching'
                       ? ['Principal', 'Vice Principal', 'Senior Teacher', 'Teacher', 'Sports Coach'].map(d => <option key={d}>{d}</option>)
-                      : ['Accountant', 'Librarian', 'Security Guard', 'Clerk'].map(d => <option key={d}>{d}</option>)
+                      : ['Accountant', 'Librarian', 'Security Guard', 'Driver', 'Bus Attendant', 'Transport Manager', 'Administrative Staff', 'Clerk'].map(d => <option key={d}>{d}</option>)
                     }
                   </select>
                 </div>
@@ -1310,7 +1314,7 @@ export default function SchoolStaffPage() {
                     <option value="">Select Department</option>
                     {formType === 'Teaching'
                       ? ['Science', 'Mathematics', 'English', 'Social Studies', 'General Knowledge'].map(d => <option key={d}>{d}</option>)
-                      : ['Finance', 'Library', 'Security', 'Administration'].map(d => <option key={d}>{d}</option>)
+                      : ['Transport', 'Finance', 'Library', 'Security', 'Administration', 'Operations', 'Maintenance / Support'].map(d => <option key={d}>{d}</option>)
                     }
                   </select>
                 </div>

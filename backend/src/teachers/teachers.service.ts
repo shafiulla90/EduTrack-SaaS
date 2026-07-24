@@ -39,8 +39,11 @@ export class TeachersService {
     const defaultPassword = data.password || 'StaffPass@123';
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    // Determine role: Non-Teaching staff get STAFF role, Teaching staff get TEACHER role
-    const userRole = data.staffType === 'Non-Teaching' ? Role.STAFF : Role.TEACHER;
+    // Determine role: Non-Teaching staff get STAFF role (or DRIVER if Driver designation), Teaching staff get TEACHER role
+    const isDriver = data.designation?.toLowerCase().includes('driver');
+    const userRole = data.staffType === 'Non-Teaching' 
+      ? (isDriver ? Role.DRIVER : Role.STAFF) 
+      : Role.TEACHER;
 
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -59,7 +62,7 @@ export class TeachersService {
         data: {
           userId: user.id,
           employeeId: data.employeeId,
-          designation: data.designation || (userRole === Role.STAFF ? 'Staff' : 'Teacher'),
+          designation: data.designation || (userRole === Role.STAFF ? 'Staff' : userRole === Role.DRIVER ? 'Driver' : 'Teacher'),
           basicSalary: data.basicSalary,
           allowances: data.allowances,
           deductions: data.deductions,
@@ -82,7 +85,7 @@ export class TeachersService {
       where: {
         user: {
           tenantId,
-          role: { in: [Role.TEACHER, Role.STAFF] },
+          role: { in: [Role.TEACHER, Role.STAFF, Role.DRIVER] },
           isActive: true,
         },
       },
