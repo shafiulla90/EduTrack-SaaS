@@ -12,6 +12,12 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase app only once
+console.log('Firebase Init Config:', {
+  apiKey: firebaseConfig.apiKey ? `${firebaseConfig.apiKey.substring(0, 8)}...` : 'undefined',
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId,
+  appId: firebaseConfig.appId,
+});
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
