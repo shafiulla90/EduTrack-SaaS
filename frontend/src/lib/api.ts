@@ -9,10 +9,10 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL
     ? 'http://localhost:3001'          // Server-side rendering in dev: direct backend call
     : '/api';                          // Client-side on Vercel: use Next.js proxy route
 
-export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' {
+export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' {
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';
   
-  let role = sessionStorage.getItem('active_role') as 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | null;
+  let role = sessionStorage.getItem('active_role') as 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' | null;
   if (!role) {
     if (localStorage.getItem('parent_token')) {
       role = 'PARENT';
@@ -30,21 +30,24 @@ export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
   if (role === 'PARENT') return localStorage.getItem('parent_token');
-  return role === 'TEACHER' ? localStorage.getItem('teacher_token') : localStorage.getItem('admin_token');
+  if (role === 'TEACHER' || role === 'DRIVER') return localStorage.getItem('teacher_token');
+  return localStorage.getItem('admin_token');
 }
 
 export function getStoredTenantId(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
   if (role === 'PARENT') return localStorage.getItem('parent_tenantId');
-  return role === 'TEACHER' ? localStorage.getItem('teacher_tenantId') : localStorage.getItem('admin_tenantId');
+  if (role === 'TEACHER' || role === 'DRIVER') return localStorage.getItem('teacher_tenantId');
+  return localStorage.getItem('admin_tenantId');
 }
 
 export function getStoredUserPhone(): string | null {
   if (typeof window === 'undefined') return null;
   const role = getActiveRole();
   if (role === 'PARENT') return localStorage.getItem('parent_userPhone');
-  return role === 'TEACHER' ? localStorage.getItem('teacher_userPhone') : localStorage.getItem('admin_userPhone');
+  if (role === 'TEACHER' || role === 'DRIVER') return localStorage.getItem('teacher_userPhone');
+  return localStorage.getItem('admin_userPhone');
 }
 
 export function clearStoredAuth() {
@@ -54,7 +57,7 @@ export function clearStoredAuth() {
     localStorage.removeItem('parent_token');
     localStorage.removeItem('parent_tenantId');
     localStorage.removeItem('parent_userPhone');
-  } else if (role === 'TEACHER') {
+  } else if (role === 'TEACHER' || role === 'DRIVER') {
     localStorage.removeItem('teacher_token');
     localStorage.removeItem('teacher_tenantId');
     localStorage.removeItem('teacher_userPhone');

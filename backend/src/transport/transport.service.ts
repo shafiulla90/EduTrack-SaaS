@@ -24,6 +24,7 @@ export class TransportService {
   // SCHOOL ADMIN: BUS MANAGEMENT
   // -------------------------------------------------------------
   async getBuses(tenantId: string) {
+    await this.detectAndMarkOfflineBuses(tenantId);
     return this.prisma.bus.findMany({
       where: { tenantId },
       include: {
@@ -317,6 +318,7 @@ export class TransportService {
   // SCHOOL ADMIN: LIVE FLEET DASHBOARD & STATS
   // -------------------------------------------------------------
   async getAdminDashboard(tenantId: string) {
+    await this.detectAndMarkOfflineBuses(tenantId);
     const totalBuses = await this.prisma.bus.count({ where: { tenantId } });
     const activeBuses = await this.prisma.bus.count({ where: { tenantId, status: 'ACTIVE' } });
     const busesRunning = await this.prisma.bus.count({
@@ -477,7 +479,6 @@ export class TransportService {
     const bus = await this.prisma.bus.findFirst({ where: { driverId: staff.id, tenantId } });
     if (!bus) throw new NotFoundException('No bus assigned to driver');
 
-    // Standardize status representation
     let stdStatus = dutyStatus;
     if (dutyStatus === 'STARTING_ROUTE' || dutyStatus === 'EN_ROUTE' || dutyStatus === 'ON_ROUTE') {
       stdStatus = 'ON_ROUTE';
@@ -487,6 +488,8 @@ export class TransportService {
       stdStatus = 'TRIP_COMPLETED';
     } else if (dutyStatus === 'OFF_DUTY' || dutyStatus === 'OFFLINE') {
       stdStatus = 'OFFLINE';
+    } else if (dutyStatus === 'PAUSED') {
+      stdStatus = 'PAUSED';
     }
 
     const updatedBus = await this.prisma.bus.update({
@@ -663,6 +666,7 @@ export class TransportService {
   // PARENT PORTAL: LIVE TRANSPORT TRACKER
   // -------------------------------------------------------------
   async getParentStudentTransport(studentId: string, parentUserId: string, tenantId: string) {
+    await this.detectAndMarkOfflineBuses(tenantId);
     const student = await this.prisma.studentProfile.findFirst({
       where: { id: studentId, tenantId },
       include: {
@@ -767,5 +771,41 @@ export class TransportService {
       orderBy: { startTime: 'desc' },
       take: 50,
     });
+  }
+
+  private async detectAndMarkOfflineBuses(tenantId: string) {
+    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+    
+    // Find buses that are not OFFLINE / OFF_DUTY but haven't sent a GPS ping in > 60 seconds
+    const staleBuses = await this.prisma.bus.findMany({
+      where: {
+        tenantId,
+        dutyStatus: { notIn: ['OFFLINE', 'OFF_DUTY'] },
+        OR: [
+          { lastGpsUpdate: null },
+          { lastGpsUpdate: { lt: sixtySecondsAgo } },
+        ],
+      },
+    });
+
+    if (staleBuses.length > 0) {
+      console.log(`[Offline Detector] Marking ${staleBuses.length} stale buses as OFFLINE`);
+      await this.prisma.bus.updateMany({
+        where: { id: { in: staleBuses.map(b => b.id) } },
+        data: { dutyStatus: 'OFFLINE' },
+      });
+      
+      // Close their active trips as well
+      await this.prisma.busTrip.updateMany({
+        where: {
+          busId: { in: staleBuses.map(b => b.id) },
+          status: 'IN_PROGRESS',
+        },
+        data: {
+          status: 'COMPLETED',
+          endTime: new Date(),
+        },
+      });
+    }
   }
 }

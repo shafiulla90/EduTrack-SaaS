@@ -110,17 +110,25 @@ function OtpContent() {
       if (data.registered) {
         setSuccessMsg('Authenticated! Loading profile...');
         const role = data.user.role;
-        if (role === 'TEACHER' || role === 'STAFF') {
+        if (role === 'TEACHER' || role === 'STAFF' || role === 'DRIVER') {
           localStorage.setItem('teacher_token', data.access_token);
           localStorage.setItem('teacher_tenantId', data.user.tenantId);
           if (data.user.phone) {
             localStorage.setItem('teacher_userPhone', data.user.phone);
           }
-          sessionStorage.setItem('active_role', 'TEACHER');
-          setSuccessMsg('Authenticated! Redirecting to Teacher Dashboard...');
-          setTimeout(() => {
-            router.push('/dashboard');
-          }, 500);
+          if (role === 'DRIVER') {
+            sessionStorage.setItem('active_role', 'DRIVER');
+            setSuccessMsg('Authenticated! Redirecting to Driver Transport Dashboard...');
+            setTimeout(() => {
+              router.push('/dashboard/transport-tracker');
+            }, 500);
+          } else {
+            sessionStorage.setItem('active_role', 'TEACHER');
+            setSuccessMsg('Authenticated! Redirecting to Teacher Dashboard...');
+            setTimeout(() => {
+              router.push('/dashboard');
+            }, 500);
+          }
         } else if (role === 'PARENT') {
           localStorage.setItem('parent_token', data.access_token);
           localStorage.setItem('parent_tenantId', data.user.tenantId);

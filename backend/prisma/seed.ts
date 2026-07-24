@@ -73,6 +73,125 @@ async function main() {
   });
   console.log(`Created Admin User for Tenant A`);
 
+  // 4. Create Driver for Tenant A
+  const driverUser = await prisma.user.create({
+    data: {
+      email: 'driver@demoschool.com',
+      passwordHash,
+      name: 'Driver John Doe',
+      role: Role.DRIVER,
+      phone: '555-444-3333',
+      tenantId: tenantA.id,
+    },
+  });
+  const driverProfile = await prisma.staffProfile.create({
+    data: {
+      userId: driverUser.id,
+      employeeId: 'DRV-1001',
+      designation: 'Bus Driver',
+      staffCategory: 'NON_TEACHING',
+      staffRole: 'Driver',
+      licenseNumber: 'LIC-998877',
+      experienceYears: 5,
+      status: 'Active',
+      tenantId: tenantA.id,
+    },
+  });
+  console.log(`Created Driver Profile for Tenant A`);
+
+  // 5. Create Route & Stop for Tenant A
+  const route = await prisma.busRoute.create({
+    data: {
+      routeName: 'Route 1 - East Line',
+      startPoint: 'Kharadi Bypass Depot',
+      endPoint: 'Demo Public School Campus',
+      tenantId: tenantA.id,
+    },
+  });
+  const stop = await prisma.busStop.create({
+    data: {
+      routeId: route.id,
+      stopName: 'Viman Nagar Main Stop',
+      sequenceOrder: 1,
+      pickupTime: '07:45 AM',
+      dropTime: '02:45 PM',
+      lat: 18.5679,
+      lng: 73.9143,
+    },
+  });
+  console.log(`Created Route & Bus Stop for Tenant A`);
+
+  // 6. Create Bus for Tenant A
+  const bus = await prisma.bus.create({
+    data: {
+      busNumber: 'BUS-101',
+      registrationNo: 'MH-12-FE-4321',
+      vehicleModel: 'Tata Starbus 40-Seater',
+      capacity: 40,
+      pickupTime: '07:30 AM',
+      dropTime: '02:30 PM',
+      status: 'ACTIVE',
+      dutyStatus: 'OFF_DUTY',
+      driverId: driverProfile.id,
+      routeId: route.id,
+      tenantId: tenantA.id,
+    },
+  });
+  console.log(`Created Bus ${bus.busNumber} for Tenant A`);
+
+  // 7. Create Parent for Tenant A
+  const parentUser = await prisma.user.create({
+    data: {
+      email: 'parent@demoschool.com',
+      passwordHash,
+      name: 'Parent Mary Jenkins',
+      role: Role.PARENT,
+      phone: '777-888-9999',
+      tenantId: tenantA.id,
+    },
+  });
+  const parentProfile = await prisma.parentProfile.create({
+    data: {
+      userId: parentUser.id,
+      emergencyContact: '777-888-0000',
+    },
+  });
+  console.log(`Created Parent Profile for Tenant A`);
+
+  // 8. Create Student for Tenant A and associate with Parent, Bus, and Stop
+  const studentUser = await prisma.user.create({
+    data: {
+      email: 'student@demoschool.com',
+      passwordHash,
+      name: 'Bobby Jenkins',
+      role: Role.STUDENT,
+      tenantId: tenantA.id,
+    },
+  });
+  const studentProfile = await prisma.studentProfile.create({
+    data: {
+      userId: studentUser.id,
+      rollNo: 'STU-1001',
+      fatherName: 'Mr. Jenkins',
+      motherName: 'Mary Jenkins',
+      parentProfileId: parentProfile.id,
+      busId: bus.id,
+      busStopId: stop.id,
+      tenantId: tenantA.id,
+    },
+  });
+
+  // Link Parent and Student in ParentStudent relation
+  await prisma.parentStudent.create({
+    data: {
+      parentId: parentProfile.id,
+      studentId: studentProfile.id,
+      relationship: 'Mother',
+      isPrimary: true,
+    },
+  });
+  console.log(`Created Student and assigned to Parent & Bus for Tenant A`);
+
   console.log('Seeding completed successfully!');
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api';
 import dynamic from 'next/dynamic';
 
@@ -25,12 +25,28 @@ interface BusLocation {
   isOnline: boolean;
 }
 
+function getHaversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Radius of the Earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 interface GoogleBusMapProps {
   buses: BusLocation[];
   stops: Stop[];
   center: { lat: number; lng: number };
   zoom?: number;
   height?: string;
+  etaDestination?: { lat: number; lng: number } | null;
+  onEtaUpdate?: (eta: string) => void;
 }
 
 const mapContainerStyle = {
@@ -46,7 +62,7 @@ const options = {
   mapId: '8d123439b1a5e', // Use a custom MapID for advanced markers/styling if needed
 };
 
-export default function GoogleBusMap({ buses, stops, center, zoom = 14, height = '400px' }: GoogleBusMapProps) {
+export default function GoogleBusMap({ buses, stops, center, zoom = 14, height = '400px', etaDestination, onEtaUpdate }: GoogleBusMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
@@ -54,6 +70,8 @@ export default function GoogleBusMap({ buses, stops, center, zoom = 14, height =
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const lastEtaCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastEtaTimeRef = useRef<number>(0);
 
   const onLoad = useCallback(function callback(map: google.maps.Map) {
     setMap(map);
@@ -62,6 +80,59 @@ export default function GoogleBusMap({ buses, stops, center, zoom = 14, height =
   const onUnmount = useCallback(function callback(map: google.maps.Map) {
     setMap(null);
   }, []);
+
+  // Calculate dynamic ETA to student stop with throttling
+  useEffect(() => {
+    if (!isLoaded || buses.length !== 1 || !etaDestination || !onEtaUpdate) return;
+
+    const activeBus = buses[0];
+    if (!activeBus.lat || !activeBus.lng) return;
+
+    const now = Date.now();
+    const timeElapsedMs = now - lastEtaTimeRef.current;
+    
+    let shouldRecalculate = false;
+    if (!lastEtaCoordsRef.current) {
+      shouldRecalculate = true;
+    } else {
+      const distanceMoved = getHaversineDistanceKm(
+        activeBus.lat,
+        activeBus.lng,
+        lastEtaCoordsRef.current.lat,
+        lastEtaCoordsRef.current.lng
+      ) * 1000; // in meters
+
+      if (distanceMoved > 100) {
+        shouldRecalculate = true;
+      } else if (timeElapsedMs > 45000) { // 45 seconds
+        shouldRecalculate = true;
+      }
+    }
+
+    if (shouldRecalculate) {
+      const directionsService = new window.google.maps.DirectionsService();
+      directionsService.route(
+        {
+          origin: { lat: activeBus.lat, lng: activeBus.lng },
+          destination: { lat: etaDestination.lat, lng: etaDestination.lng },
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK && result) {
+            const leg = result.routes[0]?.legs[0];
+            if (leg) {
+              const etaText = leg.duration?.text || '';
+              lastEtaCoordsRef.current = { lat: activeBus.lat, lng: activeBus.lng };
+              lastEtaTimeRef.current = now;
+              onEtaUpdate(etaText);
+            }
+          } else {
+            console.error('Error fetching ETA directions', status);
+          }
+        }
+      );
+    }
+  }, [isLoaded, buses, etaDestination, onEtaUpdate]);
 
   // Calculate route polyline natively with Google Directions API
   useEffect(() => {

@@ -11,6 +11,7 @@ export default function ParentTransportPage() {
   const [transportData, setTransportData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [googleEta, setGoogleEta] = useState<string>('');
 
   const fetchTransportData = async () => {
     if (!selectedChild?.id) return;
@@ -236,7 +237,7 @@ export default function ParentTransportPage() {
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">ESTIMATED ETA</span>
               <strong className="text-sm font-black text-emerald-600 mt-1 block">
-                {isOnline ? `${telemetry.etaMinutes} Mins Away` : 'Standby'}
+                {isOnline ? (googleEta ? googleEta : `${telemetry.etaMinutes} Mins Away`) : 'Standby'}
               </strong>
             </div>
 
@@ -272,6 +273,8 @@ export default function ParentTransportPage() {
               zoom={14}
               center={{ lat: bus.currentLat || 18.5204, lng: bus.currentLng || 73.8567 }}
               stops={stops}
+              etaDestination={assignedStop?.lat && assignedStop?.lng ? { lat: assignedStop.lat, lng: assignedStop.lng } : null}
+              onEtaUpdate={(eta) => setGoogleEta(eta)}
             />
           </div>
         </div>

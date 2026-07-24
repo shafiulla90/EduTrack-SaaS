@@ -69,7 +69,7 @@ export class AuthService {
       });
 
       const isAdmin = users.some(u => u.role === Role.SCHOOL_ADMIN || u.role === Role.SUPER_ADMIN || (u.role as string) === 'ADMIN');
-      const isTeacher = users.some(u => u.role === Role.TEACHER || u.role === Role.STAFF);
+      const isTeacher = users.some(u => u.role === Role.TEACHER || u.role === Role.STAFF || u.role === Role.DRIVER);
       const isParent = users.some(u => u.role === Role.PARENT) || matchingStudents.length > 0;
       const userExists = users.length > 0 || matchingStudents.length > 0;
 
@@ -96,7 +96,7 @@ export class AuthService {
             success: false,
             notFound: true,
             portal: 'teacher',
-            message: 'Teacher account not found. Please contact your School Administrator to obtain Teacher Portal access.'
+            message: 'Teacher or Driver account not found. Please contact your School Administrator to obtain portal access.'
           };
         }
       } else if (p === 'parent' || p === 'student') {
@@ -396,7 +396,7 @@ export class AuthService {
         user = await this.prisma.user.findFirst({
           where: {
             phone: { endsWith: normalizedPhone },
-            role: { in: [Role.TEACHER, Role.STAFF] }
+            role: { in: [Role.TEACHER, Role.STAFF, Role.DRIVER] }
           },
         });
       } else if (p === 'admin') {

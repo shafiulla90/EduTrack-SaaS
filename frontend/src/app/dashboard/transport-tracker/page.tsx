@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { socketService } from '@/lib/socket';
 import { AlertTriangle, CheckCircle, MapPin, Play, Square, RefreshCw, ShieldAlert, PhoneCall, Radio, Battery, Gauge } from 'lucide-react';
 
 export default function DriverTransportTrackerPage() {
@@ -22,10 +23,11 @@ export default function DriverTransportTrackerPage() {
     accuracy: number;
   } | null>(null);
   const [accuracyNotice, setAccuracyNotice] = useState<string | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
 
   const watchIdRef = useRef<number | null>(null);
-  const intervalIdRef = useRef<any>(null);
   const wakeLockRef = useRef<any>(null);
+  const gpsQueueRef = useRef<any[]>([]);
 
   const fetchAssignedBus = useCallback(async () => {
     setLoading(true);
@@ -44,6 +46,12 @@ export default function DriverTransportTrackerPage() {
 
   useEffect(() => {
     fetchAssignedBus();
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      socketService.disconnect();
+    };
   }, [fetchAssignedBus]);
 
   // Request Screen Wake Lock API to prevent phone screen from dimming/sleeping
@@ -65,18 +73,27 @@ export default function DriverTransportTrackerPage() {
     }
   };
 
+  const flushQueue = useCallback(() => {
+    const socket = socketService.getSocket();
+    if (socket && socket.connected && gpsQueueRef.current.length > 0) {
+      console.log(`[Driver Device GPS] Flushing ${gpsQueueRef.current.length} queued points`);
+      while (gpsQueueRef.current.length > 0) {
+        const queuedPayload = gpsQueueRef.current.shift();
+        socket.emit('driverGpsUpdate', queuedPayload);
+      }
+    }
+  }, []);
+
   const stopGpsTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
-    if (intervalIdRef.current !== null) {
-      clearInterval(intervalIdRef.current);
-      intervalIdRef.current = null;
-    }
     releaseWakeLock();
+    socketService.disconnect();
+    setSocketConnected(false);
     setGpsActive(false);
-    console.log('[Driver Device GPS] Stopped tracking & cleared intervals.');
+    console.log('[Driver Device GPS] Stopped tracking & cleared watch.');
   }, []);
 
   const sendGpsPing = async (pos: GeolocationPosition) => {
@@ -85,9 +102,10 @@ export default function DriverTransportTrackerPage() {
     const speed = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0; // m/s to km/h
     const heading = pos.coords.heading || 0;
     const accuracy = Math.round(pos.coords.accuracy || 0);
+    const timestamp = new Date(pos.timestamp || Date.now()).toISOString();
 
     setCurrentCoords({ lat, lng, speed, heading, accuracy });
-    const pingTime = new Date().toLocaleTimeString();
+    const pingTime = new Date(pos.timestamp || Date.now()).toLocaleTimeString();
     setLastPingTime(pingTime);
 
     if (accuracy > 500) {
@@ -97,20 +115,46 @@ export default function DriverTransportTrackerPage() {
     }
 
     const payload = {
-      lat,
-      lng,
+      busId: driverData?.bus?.id,
+      tripId: null,
+      latitude: lat,
+      longitude: lng,
       speed,
       heading,
       accuracy,
-      dutyStatus: 'ON_ROUTE',
+      timestamp,
+      dutyStatus: dutyStatus || 'ON_ROUTE',
     };
 
-    console.log('[Driver Device GPS Ping] Sending payload to /transport/driver/gps:', payload, 'Timestamp:', pingTime);
+    console.log('[Driver Device GPS Ping] Processing ping:', payload, 'Timestamp:', pingTime);
 
-    try {
-      await api.post('/transport/driver/gps', payload);
-    } catch (err) {
-      console.error('[Driver Device GPS Error] Failed to post GPS position:', err);
+    const socket = socketService.getSocket();
+    if (socket && socket.connected) {
+      console.log('[Driver Device GPS] Emitting via WebSocket');
+      socket.emit('driverGpsUpdate', payload);
+      setLastPingTime(pingTime + ' (WS)');
+    } else {
+      console.warn('[Driver Device GPS] Socket offline, queuing location update');
+      gpsQueueRef.current.push(payload);
+      if (gpsQueueRef.current.length > 50) {
+        gpsQueueRef.current.shift();
+      }
+
+      // Rest client HTTP post fallback
+      const restPayload = {
+        lat,
+        lng,
+        speed,
+        heading,
+        accuracy,
+        dutyStatus: dutyStatus || 'ON_ROUTE',
+      };
+      try {
+        await api.post('/transport/driver/gps', restPayload);
+        setLastPingTime(pingTime + ' (HTTP Fallback)');
+      } catch (err) {
+        console.error('[Driver Device GPS Fallback Error] HTTP post failed:', err);
+      }
     }
   };
 
@@ -127,6 +171,27 @@ export default function DriverTransportTrackerPage() {
     await requestWakeLock();
     setGpsActive(true);
     console.log('[Driver Device GPS] Starting tracking & requesting position...');
+
+    // Connect to Socket.IO and register reconnect flushing
+    const token = localStorage.getItem('token');
+    if (token) {
+      const socket = socketService.connect(token);
+      if (socket) {
+        socket.on('connect', () => {
+          setSocketConnected(true);
+          flushQueue();
+        });
+        socket.on('disconnect', () => {
+          setSocketConnected(false);
+        });
+        socket.on('connect_error', () => {
+          setSocketConnected(false);
+        });
+        if (socket.connected) {
+          setSocketConnected(true);
+        }
+      }
+    }
 
     // Immediately capture position
     navigator.geolocation.getCurrentPosition(
@@ -157,15 +222,6 @@ export default function DriverTransportTrackerPage() {
         maximumAge: 0,
       }
     );
-
-    // Continuous 5-second polling interval fallback
-    intervalIdRef.current = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => sendGpsPing(pos),
-        (err) => console.warn('[Driver Device Interval GPS Error]:', err),
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-      );
-    }, 5000);
   };
 
   const handleDutyChange = async (newStatus: string) => {
