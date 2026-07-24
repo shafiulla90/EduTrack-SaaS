@@ -307,8 +307,6 @@ function OtpContent() {
               ))}
             </div>
 
-            <div id="recaptcha-container"></div>
-
             <button
               type="submit"
               disabled={loading || otpCode.join('').length < 6}
@@ -324,6 +322,7 @@ function OtpContent() {
               )}
             </button>
           </form>
+          <div id="recaptcha-container"></div>
 
           <div className="text-center mt-6">
             <button

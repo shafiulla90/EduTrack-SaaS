@@ -305,8 +305,6 @@ function LoginContent() {
               </div>
             </div>
 
-            <div id="recaptcha-container"></div>
-
             <button
               type="submit"
               disabled={loading}
@@ -325,6 +323,7 @@ function LoginContent() {
               )}
             </button>
           </form>
+          <div id="recaptcha-container"></div>
         </div>
       </div>
     </main>

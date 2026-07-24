@@ -67,7 +67,7 @@ async function main() {
       passwordHash,
       name: 'Principal Sarah Jenkins',
       role: Role.SCHOOL_ADMIN,
-      phone: '111-222-3333',
+      phone: '1112223333',
       tenantId: tenantA.id,
     },
   });
@@ -80,7 +80,7 @@ async function main() {
       passwordHash,
       name: 'Driver John Doe',
       role: Role.DRIVER,
-      phone: '555-444-3333',
+      phone: '9638527410',
       tenantId: tenantA.id,
     },
   });
@@ -146,7 +146,7 @@ async function main() {
       passwordHash,
       name: 'Parent Mary Jenkins',
       role: Role.PARENT,
-      phone: '777-888-9999',
+      phone: '7778889999',
       tenantId: tenantA.id,
     },
   });

@@ -86,6 +86,7 @@ export function getTenantFromHostname(): string {
     if (hostParts.length > 3) {
       return hostParts[0];
     }
+    return 'demo-school';
   } else {
     // Local development (e.g. school-subdomain.localhost)
     if (hostParts.length > 1 && hostParts[0] !== 'localhost' && hostParts[0] !== 'www' && isNaN(Number(hostParts[0]))) {
