@@ -18,8 +18,21 @@ export class TenantMiddleware implements NestMiddleware {
       // 2. Resolve from subdomain of hostname (e.g. school1.edutrack.com -> school1)
       const hostname = req.hostname;
       const hostParts = hostname.split('.');
-      if (hostParts.length > 2 && hostParts[0] !== 'www' && hostParts[0] !== 'localhost') {
-        tenantSubdomain = hostParts[0];
+      const isVercelApp = hostname.includes('vercel.app');
+      const isEdutrackDomain = hostname.includes('edutrack.com');
+
+      if (isEdutrackDomain) {
+        if (hostParts.length > 2 && hostParts[0] !== 'www' && hostParts[0] !== 'app') {
+          tenantSubdomain = hostParts[0];
+        }
+      } else if (isVercelApp) {
+        if (hostParts.length > 3 && hostParts[0] !== 'www') {
+          tenantSubdomain = hostParts[0];
+        }
+      } else {
+        if (hostParts.length > 1 && hostParts[0] !== 'localhost' && hostParts[0] !== 'www' && isNaN(Number(hostParts[0]))) {
+          tenantSubdomain = hostParts[0];
+        }
       }
     }
 
@@ -30,8 +43,6 @@ export class TenantMiddleware implements NestMiddleware {
 
     if (!tenantSubdomain) {
       // No tenant identifier provided — allow the request through without a tenant context.
-      // Public endpoints (e.g. /tenant/public-branding, /auth/send-otp) will handle the
-      // missing tenantId gracefully and return generic platform branding.
       next();
       return;
     }
@@ -54,8 +65,18 @@ export class TenantMiddleware implements NestMiddleware {
           });
           return;
         } catch (e) {
-          // If still not found, throw error
+          // If still not found, allow public auth routes to continue gracefully without blocking
+          const isPublicAuthRoute = req.path.startsWith('/auth/') || req.path.startsWith('/tenant/public-branding');
+          if (isPublicAuthRoute) {
+            next();
+            return;
+          }
         }
+      }
+      const isPublicAuthRoute = req.path.startsWith('/auth/') || req.path.startsWith('/tenant/public-branding');
+      if (isPublicAuthRoute) {
+        next();
+        return;
       }
       throw new BadRequestException(`Tenant resolution failed: ${error.message}`);
     }

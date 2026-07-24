@@ -72,6 +72,10 @@ export function clearStoredAuth() {
 export function getTenantFromHostname(): string {
   if (typeof window === 'undefined') return 'demo-school';
 
+  // Prefer stored tenant ID (from successful login) over hostname detection
+  const stored = getStoredTenantId();
+  if (stored) return stored;
+
   const hostname = window.location.hostname;
   const hostParts = hostname.split('.');
 
@@ -79,24 +83,21 @@ export function getTenantFromHostname(): string {
   const isEdutrackDomain = hostname.includes('edutrack.com');
 
   if (isEdutrackDomain) {
-    if (hostParts.length > 2 && hostParts[0] !== 'www') {
+    if (hostParts.length > 2 && hostParts[0] !== 'www' && hostParts[0] !== 'app') {
       return hostParts[0];
     }
   } else if (isVercelApp) {
-    if (hostParts.length > 3) {
+    // Standard Vercel deployment URL (e.g. project-name.vercel.app) has 3 parts.
+    // Explicit tenant subdomain (e.g. school1.project-name.vercel.app) has 4 parts.
+    if (hostParts.length > 3 && hostParts[0] !== 'www') {
       return hostParts[0];
     }
-    return 'demo-school';
   } else {
-    // Local development (e.g. school-subdomain.localhost)
+    // Local development (e.g. school1.localhost)
     if (hostParts.length > 1 && hostParts[0] !== 'localhost' && hostParts[0] !== 'www' && isNaN(Number(hostParts[0]))) {
       return hostParts[0];
     }
   }
-
-  // Fallback to localStorage
-  const stored = getStoredTenantId();
-  if (stored) return stored;
 
   return 'demo-school';
 }
@@ -105,7 +106,7 @@ export const api = axios.create({
   baseURL: BACKEND_URL,
   headers: {
     'Content-Type': 'application/json',
-    'X-Tenant-ID': 'demo-school',
+    // X‑Tenant‑ID will be injected dynamically by the request interceptor.
   },
 });
 
@@ -117,6 +118,7 @@ api.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      // Inject resolved tenant ID
       config.headers['X-Tenant-ID'] = getTenantFromHostname();
     }
     return config;
@@ -130,10 +132,10 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
-        clearStoredAuth();
-        // Prevent redirect loop if already on login, otp, or onboarding pages
+        // Prevent redirect loop if already on auth pages or onboarding
         const path = window.location.pathname;
-        if (!path.includes('/auth/login') && !path.includes('/auth/otp') && !path.includes('/register-school')) {
+        if (!path.includes('/auth/login') && !path.includes('/auth/otp') && !path.includes('/auth/callback') && !path.includes('/register-school')) {
+          clearStoredAuth();
           window.location.href = '/auth/login';
         }
       }

@@ -220,7 +220,7 @@ export class AuthService {
 
     let verifiedPhoneRaw: string;
     try {
-      if (isSecurityDisabled && otpCode === 'MOCK_FIREBASE_ID_TOKEN') {
+      if (isSecurityDisabled && (otpCode === 'MOCK_FIREBASE_ID_TOKEN' || !this.firebaseAdminService.isInitialized())) {
         verifiedPhoneRaw = normalizedPhone;
       } else {
         verifiedPhoneRaw = await this.firebaseAdminService.verifyIdToken(otpCode);

@@ -47,7 +47,7 @@ function LoginContent() {
 
       if (isSubdomain && tenant) {
         // Redirect to central Auth Hub
-        const authHubUrl = process.env.NEXT_PUBLIC_AUTH_HUB_URL || 'https://edu-track-saa-s-orcin.vercel.app';
+        const authHubUrl = process.env.NEXT_PUBLIC_AUTH_HUB_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://edu-track-saa-s-orcin.vercel.app');
         const returnUrl = window.location.href.replace('/auth/login', '/auth/callback');
         window.location.href = `${authHubUrl}/auth/login?portal=${portal}&tenant=${tenant}&returnUrl=${encodeURIComponent(returnUrl)}`;
       }
@@ -76,7 +76,9 @@ function LoginContent() {
     }
     return () => {
       if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear();
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch (e) {}
         recaptchaVerifierRef.current = null;
       }
     };
@@ -208,7 +210,13 @@ function LoginContent() {
 
       // Step 2: Trigger Firebase Phone Authentication
       if (!recaptchaVerifierRef.current) {
-        throw new Error('reCAPTCHA has not been initialized. Please refresh the page and try again.');
+        try {
+          recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            size: 'invisible',
+          });
+        } catch (err) {
+          console.error('Failed to instantiate RecaptchaVerifier:', err);
+        }
       }
 
       let formattedPhone = cleanedPhone;
@@ -216,7 +224,7 @@ function LoginContent() {
         formattedPhone = `+91${formattedPhone}`;
       }
 
-      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current);
+      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifierRef.current!);
       setConfirmationResult(confirmationResult);
       setSavedPhone(cleanedPhone);
 
@@ -228,6 +236,12 @@ function LoginContent() {
       router.push(otpUrl);
     } catch (err: any) {
       console.error('Send OTP error:', err);
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch (e) {}
+        recaptchaVerifierRef.current = null;
+      }
       let userFriendlyMessage = 'Failed to send OTP. Please try again.';
       if (err.code === 'auth/invalid-phone-number') {
         userFriendlyMessage = 'Invalid mobile number format.';

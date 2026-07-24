@@ -88,4 +88,8 @@ export class FirebaseAdminService implements OnModuleInit {
       throw new UnauthorizedException(`OTP token verification failed: ${error.message}`);
     }
   }
+
+  isInitialized(): boolean {
+    return !!this.firebaseApp;
+  }
 }

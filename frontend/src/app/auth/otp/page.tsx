@@ -25,28 +25,18 @@ function OtpContent() {
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !recaptchaVerifierRef.current) {
-      try {
-        recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-        });
-      } catch (err) {
-        console.error('Failed to initialize RecaptchaVerifier on OTP page:', err);
-      }
-    }
-    return () => {
-      if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear();
-        recaptchaVerifierRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (typeof window !== 'undefined') {
       setSchoolName(sessionStorage.getItem('otp_schoolName') || searchParams.get('schoolName') || '');
       setLogoUrl(sessionStorage.getItem('otp_logoUrl') || searchParams.get('logoUrl') || '');
     }
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch (e) {}
+        recaptchaVerifierRef.current = null;
+      }
+    };
   }, [searchParams]);
 
   // Refs for auto-focusing next input
@@ -92,7 +82,7 @@ function OtpContent() {
     try {
       const confirmationResult = getConfirmationResult();
       if (!confirmationResult) {
-        throw new Error('Authentication session lost. Please log in again.');
+        throw new Error('Authentication session lost. Please return to login and enter your mobile number again.');
       }
 
       // Step 1: Confirm OTP via Firebase
