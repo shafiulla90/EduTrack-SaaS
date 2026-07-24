@@ -7,6 +7,19 @@ async function main() {
   console.log('Starting database seeding...');
 
   // 1. Clean old entries
+  const dbUrl = process.env.DATABASE_URL || '';
+  const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+  const allowDestructive = process.env.ALLOW_DESTRUCTIVE_SEED === 'true';
+
+  if (!isLocal && !allowDestructive) {
+    console.error('========================================================================');
+    console.error('WARNING: Destructive seeding blocked!');
+    console.error('The database URL does not point to localhost, and ALLOW_DESTRUCTIVE_SEED is not true.');
+    console.error('Seeding is aborted to prevent accidental data loss in shared/production.');
+    console.error('========================================================================');
+    throw new Error('Destructive seeding blocked on remote database');
+  }
+
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE "Tenant" CASCADE;`);
   console.log('Cleared existing database records.');
 
