@@ -33,7 +33,7 @@ function LoginContent() {
           tenant = hostParts[0];
         }
       } else if (isVercelApp) {
-        if (hostParts.length > 4) {
+        if (hostParts.length > 3) {
           isSubdomain = true;
           tenant = hostParts[0];
         }
