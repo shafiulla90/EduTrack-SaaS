@@ -4,6 +4,9 @@ import { TenantContext } from '../tenants/tenant.context';
 import { PaymentStatus, PaymentMethod, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { StorageService } from '../common/storage.service';
+import PDFDocument from 'pdfkit';
+import * as https from 'https';
+import * as http from 'http';
 
 @Injectable()
 export class BillingService {
@@ -1146,7 +1149,6 @@ export class BillingService {
   }
 
   async generateReceiptPdfStream(data: any, res: any) {
-    const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
 
     res.set({
@@ -1166,8 +1168,6 @@ export class BillingService {
     let logoDrawn = false;
     if (data.schoolLogo) {
       try {
-        const https = require('https');
-        const http = require('http');
         const client = data.schoolLogo.startsWith('https') ? https : http;
 
         const logoBuffer = await new Promise<Buffer>((resolve, reject) => {

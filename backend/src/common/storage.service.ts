@@ -1,8 +1,8 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as AWS from 'aws-sdk';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs';
+import { join, dirname } from 'path';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -83,9 +83,8 @@ export class StorageService {
       }
       const relativePath = `/uploads/${storageKey}`;
       const absolutePath = join(__dirname, '..', '..', 'uploads', storageKey);
-      // Ensure directory exists
-      const dirPath = require('path').dirname(absolutePath);
-      require('fs').mkdirSync(dirPath, { recursive: true });
+      const dirPath = dirname(absolutePath);
+      mkdirSync(dirPath, { recursive: true });
       writeFileSync(absolutePath, buffer);
       // Return path that can be served statically (relative to server root)
       return relativePath;
@@ -114,9 +113,8 @@ export class StorageService {
     // Local fallback: map relative URL to filesystem path
     try {
       const localPath = join(__dirname, '..', '..', imageUrl);
-      const fs = require('fs');
-      if (fs.existsSync(localPath)) {
-        fs.unlinkSync(localPath);
+      if (existsSync(localPath)) {
+        unlinkSync(localPath);
       }
     } catch (err) {
       console.warn('[StorageService] Failed to delete local file:', err);

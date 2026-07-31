@@ -1,6 +1,7 @@
 {
   "name": "edutrack-saas-backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "NestJS backend for EduTrack SaaS Independent platform",
   "author": "Covenant Synergy Private Limited",
   "private": true,

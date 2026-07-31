@@ -8,7 +8,7 @@
     "backend": {
       "root": "backend",
       "routePrefix": "/_backend",
-      "entrypoint": "dist/main.js"
+      "entrypoint": "src/main.ts"
     }
   }
 }

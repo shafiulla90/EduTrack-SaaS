@@ -2,6 +2,8 @@ import { Injectable, OnModuleInit, Logger, UnauthorizedException } from '@nestjs
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
 @Injectable()
 export class FirebaseAdminService implements OnModuleInit {
@@ -46,16 +48,13 @@ export class FirebaseAdminService implements OnModuleInit {
         return;
       }
 
-      // Require firebase-admin root package
-      const admin = require('firebase-admin');
-
-      // Reuse existing app instance if already initialized to prevent duplicate app errors
-      if (admin.apps && admin.apps.length > 0) {
-        this.firebaseApp = admin.apps[0];
+      const apps = getApps();
+      if (apps.length > 0) {
+        this.firebaseApp = apps[0];
         this.logger.log('Firebase Admin: Reusing already initialized Firebase App instance.');
       } else {
-        this.firebaseApp = admin.initializeApp({
-          credential: admin.cert(serviceAccount),
+        this.firebaseApp = initializeApp({
+          credential: cert(serviceAccount),
         });
         this.logger.log('Firebase Admin: SDK successfully initialized.');
       }
@@ -70,7 +69,6 @@ export class FirebaseAdminService implements OnModuleInit {
     }
 
     try {
-      const { getAuth } = require('firebase-admin/auth');
       const decodedToken = await getAuth(this.firebaseApp).verifyIdToken(idToken);
       const phone = decodedToken.phone_number;
       if (!phone) {
