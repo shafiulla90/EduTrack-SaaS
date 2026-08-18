@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Request } from '@nestjs/common';
 import { TeacherService } from './teacher.service';
 
 @Controller('teachers')
@@ -6,9 +6,14 @@ export class TeacherController {
   constructor(private readonly teacherService: TeacherService) {}
 
   @Get()
-  findAll(@Request() req) {
+  findAll(
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+    @Query('department') department?: string,
+    @Request() req?: any,
+  ) {
     const tenantId = req?.user?.tenantId || 'tenant-test-001';
-    return this.teacherService.findAll(tenantId);
+    return this.teacherService.findAll(tenantId, { search, role, department });
   }
 
   @Get(':id')

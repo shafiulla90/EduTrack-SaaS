@@ -76,8 +76,31 @@ export class TeacherService {
     };
   }
 
-  async findAll(tenantId: string) {
-    return this.teacherRepo.findTeachersByTenant(tenantId);
+  async findAll(tenantId: string, filters?: any) {
+    const list = await this.teacherRepo.findTeachersByTenant(tenantId);
+    if (!filters) return list;
+    let filtered = [...list];
+    if (filters.search && typeof filters.search === 'string' && filters.search.trim()) {
+      const q = filters.search.toLowerCase().trim();
+      filtered = filtered.filter((t: any) => 
+        (t.name || t.User?.name || t.user?.name || '').toLowerCase().includes(q) ||
+        (t.employeeId || '').toLowerCase().includes(q) ||
+        (t.designation || '').toLowerCase().includes(q) ||
+        (t.user?.phone || t.phone || '').includes(q) ||
+        (t.user?.email || t.email || '').toLowerCase().includes(q)
+      );
+    }
+    if (filters.role && filters.role !== 'All') {
+      filtered = filtered.filter((t: any) => 
+        (t.User?.role || t.user?.role || t.role || '').toLowerCase() === filters.role.toLowerCase()
+      );
+    }
+    if (filters.department && filters.department !== 'All') {
+      filtered = filtered.filter((t: any) => 
+        (t.department || t.designation || '').toLowerCase().includes(filters.department.toLowerCase())
+      );
+    }
+    return filtered;
   }
 
   async findOne(id: string, tenantId: string) {

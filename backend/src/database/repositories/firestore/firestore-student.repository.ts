@@ -65,27 +65,11 @@ export class FirestoreStudentRepository implements IStudentRepository {
   async findStudentsByTenant(tenantId: string, page = 1, limit = 100, filters?: any): Promise<{ items: any[]; total: number }> {
     const tid = tenantId || 'tenant-test-001';
     
-    // First try finding directly by tenantId on studentProfiles
+    // Fetch all studentProfiles
     let snap = await this.db.collection('studentProfiles').where('tenantId', '==', tid).get();
     
-    // If empty, search users collection
     if (snap.empty) {
-      const usersSnap = await this.db.collection('users').where('tenantId', '==', tid).where('role', '==', 'STUDENT').get();
-      const userIds = usersSnap.docs.map((d) => d.id);
-      if (userIds.length > 0) {
-        const batches = [];
-        for (let i = 0; i < userIds.length; i += 30) {
-          batches.push(userIds.slice(i, i + 30));
-        }
-        const snaps = await Promise.all(batches.map((b) => this.db.collection('studentProfiles').where('userId', 'in', b).get()));
-        const docs = snaps.flatMap((s) => s.docs);
-        snap = { docs, empty: docs.length === 0 } as any;
-      }
-    }
-
-    if (snap.empty) {
-      // Fallback: fetch all studentProfiles if tenant dataset is small
-      snap = await this.db.collection('studentProfiles').limit(100).get();
+      snap = await this.db.collection('studentProfiles').limit(500).get();
     }
 
     // Pre-fetch classes and sections for label mapping
@@ -124,8 +108,9 @@ export class FirestoreStudentRepository implements IStudentRepository {
         return {
           ...data,
           name: fullName,
-          User: user || { id: (data as any).userId || doc.id, name: fullName },
-          user: user || { id: (data as any).userId || doc.id, name: fullName },
+          rollNo: (data as any).rollNo || (data as any).rollNumber || (data as any).admissionNo || 'N/A',
+          User: user || { id: (data as any).userId || doc.id, name: fullName, email: (data as any).email, phone: (data as any).phone },
+          user: user || { id: (data as any).userId || doc.id, name: fullName, email: (data as any).email, phone: (data as any).phone },
           classSection: {
             class: { id: (data as any).classId, name: className, academicYearId },
             section: { id: (data as any).sectionId, name: sectionName },
@@ -139,22 +124,39 @@ export class FirestoreStudentRepository implements IStudentRepository {
 
     // Filter results if parameters provided
     if (filters) {
-      if (filters.search) {
+      if (filters.search && typeof filters.search === 'string' && filters.search.trim()) {
         const q = filters.search.toLowerCase().trim();
         allItems = allItems.filter((s: any) =>
           (s.name || '').toLowerCase().includes(q) ||
           (s.rollNo || '').toLowerCase().includes(q) ||
-          (s.user?.phone || s.phone || s.parentPhone || '').includes(q)
+          (s.fatherName || '').toLowerCase().includes(q) ||
+          (s.motherName || '').toLowerCase().includes(q) ||
+          (s.aadharNo || '').toLowerCase().includes(q) ||
+          (s.user?.phone || s.phone || s.parentPhone || '').includes(q) ||
+          (s.user?.email || s.email || '').toLowerCase().includes(q)
         );
       }
-      if (filters.classId) {
-        allItems = allItems.filter((s: any) => s.classId === filters.classId || s.classSection?.class?.id === filters.classId);
+      if (filters.classId && filters.classId !== 'All') {
+        allItems = allItems.filter((s: any) => 
+          s.classId === filters.classId || 
+          s.className === filters.classId ||
+          s.classSection?.class?.id === filters.classId ||
+          s.classSection?.class?.name === filters.classId
+        );
       }
-      if (filters.sectionId) {
-        allItems = allItems.filter((s: any) => s.sectionId === filters.sectionId || s.classSection?.section?.id === filters.sectionId);
+      if (filters.sectionId && filters.sectionId !== 'All') {
+        allItems = allItems.filter((s: any) => 
+          s.sectionId === filters.sectionId || 
+          s.sectionName === filters.sectionId ||
+          s.classSection?.section?.id === filters.sectionId ||
+          s.classSection?.section?.name === filters.sectionId
+        );
       }
-      if (filters.academicYearId) {
-        allItems = allItems.filter((s) => s.academicYearId === filters.academicYearId || s.classSection?.class?.academicYearId === filters.academicYearId);
+      if (filters.academicYearId && filters.academicYearId !== 'All') {
+        allItems = allItems.filter((s: any) => 
+          s.academicYearId === filters.academicYearId || 
+          s.classSection?.class?.academicYearId === filters.academicYearId
+        );
       }
     }
 
