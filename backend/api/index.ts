@@ -1,9 +1,12 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/app.module';
 import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { ExpressAdapter } from '@nestjs/platform-express';
+
+// Import compiled module from dist to ensure all NestJS decorator metadata is preserved!
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { AppModule } = require('../dist/app.module');
 
 const server = express();
 let cachedApp: any;
