@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from './modules/auth/auth.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { APP_GUARD } from '@nestjs/core';
@@ -20,11 +21,17 @@ import { ComplaintBoxModule } from './modules/complaint-box/complaint-box.module
 import { TeacherPortalModule } from './modules/teacher-portal/teacher-portal.module';
 import { ParentPortalModule } from './modules/parent-portal/parent-portal.module';
 import { AcademicsModule } from './modules/academics/academics.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { TenantContextMiddleware } from './common/middleware/tenant-context.middleware';
 import { AppController } from './app.controller';
 
 @Module({
   controllers: [AppController],
   imports: [
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'edutrack_secret_2026_!@#',
+      signOptions: { expiresIn: '24h' },
+    }),
     FirebaseModule,
     DatabaseProviderModule,
     AuthModule,
@@ -44,6 +51,7 @@ import { AppController } from './app.controller';
     TeacherPortalModule,
     ParentPortalModule,
     AcademicsModule,
+    DashboardModule,
   ],
   providers: [
     {
@@ -52,4 +60,8 @@ import { AppController } from './app.controller';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantContextMiddleware).forRoutes('*');
+  }
+}

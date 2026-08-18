@@ -178,8 +178,23 @@ export class FirestoreStudentRepository implements IStudentRepository {
     const ref = this.db.collection('studentProfiles').doc(id);
     const payload = sanitizePayload(data);
     await ref.set(payload, { merge: true });
+    
     const doc = await ref.get();
-    return { id: doc.id, ...doc.data() };
+    const studentData = { id: doc.id, ...doc.data() };
+    const userId = (studentData as any).userId;
+
+    if (userId) {
+      const userUpdate: any = {};
+      if (data.name) userUpdate.name = data.name;
+      if (data.email) userUpdate.email = data.email;
+      if (data.phone) userUpdate.phone = data.phone;
+      if (data.status) userUpdate.isActive = data.status === 'Active';
+      if (Object.keys(userUpdate).length > 0) {
+        await this.db.collection('users').doc(userId).set(userUpdate, { merge: true }).catch(() => {});
+      }
+    }
+
+    return studentData;
   }
 
   async deleteProfile(id: string): Promise<any> {
