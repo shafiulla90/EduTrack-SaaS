@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -9,7 +10,9 @@ let cachedApp: any;
 
 async function bootstrap() {
   if (!cachedApp) {
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+    const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+      logger: ['error', 'warn', 'log'],
+    });
     app.enableCors({
       origin: true,
       credentials: true,
@@ -22,6 +25,15 @@ async function bootstrap() {
 }
 
 export default async function handler(req: any, res: any) {
-  await bootstrap();
-  server(req, res);
+  try {
+    await bootstrap();
+    server(req, res);
+  } catch (error: any) {
+    console.error('CRITICAL SERVERLESS BOOTSTRAP ERROR:', error);
+    res.status(500).json({
+      error: 'Serverless Bootstrap Failed',
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+    });
+  }
 }
