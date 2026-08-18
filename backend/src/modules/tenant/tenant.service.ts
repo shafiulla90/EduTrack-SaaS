@@ -92,6 +92,10 @@ export class TenantService {
         schoolType: tenant.schoolType || 'School',
         adminName: tenant.adminName || tenant.name || 'School Administrator',
         schoolLogo: tenant.logoUrl || null,
+        email: tenant.email || '',
+        mobileNumber: tenant.adminPhone || tenant.phone || '',
+        address: tenant.address || '',
+        tenant,
       },
       subscription: {
         plan: 'PRO',
