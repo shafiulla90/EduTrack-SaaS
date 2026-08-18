@@ -20,8 +20,10 @@ import { ComplaintBoxModule } from './modules/complaint-box/complaint-box.module
 import { TeacherPortalModule } from './modules/teacher-portal/teacher-portal.module';
 import { ParentPortalModule } from './modules/parent-portal/parent-portal.module';
 import { AcademicsModule } from './modules/academics/academics.module';
+import { AppController } from './app.controller';
 
 @Module({
+  controllers: [AppController],
   imports: [
     FirebaseModule,
     DatabaseProviderModule,

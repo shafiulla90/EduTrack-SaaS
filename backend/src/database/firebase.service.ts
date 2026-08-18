@@ -24,9 +24,14 @@ export class FirebaseService implements OnModuleInit, OnModuleDestroy {
     const projectId = process.env.FIREBASE_PROJECT_ID || 'edutrack-52e6c';
     const credentialsPath = process.env.FIREBASE_CREDENTIALS_PATH;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY
-      ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
-      : undefined;
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    if (privateKey) {
+      privateKey = privateKey.trim();
+      if ((privateKey.startsWith('"') && privateKey.endsWith('"')) || (privateKey.startsWith("'") && privateKey.endsWith("'"))) {
+        privateKey = privateKey.substring(1, privateKey.length - 1);
+      }
+      privateKey = privateKey.replace(/\\n/g, '\n');
+    }
 
     let credential;
 
