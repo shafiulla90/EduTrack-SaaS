@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, Inject, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, ConflictException, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import { ITenantRepository } from '../../common/interfaces/tenant.repository.interface';
 import { IUserRepository } from '../../common/interfaces/user.repository.interface';
+import { FirebaseService } from '../../database/firebase.service';
 
 @Injectable()
 export class TenantService {
@@ -10,6 +11,7 @@ export class TenantService {
     @Inject('ITenantRepository') private readonly tenantRepo: ITenantRepository,
     @Inject('IUserRepository') private readonly userRepo: IUserRepository,
     private readonly jwtService: JwtService,
+    @Optional() private readonly firebaseService?: FirebaseService,
   ) {}
 
   async registerSchool(data: any) {
@@ -77,6 +79,42 @@ export class TenantService {
   async getSetupStatus(tenantId?: string) {
     const tenants = await this.tenantRepo.findAll();
     const tenant = tenants.find((t: any) => t.id === tenantId) || tenants[0] || { id: 'tenant-test-001', name: 'EduTrack School' };
+    const tid = tenant.id || 'tenant-test-001';
+
+    let classesCount = 0;
+    let teachersCount = 0;
+    let studentsCount = 0;
+
+    if (this.firebaseService) {
+      try {
+        const db = this.firebaseService.getFirestore();
+        if (db) {
+          const [classesSnap, teachersSnap, studentsSnap] = await Promise.all([
+            db.collection('tenants').doc(tid).collection('classes').get().catch(() => null),
+            db.collection('users').where('tenantId', '==', tid).where('role', 'in', ['TEACHER', 'STAFF', 'DRIVER']).get().catch(() => null),
+            db.collection('studentProfiles').where('tenantId', '==', tid).get().catch(() => null),
+          ]);
+
+          if (classesSnap && !classesSnap.empty) {
+            classesCount = classesSnap.size;
+          } else {
+            const rootClasses = await db.collection('classes').where('tenantId', '==', tid).get().catch(() => null);
+            if (rootClasses) classesCount = rootClasses.size;
+          }
+
+          if (teachersSnap) teachersCount = teachersSnap.size;
+
+          if (studentsSnap && !studentsSnap.empty) {
+            studentsCount = studentsSnap.size;
+          } else {
+            const altStudents = await db.collection('users').where('tenantId', '==', tid).where('role', '==', 'STUDENT').get().catch(() => null);
+            if (altStudents) studentsCount = altStudents.size;
+          }
+        }
+      } catch (err) {
+        console.warn('[getSetupStatus] Count calculation notice:', err);
+      }
+    }
 
     return {
       success: true,
@@ -84,10 +122,10 @@ export class TenantService {
         id: 'user-active',
         name: tenant.adminName || tenant.name || 'School Administrator',
         role: 'SCHOOL_ADMIN',
-        tenantId: tenant.id,
+        tenantId: tid,
       },
       setup: {
-        tenantId: tenant.id,
+        tenantId: tid,
         schoolName: tenant.name || 'EduTrack School',
         schoolType: tenant.schoolType || 'School',
         adminName: tenant.adminName || tenant.name || 'School Administrator',
@@ -95,6 +133,9 @@ export class TenantService {
         email: tenant.email || '',
         mobileNumber: tenant.adminPhone || tenant.phone || '',
         address: tenant.address || '',
+        classesCount,
+        teachersCount,
+        studentsCount,
         tenant,
       },
       subscription: {
