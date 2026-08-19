@@ -873,19 +873,34 @@ export default function FeesBillingPage() {
                               className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                             />
                           </td>
-                          <td className="px-4 py-3 font-bold text-slate-800">{fee.name}</td>
+                          <td className="px-4 py-3 font-bold text-slate-800">
+                            <div className="flex items-center gap-2">
+                              <span>{fee.name}</span>
+                              {isPaid && (
+                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                  ✓ PAID
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-right font-mono">₹{fmt(fee.total)}</td>
                           <td className="px-4 py-3 text-right font-mono text-slate-400">₹{fmt(fee.discount)} ({fee.discountPercent || 0}%)</td>
                           <td className="px-4 py-3 text-right font-mono text-slate-500">₹{fmt(fee.paid)}</td>
-                          <td className="px-4 py-3 text-right font-mono text-rose-600 font-bold">₹{fmt(fee.balance)}</td>
+                          <td className={`px-4 py-3 text-right font-mono font-bold ${isPaid ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            ₹{fmt(fee.balance)}
+                          </td>
                           <td className="px-4 py-3 text-right">
-                            <input
-                              type="number"
-                              value={fee.isSelected ? fee.input : 0}
-                              disabled={!fee.isSelected || isPaid}
-                              onChange={(e) => handleInputChange(fee.id, Number(e.target.value))}
-                              className="w-24 bg-white border border-slate-200 rounded px-2 py-1 text-right font-mono text-slate-800 font-bold outline-none"
-                            />
+                            {isPaid ? (
+                              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded inline-block">N/A</span>
+                            ) : (
+                              <input
+                                type="number"
+                                value={fee.isSelected ? fee.input : 0}
+                                disabled={!fee.isSelected || isPaid}
+                                onChange={(e) => handleInputChange(fee.id, Number(e.target.value))}
+                                className="w-24 bg-white border border-slate-200 rounded px-2 py-1 text-right font-mono text-slate-800 font-bold outline-none"
+                              />
+                            )}
                           </td>
                         </tr>
                       );

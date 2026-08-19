@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { IBillingRepository } from '../../common/interfaces/billing.repository.interface';
 import { IAcademicRepository } from '../../common/interfaces/academic.repository.interface';
 import { IStudentRepository } from '../../common/interfaces/student.repository.interface';
@@ -90,6 +90,14 @@ export class BillingService {
     const existingPaid = Number(currentInvoice?.paidAmount || 0);
 
     // Cumulative calculation
+    const currentRemaining = Math.max(0, totalInvoiceAmount - existingPaid);
+    if (currentRemaining <= 0) {
+      throw new BadRequestException('Invoice for this student is already fully paid.');
+    }
+    if (paymentAmount > currentRemaining) {
+      throw new BadRequestException(`Payment amount ₹${paymentAmount} exceeds remaining balance of ₹${currentRemaining}.`);
+    }
+
     const newPaidAmount = existingPaid + paymentAmount;
     const newBalance = Math.max(0, totalInvoiceAmount - newPaidAmount);
 
@@ -607,6 +615,7 @@ export class BillingService {
 
     const formatted = this.formatStudentForBilling(profile);
     return {
+      ...formatted,
       account: formatted.account,
       student: formatted
     };
