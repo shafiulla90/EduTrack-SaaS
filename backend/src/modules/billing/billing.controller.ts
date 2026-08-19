@@ -136,4 +136,11 @@ export class BillingController {
     const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.getSectionsOptions(classId, tenantId);
   }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search students for fee payment' })
+  async searchStudents(@Query('searchTerm') searchTerm: string, @Request() req: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    return this.billingService.searchStudents(searchTerm, tenantId);
+  }
 }

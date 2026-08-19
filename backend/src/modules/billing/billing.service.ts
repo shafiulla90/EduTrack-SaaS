@@ -247,4 +247,75 @@ export class BillingService {
       { value: 'sec-c', label: 'Section C' }
     ];
   }
+
+  async searchStudents(searchTerm: string, tenantId?: string) {
+    const tid = tenantId || 'tenant-test-001';
+    const q = (searchTerm || '').trim().toLowerCase();
+
+    let students: any[] = [];
+    try {
+      const res: any = await this.studentRepo.findStudentsByTenant(tid, 1, 500, { search: q });
+      students = Array.isArray(res) ? res : (res?.items || []);
+    } catch (err) {
+      console.warn('[searchStudents] Error fetching students:', err);
+    }
+
+    if (!q) {
+      return students.map((s) => this.formatStudentForBilling(s));
+    }
+
+    const filtered = students.filter((s) => {
+      const name = (s.User?.name || s.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`).toLowerCase();
+      const rollNo = (s.rollNo || s.rollNumber || '').toLowerCase();
+      const phone = (s.User?.phone || s.phone || s.mobileNumber || s.contact || '').toLowerCase();
+      const email = (s.User?.email || s.email || '').toLowerCase();
+      const fatherName = (s.fatherName || s.parentName || '').toLowerCase();
+      const motherName = (s.motherName || '').toLowerCase();
+      const aadharNo = (s.aadharNo || s.aadhar || '').toLowerCase();
+      const className = (s.classSection?.class?.name || s.className || s.class || '').toLowerCase();
+      const sectionName = (s.classSection?.section?.name || s.sectionName || s.section || '').toLowerCase();
+
+      return (
+        name.includes(q) ||
+        rollNo.includes(q) ||
+        phone.includes(q) ||
+        email.includes(q) ||
+        fatherName.includes(q) ||
+        motherName.includes(q) ||
+        aadharNo.includes(q) ||
+        className.includes(q) ||
+        sectionName.includes(q)
+      );
+    });
+
+    return filtered.map((s) => this.formatStudentForBilling(s));
+  }
+
+  private formatStudentForBilling(s: any) {
+    const name = s.User?.name || s.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Student Record';
+    const phone = s.User?.phone || s.phone || s.mobileNumber || s.contact || 'N/A';
+    const email = s.User?.email || s.email || 'N/A';
+    const className = s.classSection?.class?.name || s.className || s.class || 'Class 1';
+    const sectionName = s.classSection?.section?.name || s.sectionName || s.section || 'A';
+
+    return {
+      id: s.id,
+      studentId: s.id,
+      name,
+      studentName: name,
+      rollNo: s.rollNo || 'N/A',
+      phone,
+      email,
+      fatherName: s.fatherName || 'N/A',
+      motherName: s.motherName || 'N/A',
+      class: className,
+      className,
+      section: sectionName,
+      sectionName,
+      classSection: `${className} - ${sectionName}`,
+      outstandingAmount: s.outstandingAmount !== undefined ? s.outstandingAmount : 15000,
+      totalDue: s.totalDue !== undefined ? s.totalDue : 15000,
+      status: 'Active',
+    };
+  }
 }
