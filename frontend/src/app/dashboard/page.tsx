@@ -74,6 +74,17 @@ function AdminDashboardOverview() {
     10000
   );
 
+  const classesCount = setupStatus?.classesCount ?? setupStatus?.setup?.classesCount ?? stats.classesCount ?? 0;
+  const teachersCount = setupStatus?.teachersCount ?? setupStatus?.setup?.teachersCount ?? stats.teachersCount ?? 0;
+  const studentsCount = setupStatus?.studentsCount ?? setupStatus?.setup?.studentsCount ?? stats.studentsCount ?? 0;
+
+  let completedSteps = 1;
+  if (classesCount > 0) completedSteps++;
+  if (teachersCount > 0) completedSteps++;
+  if (studentsCount > 0) completedSteps++;
+  const completionPercentage = setupStatus?.completionPercentage ?? Math.round((completedSteps / 4) * 100);
+  const setupCompleted = setupStatus?.setupCompleted ?? completionPercentage === 100;
+
   return (
     <div className="space-y-6 animate-in">
       {/* Page Header matching LWC layout */}
@@ -120,7 +131,7 @@ function AdminDashboardOverview() {
         </div>
       </div>
 
-      {setupStatus && !setupStatus.setupCompleted && showBanner && (
+      {!setupCompleted && showBanner && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm relative">
           <div className="flex items-start sm:items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
@@ -180,18 +191,18 @@ function AdminDashboardOverview() {
                     strokeWidth="3.5"
                     fill="transparent"
                     strokeDasharray={`${2 * Math.PI * 20}`}
-                    strokeDashoffset={`${2 * Math.PI * 20 * (1 - setupStatus.completionPercentage / 100)}`}
+                    strokeDashoffset={`${2 * Math.PI * 20 * (1 - completionPercentage / 100)}`}
                     strokeLinecap="round"
                   />
                 </svg>
-                <span className="absolute text-[10px] sm:text-[11px] font-bold text-slate-700">{setupStatus.completionPercentage}%</span>
+                <span className="absolute text-[10px] sm:text-[11px] font-bold text-slate-700">{completionPercentage}%</span>
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Profile Setup</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {setupStatus.setupCompleted ? 'Completed' : 'Complete Profile'}
+                  {setupCompleted ? 'Completed' : 'Complete Profile'}
                 </div>
-                {!setupStatus.setupCompleted && (
+                {!setupCompleted && (
                   <Link href="/dashboard/setup-checklist" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                     Complete now
                   </Link>
@@ -202,12 +213,12 @@ function AdminDashboardOverview() {
             {/* Classes Created */}
             <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-4 rounded-xl flex items-center gap-2.5 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
-                {setupStatus.classesCount}
+                {classesCount}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Classes Created</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {setupStatus.classesCount > 0 ? `${setupStatus.classesCount} Active Class(es)` : 'No classes added'}
+                  {classesCount > 0 ? `${classesCount} Active Class(es)` : 'No classes added'}
                 </div>
                 <Link href="/dashboard/teachers" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                   Add Classes
@@ -218,12 +229,12 @@ function AdminDashboardOverview() {
             {/* Teachers Added */}
             <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-4 rounded-xl flex items-center gap-2.5 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
-                {setupStatus.teachersCount}
+                {teachersCount}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Teachers Added</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {setupStatus.teachersCount > 0 ? `${setupStatus.teachersCount} Faculty Registered` : 'No faculty added'}
+                  {teachersCount > 0 ? `${teachersCount} Faculty Registered` : 'No faculty added'}
                 </div>
                 <Link href="/dashboard/teachers" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                   Add Teachers
@@ -234,12 +245,12 @@ function AdminDashboardOverview() {
             {/* Students Added */}
             <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-4 rounded-xl flex items-center gap-2.5 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
-                {setupStatus.studentsCount}
+                {studentsCount}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[9px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Students Added</div>
                 <div className="text-[11px] sm:text-xs font-semibold text-slate-800 mt-0.5 truncate">
-                  {setupStatus.studentsCount > 0 ? `${setupStatus.studentsCount} Active Student(s)` : 'No students added'}
+                  {studentsCount > 0 ? `${studentsCount} Active Student(s)` : 'No students added'}
                 </div>
                 <Link href="/dashboard/admissions" className="text-[10px] sm:text-[11px] text-blue-600 hover:underline font-medium mt-0.5 block truncate">
                   New Admission

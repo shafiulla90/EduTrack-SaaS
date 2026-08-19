@@ -116,8 +116,20 @@ export class TenantService {
       }
     }
 
+    let completedSteps = 1;
+    if (classesCount > 0) completedSteps++;
+    if (teachersCount > 0) completedSteps++;
+    if (studentsCount > 0) completedSteps++;
+    const completionPercentage = Math.round((completedSteps / 4) * 100);
+    const setupCompleted = completionPercentage === 100;
+
     return {
       success: true,
+      classesCount,
+      teachersCount,
+      studentsCount,
+      completionPercentage,
+      setupCompleted,
       currentUser: {
         id: 'user-active',
         name: tenant.adminName || tenant.name || 'School Administrator',
@@ -136,6 +148,8 @@ export class TenantService {
         classesCount,
         teachersCount,
         studentsCount,
+        completionPercentage,
+        setupCompleted,
         tenant,
       },
       subscription: {
