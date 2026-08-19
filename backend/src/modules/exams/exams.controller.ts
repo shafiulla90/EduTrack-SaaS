@@ -7,6 +7,20 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 export class ExamsController {
   constructor(private readonly examsService: ExamsService) {}
 
+  @Get('subjects')
+  @ApiOperation({ summary: 'Get exam subjects' })
+  async getSubjects(@Request() req?: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    return this.examsService.getSubjects(tenantId);
+  }
+
+  @Get('report-card/:studentId')
+  @ApiOperation({ summary: 'Get student report card PDF data' })
+  async getStudentReportCard(@Param('studentId') studentId: string, @Request() req?: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    return this.examsService.getStudentReportCard(tenantId, studentId);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create new exam' })
   async create(
