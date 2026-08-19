@@ -241,9 +241,67 @@ export class BillingService {
     const rollNo = profile?.rollNo || 'STU-1001';
 
     const invoiceNo = payment?.receiptNumber || invoice?.invoiceNo || invoiceId.slice(0, 10).toUpperCase();
-    const paidAmount = payment?.amount || invoice?.paidAmount || 2500;
-    const totalAmount = invoice?.totalAmount || 15000;
-    const remainingBalance = invoice?.remainingBalance !== undefined ? invoice.remainingBalance : Math.max(0, totalAmount - paidAmount);
+    const currentPayment = Number(payment?.amount || invoice?.paidAmount || 2500);
+
+    let totalPaidAll = 0;
+    try {
+      const snap = await (this.billingRepo as any).db
+        .collection('tenants')
+        .doc(tid)
+        .collection('payments')
+        .where('studentId', '==', studentId)
+        .get();
+
+      if (!snap.empty) {
+        totalPaidAll = snap.docs.reduce((sum: number, doc: any) => {
+          const d = doc.data();
+          if (d.status === 'SUCCESS' || !d.status) {
+            const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+            return sum + amt;
+          }
+          return sum;
+        }, 0);
+      }
+    } catch (err) {}
+
+    if (totalPaidAll <= 0) {
+      totalPaidAll = currentPayment;
+    }
+
+    const totalFeeAmount = 15000;
+    const previouslyPaid = Math.max(0, totalPaidAll - currentPayment);
+    const remainingBalance = Math.max(0, totalFeeAmount - totalPaidAll);
+
+    // Compute fee item level breakdown
+    const baseFeeItems = [
+      { particulars: 'Tuition Fee', totalAmount: 5000 },
+      { particulars: 'Admission & Admin Fee', totalAmount: 2500 },
+      { particulars: 'Transport / Van Fee', totalAmount: 5000 },
+      { particulars: 'Activity & Sports Fee', totalAmount: 2500 },
+    ];
+
+    let remPrev = previouslyPaid;
+    let remCurr = currentPayment;
+
+    const detailedItems = baseFeeItems.map((item) => {
+      const itemPrevPaid = Math.min(item.totalAmount, remPrev);
+      remPrev -= itemPrevPaid;
+
+      const itemCurrBal = item.totalAmount - itemPrevPaid;
+      const itemCurrPaid = Math.min(itemCurrBal, remCurr);
+      remCurr -= itemCurrPaid;
+
+      const itemRemBal = item.totalAmount - itemPrevPaid - itemCurrPaid;
+
+      return {
+        particulars: item.particulars,
+        totalAmount: item.totalAmount,
+        previouslyPaid: itemPrevPaid,
+        currentPayment: itemCurrPaid,
+        remainingBalance: itemRemBal,
+        amount: itemCurrPaid > 0 ? itemCurrPaid : item.totalAmount,
+      };
+    });
 
     return {
       schoolName,
@@ -262,16 +320,15 @@ export class BillingService {
       sectionName,
       studentDob: profile?.dob || '15 May 2012',
       addressVillage: profile?.address || 'Plot No. 12, Vikas Nagar, New Delhi - 110009',
-      totalAmount: paidAmount,
-      paidAmount,
+      totalFeeAmount,
+      totalDiscount: 0,
+      previouslyPaid,
+      currentPayment,
+      paidAmount: currentPayment,
       remainingBalance,
-      invoiceTotal: totalAmount,
-      items: (payment?.items && payment.items.length > 0) ? payment.items.map((i: any) => ({
-        particulars: i.productName || i.name || 'Fee Particular',
-        amount: Number(i.amount || paidAmount)
-      })) : [
-        { particulars: 'Tuition & Academic Fee Collection', amount: Number(paidAmount) }
-      ]
+      totalAmount: currentPayment,
+      invoiceTotal: totalFeeAmount,
+      items: detailedItems,
     };
   }
 
