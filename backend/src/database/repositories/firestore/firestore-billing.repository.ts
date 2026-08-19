@@ -118,6 +118,48 @@ export class FirestoreBillingRepository implements IBillingRepository {
     return { id: doc.id, ...data, ...updatePayload };
   }
 
+  async createPayment(paymentData: any): Promise<any> {
+    const tenantId = paymentData.tenantId || 'tenant-test-001';
+    const ref = paymentData.id
+      ? this.db.collection('tenants').doc(tenantId).collection('payments').doc(paymentData.id)
+      : this.db.collection('tenants').doc(tenantId).collection('payments').doc();
+    const payload = {
+      ...paymentData,
+      id: ref.id,
+      tenantId,
+      amount: Number(paymentData.amount || 0),
+      amountCents: toCents(paymentData.amount || 0),
+      createdAt: paymentData.createdAt || new Date().toISOString(),
+    };
+    await ref.set(payload, { merge: true });
+    return payload;
+  }
+
+  async findPaymentById(id: string, tenantId?: string): Promise<any | null> {
+    const tid = tenantId || 'tenant-test-001';
+    const doc = await this.db.collection('tenants').doc(tid).collection('payments').doc(id).get();
+    if (doc.exists) return { id: doc.id, ...doc.data() };
+
+    const snap = await this.db.collectionGroup('payments').where('id', '==', id).limit(1).get();
+    if (!snap.empty) {
+      return { id: snap.docs[0].id, ...snap.docs[0].data() };
+    }
+    return null;
+  }
+
+  async getRecentPayments(tenantId: string, limit = 50): Promise<any[]> {
+    const tid = tenantId || 'tenant-test-001';
+    const snap = await this.db.collection('tenants').doc(tid).collection('payments').limit(limit).get();
+    return snap.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        amount: data.amountCents !== undefined ? fromCents(data.amountCents) : Number(data.amount || 0),
+      };
+    });
+  }
+
   async findExpensesByTenant(tenantId: string): Promise<any[]> {
     const snap = await this.db.collection('tenants').doc(tenantId).collection('expenses').get();
     return snap.docs.map((doc) => {
