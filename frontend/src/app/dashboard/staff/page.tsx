@@ -627,9 +627,14 @@ export default function SchoolStaffPage() {
               <select
                 value={selectedPayrollMonth}
                 onChange={e => setSelectedPayrollMonth(e.target.value)}
-                className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none bg-white"
+                className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none bg-white font-medium cursor-pointer"
               >
-                {['Jun 2026','May 2026','Apr 2026','Mar 2026'].map(m => <option key={m}>{m}</option>)}
+                {[
+                  'Apr 2026', 'May 2026', 'Jun 2026', 'Jul 2026', 'Aug 2026', 'Sep 2026',
+                  'Oct 2026', 'Nov 2026', 'Dec 2026', 'Jan 2027', 'Feb 2027', 'Mar 2027',
+                  'Apr 2025', 'May 2025', 'Jun 2025', 'Jul 2025', 'Aug 2025', 'Sep 2025',
+                  'Oct 2025', 'Nov 2025', 'Dec 2025', 'Jan 2026', 'Feb 2026', 'Mar 2026'
+                ].map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
           </div>
