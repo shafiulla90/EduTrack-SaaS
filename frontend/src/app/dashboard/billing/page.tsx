@@ -111,10 +111,21 @@ export default function FeesBillingPage() {
     const delayDebounce = setTimeout(async () => {
       if (search.trim().length >= 2) {
         try {
-          const res = await api.get(`/billing/students/search`, {
-            params: { searchTerm: search }
-          });
-          setMatchingStudents(res.data);
+          let res;
+          try {
+            res = await api.get(`/billing/students/search`, {
+              params: { searchTerm: search }
+            });
+          } catch (err: any) {
+            if (err.response?.status === 404) {
+              res = await api.get(`/billing/search`, {
+                params: { searchTerm: search }
+              });
+            } else {
+              throw err;
+            }
+          }
+          setMatchingStudents(res.data || []);
         } catch (err) {
           console.error('Error searching students', err);
         }
