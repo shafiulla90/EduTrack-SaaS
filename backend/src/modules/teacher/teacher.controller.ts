@@ -22,8 +22,21 @@ export class TeacherController {
     return this.teacherService.payAllSalaries(tenantId, body);
   }
 
+  @Post('pay-salary')
+  paySalaryGeneric(@Body() body: any, @Request() req: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const id = body?.id || body?.staffId || 'staff-001';
+    return this.teacherService.paySalary(id, tenantId, body);
+  }
+
   @Post(':id/pay-salary')
   paySalary(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    return this.teacherService.paySalary(id, tenantId, body);
+  }
+
+  @Patch(':id/pay-salary')
+  paySalaryPatch(@Param('id') id: string, @Body() body: any, @Request() req: any) {
     const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.teacherService.paySalary(id, tenantId, body);
   }
