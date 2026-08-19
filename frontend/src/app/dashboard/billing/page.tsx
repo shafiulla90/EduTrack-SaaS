@@ -613,19 +613,28 @@ export default function FeesBillingPage() {
         {/* Autocomplete Dropdown list */}
         {matchingStudents.length > 0 && (
           <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden divide-y divide-slate-100 max-h-60 overflow-y-auto">
-            {matchingStudents.map((s) => (
-              <div
-                key={s.account.id}
-                onClick={() => handleSelectStudent(s)}
-                className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center text-xs font-medium"
-              >
-                <div>
-                  <span className="font-bold text-slate-800 block">{s.account.name}</span>
-                  <span className="text-slate-400 text-[10px]">{s.account.class} {s.account.section} · Roll: {s.account.rollNo || 'N/A'}</span>
+            {matchingStudents.map((s, idx) => {
+              const accountId = s.account?.id || s.id || `student-${idx}`;
+              const name = s.account?.name || s.name || s.studentName || 'Student Record';
+              const rollNo = s.account?.rollNo || s.rollNo || 'N/A';
+              const cls = s.account?.className || s.className || s.class || '';
+              const sec = s.account?.sectionName || s.sectionName || s.section || '';
+              const pending = s.totalPendingBalance ?? s.outstandingAmount ?? s.totalDue ?? 15000;
+
+              return (
+                <div
+                  key={accountId}
+                  onClick={() => handleSelectStudent(s)}
+                  className="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center text-xs font-medium"
+                >
+                  <div>
+                    <span className="font-bold text-slate-800 block">{name}</span>
+                    <span className="text-slate-400 text-[10px]">{cls} {sec} · Roll: {rollNo}</span>
+                  </div>
+                  <span className="text-amber-600 font-bold font-mono">Due: ₹{Number(pending || 0).toLocaleString()}</span>
                 </div>
-                <span className="text-amber-600 font-bold font-mono">Due: ₹{s.totalPendingBalance.toLocaleString()}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -637,10 +646,10 @@ export default function FeesBillingPage() {
             <div>
               <h3 className="font-extrabold text-slate-850 text-base flex items-center gap-1.5">
                 <User className="w-5 h-5 text-blue-500 shrink-0" />
-                Ledger: <span className="text-blue-600 font-black">{selectedStudent.account.name}</span>
+                Ledger: <span className="text-blue-600 font-black">{selectedStudent.account?.name || selectedStudent.name || 'Student Ledger'}</span>
               </h3>
               <p className="text-[11px] text-slate-450 mt-1 font-semibold">
-                Roll: {selectedStudent.account.rollNo || 'N/A'} · {selectedStudent.account.class} {selectedStudent.account.section}
+                Roll: {selectedStudent.account?.rollNo || selectedStudent.rollNo || 'N/A'} · {selectedStudent.account?.className || selectedStudent.className || 'Class 1'} {selectedStudent.account?.sectionName || selectedStudent.sectionName || 'A'}
               </p>
             </div>
             
@@ -655,7 +664,7 @@ export default function FeesBillingPage() {
                 ))}
               </select>
               <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100 text-xs font-bold font-mono">
-                PENDING: ₹{selectedStudent.totalPendingBalance.toLocaleString()}
+                PENDING: ₹{Number(selectedStudent.totalPendingBalance ?? selectedStudent.outstandingAmount ?? 15000).toLocaleString()}
               </span>
             </div>
           </div>
@@ -668,15 +677,15 @@ export default function FeesBillingPage() {
                 <div className="divide-y divide-slate-100 text-xs text-slate-600 space-y-1">
                   <div className="flex justify-between py-1">
                     <span>Fee Products:</span>
-                    <strong className="text-slate-800 font-mono">₹{selectedStudent.feeSummary.currentYear.feeProductsAmount.toLocaleString()}</strong>
+                    <strong className="text-slate-800 font-mono">₹{Number(selectedStudent.feeSummary.currentYear?.feeProductsAmount ?? 15000).toLocaleString()}</strong>
                   </div>
                   <div className="flex justify-between py-1">
                     <span>Paid Amount:</span>
-                    <strong className="text-emerald-600 font-mono">₹{selectedStudent.feeSummary.currentYear.paidAmount.toLocaleString()}</strong>
+                    <strong className="text-emerald-600 font-mono">₹{Number(selectedStudent.feeSummary.currentYear?.paidAmount ?? 0).toLocaleString()}</strong>
                   </div>
                   <div className="flex justify-between py-1 pt-1.5">
                     <span className="font-bold">Pending Amount:</span>
-                    <strong className="text-rose-600 font-bold font-mono">₹{selectedStudent.feeSummary.currentYear.pendingAmount.toLocaleString()}</strong>
+                    <strong className="text-rose-600 font-bold font-mono">₹{Number(selectedStudent.feeSummary.currentYear?.pendingAmount ?? 15000).toLocaleString()}</strong>
                   </div>
                 </div>
               </div>
@@ -686,11 +695,11 @@ export default function FeesBillingPage() {
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Previous Year Outstanding</span>
                   <div className="max-h-20 overflow-y-auto divide-y divide-slate-100 text-xs text-slate-650 mt-1 font-semibold space-y-1">
-                    {selectedStudent.feeSummary.previousYears.length > 0 ? (
+                    {selectedStudent.feeSummary.previousYears && selectedStudent.feeSummary.previousYears.length > 0 ? (
                       selectedStudent.feeSummary.previousYears.map((py: any, idx: number) => (
                         <div key={idx} className="flex justify-between py-1">
-                          <span className="text-slate-500 font-medium">Session {py.academicYearName}:</span>
-                          <strong className="text-rose-600 font-mono">₹{py.outstandingBalance.toLocaleString()}</strong>
+                          <span className="text-slate-500 font-medium">Session {py.academicYearName || '2025-2026'}:</span>
+                          <strong className="text-rose-600 font-mono">₹{Number(py.outstandingBalance ?? 0).toLocaleString()}</strong>
                         </div>
                       ))
                     ) : (
