@@ -438,25 +438,28 @@ function AdminDashboardOverview() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
-                    {displayAdmissions.map((adm) => (
-                      <tr key={adm.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            {adm.profilePhotoUrl ? (
-                              <img src={adm.profilePhotoUrl} alt={adm.name} className="w-9 h-9 rounded-lg object-cover border border-slate-200" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-xs select-none">
-                                {adm.avatar || adm.name?.charAt(0) || 'S'}
-                              </div>
-                            )}
-                            <div className="font-semibold text-slate-800">{adm.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-500 font-mono">{adm.rollNo}</td>
-                        <td className="px-4 py-3 text-slate-500">{adm.class || adm.classSection || `${adm.className || 'Grade 1'} - ${adm.sectionName || 'A'}`}</td>
-                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{adm.joiningDate}</td>
-                      </tr>
-                    ))}
+                    {displayAdmissions.map((adm) => {
+                      const photoSrc = adm.profilePhotoUrl || adm.photo || adm.avatarUrl || adm.photoUrl || adm.imageUrl;
+                      return (
+                        <tr key={adm.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              {photoSrc ? (
+                                <img src={photoSrc} alt={adm.name} className="w-9 h-9 rounded-lg object-cover border border-slate-200" />
+                              ) : (
+                                <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-500 to-indigo-500 text-white flex items-center justify-center font-bold text-xs select-none">
+                                  {adm.avatar || adm.name?.charAt(0) || 'S'}
+                                </div>
+                              )}
+                              <div className="font-semibold text-slate-800">{adm.name}</div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 font-mono">{adm.rollNo}</td>
+                          <td className="px-4 py-3 text-slate-500">{adm.class || adm.classSection || `${adm.className || 'Grade 1'} - ${adm.sectionName || 'A'}`}</td>
+                          <td className="px-4 py-3 text-slate-400 font-mono text-xs">{adm.joiningDate}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -511,7 +514,10 @@ function AdminDashboardOverview() {
                   <tbody className="divide-y divide-slate-100 text-[13px] text-slate-600 font-medium">
                     {displayPayments.map((pay) => {
                       const pType = pay.type || 'Fee Payment';
-                      const pName = pay.particulars || pay.name || pay.studentName || 'Fee Collection';
+                      let pName = pay.particulars || pay.name || pay.studentName;
+                      if (!pName || pName.toLowerCase() === 'student') {
+                        pName = 'Fee Collection';
+                      }
                       const isFee = pType === 'Fee Payment';
                       const pDate = new Date(pay.date).toLocaleDateString('en-IN') !== 'Invalid Date'
                         ? new Date(pay.date).toLocaleDateString('en-IN')

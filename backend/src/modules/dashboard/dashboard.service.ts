@@ -29,13 +29,14 @@ export class DashboardService {
     const classes = await this.academicRepo.findClasses(tid);
     const classesCount = classes.length;
 
-    // 4. Build Student Name Map for Transaction Resolution
-    const studentMap = new Map<string, string>();
+    // 4. Build Student Name & Profile Map for Transaction Resolution
+    const studentMap = new Map<string, any>();
     students.forEach((s: any) => {
       const sName = s.name || s.user?.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`.trim();
-      if (sName && sName !== 'Student') {
-        studentMap.set(s.id, sName);
-        if (s.userId) studentMap.set(s.userId, sName);
+      if (sName && sName.toLowerCase() !== 'student') {
+        if (s.id) studentMap.set(s.id, s);
+        if (s.userId) studentMap.set(s.userId, s);
+        if (s.rollNo) studentMap.set(s.rollNo, s);
       }
     });
 
@@ -52,9 +53,28 @@ export class DashboardService {
           if (d.status === 'SUCCESS' || !d.status) {
             const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
             totalRevenue += amt;
-            const resolvedName = (d.studentName && d.studentName !== 'Student')
-              ? d.studentName
-              : (studentMap.get(d.studentId) || studentMap.get(d.userId) || d.name || d.payeeName || 'Fee Collection');
+
+            // Resolve real student name or fee item description
+            let matchedStudent = d.studentId ? studentMap.get(d.studentId) : null;
+            if (!matchedStudent && d.rollNo) matchedStudent = studentMap.get(d.rollNo);
+
+            let resolvedName = matchedStudent
+              ? (matchedStudent.name || matchedStudent.user?.name || `${matchedStudent.firstName || ''} ${matchedStudent.lastName || ''}`.trim())
+              : null;
+
+            if (!resolvedName && d.studentName && d.studentName.toLowerCase() !== 'student') {
+              resolvedName = d.studentName;
+            }
+
+            if (!resolvedName && d.items && d.items.length > 0 && d.items[0].productName) {
+              resolvedName = d.items[0].productName;
+            }
+
+            if (!resolvedName || resolvedName.toLowerCase() === 'student') {
+              resolvedName = d.particulars && d.particulars.toLowerCase() !== 'student'
+                ? d.particulars
+                : `Fee Collection (${d.paymentMethod || 'UPI/Cash'})`;
+            }
 
             recentPayments.push({
               id: doc.id,
@@ -62,7 +82,7 @@ export class DashboardService {
               particulars: resolvedName,
               name: resolvedName,
               studentName: resolvedName,
-              rollNo: d.rollNo || d.studentRollNo || 'N/A',
+              rollNo: d.rollNo || matchedStudent?.rollNo || 'N/A',
               amount: amt,
               date: d.paymentDate || d.createdAt || new Date().toISOString(),
               paymentMethod: d.paymentMethod || 'UPI / Cash',
@@ -78,9 +98,18 @@ export class DashboardService {
             const paid = Number(d.paidAmount || d.amountPaid || 0);
             totalRevenue += paid;
             if (paid > 0) {
-              const resolvedName = (d.studentName && d.studentName !== 'Student')
-                ? d.studentName
-                : (studentMap.get(d.studentId) || studentMap.get(d.userId) || d.name || d.payeeName || 'Fee Collection');
+              let matchedStudent = d.studentId ? studentMap.get(d.studentId) : null;
+              let resolvedName = matchedStudent
+                ? (matchedStudent.name || matchedStudent.user?.name)
+                : null;
+
+              if (!resolvedName && d.studentName && d.studentName.toLowerCase() !== 'student') {
+                resolvedName = d.studentName;
+              }
+
+              if (!resolvedName || resolvedName.toLowerCase() === 'student') {
+                resolvedName = `Fee Collection (${d.paymentMethod || 'CASH'})`;
+              }
 
               recentPayments.push({
                 id: doc.id,
@@ -88,7 +117,7 @@ export class DashboardService {
                 particulars: resolvedName,
                 name: resolvedName,
                 studentName: resolvedName,
-                rollNo: d.rollNo || d.studentRollNo || 'N/A',
+                rollNo: d.rollNo || matchedStudent?.rollNo || 'N/A',
                 amount: paid,
                 date: d.paymentDate || d.createdAt || new Date().toISOString(),
                 paymentMethod: d.paymentMethod || 'UPI / Cash',
@@ -112,7 +141,7 @@ export class DashboardService {
       const cName = s.className || s.classSection?.class?.name || s.class || 'Grade 1';
       const secName = s.sectionName || s.classSection?.section?.name || s.section || 'Section A';
       const fullClass = cName.includes('-') ? cName : `${cName} - ${secName}`;
-      const photoUrl = s.profilePhotoUrl || s.avatarUrl || s.photo || s.user?.profilePhotoUrl || s.user?.avatarUrl || null;
+      const photoUrl = s.profilePhotoUrl || s.avatarUrl || s.photo || s.photoUrl || s.imageUrl || s.user?.profilePhotoUrl || s.user?.avatarUrl || s.user?.photo || null;
 
       return {
         id: s.id,
@@ -123,6 +152,8 @@ export class DashboardService {
         sectionName: secName,
         classSection: fullClass,
         profilePhotoUrl: photoUrl,
+        photo: photoUrl,
+        avatarUrl: photoUrl,
         avatar: sName.charAt(0).toUpperCase(),
         joiningDate: s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         phone: s.user?.phone || s.phone || s.parentPhone || 'N/A',
