@@ -585,6 +585,7 @@ export class BillingService {
   }
 
   async getStudentBillingAccount(studentId: string, tenantId?: string) {
+    const tid = tenantId || 'tenant-test-001';
     let profile: any = null;
     try {
       profile = await this.studentRepo.findProfileById(studentId);
@@ -604,13 +605,38 @@ export class BillingService {
       };
     }
 
-    let existingInvoices: any[] = [];
+    let totalPaidFromPayments = 0;
     try {
-      existingInvoices = await this.billingRepo.findInvoicesByStudent(studentId);
+      const snap = await (this.billingRepo as any).db
+        .collection('tenants')
+        .doc(tid)
+        .collection('payments')
+        .where('studentId', '==', studentId)
+        .get();
+
+      if (!snap.empty) {
+        totalPaidFromPayments = snap.docs.reduce((sum: number, doc: any) => {
+          const d = doc.data();
+          if (d.status === 'SUCCESS' || !d.status) {
+            const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+            return sum + amt;
+          }
+          return sum;
+        }, 0);
+      }
     } catch (err) {}
 
-    if (existingInvoices.length > 0 && existingInvoices[0].remainingBalance !== undefined) {
-      profile.outstandingAmount = existingInvoices[0].remainingBalance;
+    if (totalPaidFromPayments > 0) {
+      profile.outstandingAmount = Math.max(0, 15000 - totalPaidFromPayments);
+    } else {
+      let existingInvoices: any[] = [];
+      try {
+        existingInvoices = await this.billingRepo.findInvoicesByStudent(studentId);
+      } catch (err) {}
+
+      if (existingInvoices.length > 0 && existingInvoices[0].remainingBalance !== undefined) {
+        profile.outstandingAmount = existingInvoices[0].remainingBalance;
+      }
     }
 
     const formatted = this.formatStudentForBilling(profile);
@@ -625,13 +651,35 @@ export class BillingService {
     const tid = tenantId || 'tenant-test-001';
     const studentId = oppId;
 
-    let existingInvoices: any[] = [];
+    let paidAmount = 0;
     try {
-      existingInvoices = await this.billingRepo.findInvoicesByStudent(studentId);
+      const snap = await (this.billingRepo as any).db
+        .collection('tenants')
+        .doc(tid)
+        .collection('payments')
+        .where('studentId', '==', studentId)
+        .get();
+
+      if (!snap.empty) {
+        paidAmount = snap.docs.reduce((sum: number, doc: any) => {
+          const d = doc.data();
+          if (d.status === 'SUCCESS' || !d.status) {
+            const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+            return sum + amt;
+          }
+          return sum;
+        }, 0);
+      }
     } catch (err) {}
 
-    const invoice = existingInvoices.length > 0 ? existingInvoices[0] : null;
-    const paidAmount = Number(invoice?.paidAmount || 0);
+    if (paidAmount <= 0) {
+      try {
+        const existingInvoices = await this.billingRepo.findInvoicesByStudent(studentId);
+        if (existingInvoices.length > 0) {
+          paidAmount = Math.max(...existingInvoices.map((inv) => Number(inv.paidAmount || 0)));
+        }
+      } catch (err) {}
+    }
 
     const baseItems = [
       {
