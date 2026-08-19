@@ -140,6 +140,10 @@ export class BillingService {
       await (this.billingRepo as any).createPayment(paymentPayload);
     }
 
+    if ((this.billingRepo as any).updateStudentLedger && studentId) {
+      await (this.billingRepo as any).updateStudentLedger(tid, studentId, newPaidAmount, newBalance, newStatus);
+    }
+
     return {
       id: transactionId,
       invoiceId,

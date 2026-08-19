@@ -150,14 +150,71 @@ export class FirestoreBillingRepository implements IBillingRepository {
   async getRecentPayments(tenantId: string, limit = 50): Promise<any[]> {
     const tid = tenantId || 'tenant-test-001';
     const snap = await this.db.collection('tenants').doc(tid).collection('payments').limit(limit).get();
+    
+    const studentIds = Array.from(new Set(snap.docs.map(doc => doc.data().studentId).filter(Boolean)));
+    const studentMap = new Map<string, any>();
+
+    if (studentIds.length > 0) {
+      await Promise.all(
+        studentIds.map(async (sid) => {
+          try {
+            const sDoc = await this.db.collection('studentProfiles').doc(sid).get();
+            if (sDoc.exists) {
+              const sData = sDoc.data() || {};
+              let uData: any = null;
+              if (sData.userId) {
+                const uDoc = await this.db.collection('users').doc(sData.userId).get();
+                if (uDoc.exists) uData = uDoc.data();
+              }
+              const sName = uData?.name || sData.name || sData.studentName || `${sData.firstName || ''} ${sData.lastName || ''}`.trim() || 'Student Record';
+              studentMap.set(sid, {
+                name: sName,
+                rollNo: sData.rollNo || sData.rollNumber || 'STU-1844',
+              });
+            }
+          } catch (err) {}
+        })
+      );
+    }
+
     return snap.docs.map((doc) => {
       const data = doc.data();
+      const sInfo = studentMap.get(data.studentId) || { name: 'Student Record', rollNo: 'STU-1844' };
+      const amountVal = data.amountCents !== undefined ? fromCents(data.amountCents) : Number(data.amount || 0);
+      const createdAtISO = data.createdAt || data.paymentDate || new Date().toISOString();
+      const dateObj = new Date(createdAtISO);
+      const dateStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+
       return {
         id: doc.id,
         ...data,
-        amount: data.amountCents !== undefined ? fromCents(data.amountCents) : Number(data.amount || 0),
+        amount: amountVal,
+        totalAmount: amountVal,
+        name: sInfo.name,
+        studentName: sInfo.name,
+        rollNo: sInfo.rollNo,
+        dateStr,
+        paymentDate: createdAtISO,
+        status: data.status || 'SUCCESS',
+        paymentMethod: data.paymentMethod || 'CASH',
       };
     });
+  }
+
+  async updateStudentLedger(tenantId: string, studentId: string, paidAmount: number, remainingBalance: number, status: string): Promise<void> {
+    if (!studentId) return;
+    try {
+      const sRef = this.db.collection('studentProfiles').doc(studentId);
+      await sRef.set({
+        outstandingAmount: remainingBalance,
+        totalPendingBalance: remainingBalance,
+        totalPaidAmount: paidAmount,
+        financialStatus: status,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Failed to update student profile ledger in Firestore:', err);
+    }
   }
 
   async findExpensesByTenant(tenantId: string): Promise<any[]> {
