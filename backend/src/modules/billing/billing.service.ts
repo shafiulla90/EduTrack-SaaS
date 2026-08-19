@@ -505,6 +505,11 @@ export class BillingService {
     const sectionName = s.classSection?.section?.name || s.sectionName || s.section || 'A';
     const studentId = s.id || randomUUID();
 
+    const currentYearDue = s.outstandingAmount !== undefined ? Number(s.outstandingAmount) : 15000;
+    const previousYearDue = Number(s.previousYearDue || 0);
+    const grandTotalDue = currentYearDue + previousYearDue;
+    const paidAmount = Math.max(0, 15000 - currentYearDue);
+
     return {
       id: studentId,
       studentId,
@@ -523,9 +528,29 @@ export class BillingService {
       section: sectionName,
       sectionName,
       classSection: `${className} - ${sectionName}`,
-      outstandingAmount: s.outstandingAmount !== undefined ? s.outstandingAmount : 15000,
-      totalDue: s.totalDue !== undefined ? s.totalDue : 15000,
+      outstandingAmount: currentYearDue,
+      currentYearDue,
+      previousYearDue,
+      grandTotalDue,
+      totalDue: grandTotalDue,
+      totalPendingBalance: currentYearDue,
+      totalPaidAmount: paidAmount,
       status: 'Active',
+      feeSummary: {
+        currentYear: {
+          feeProductsAmount: 15000,
+          paidAmount: paidAmount,
+          pendingAmount: currentYearDue,
+        },
+        previousYears: previousYearDue > 0 ? [
+          { academicYearName: '2025-2026', outstandingBalance: previousYearDue }
+        ] : [],
+        overall: {
+          totalCurrentYearDue: currentYearDue,
+          totalPreviousYearDue: previousYearDue,
+          grandTotalBalanceDue: grandTotalDue,
+        }
+      },
       account: {
         id: studentId,
         name,
@@ -571,10 +596,19 @@ export class BillingService {
       };
     }
 
+    let existingInvoices: any[] = [];
+    try {
+      existingInvoices = await this.billingRepo.findInvoicesByStudent(studentId);
+    } catch (err) {}
+
+    if (existingInvoices.length > 0 && existingInvoices[0].remainingBalance !== undefined) {
+      profile.outstandingAmount = existingInvoices[0].remainingBalance;
+    }
+
     const formatted = this.formatStudentForBilling(profile);
     return {
       account: formatted.account,
-      student: profile
+      student: formatted
     };
   }
 
@@ -648,7 +682,7 @@ export class BillingService {
         paidAmount: newPaid,
         balanceDue: newBalance,
       };
-    }).filter((item) => item.balanceDue > 0);
+    });
 
     return items;
   }

@@ -781,68 +781,51 @@ export default function FeesBillingPage() {
             </div>
           </div>
 
-          {selectedStudent.feeSummary && (
-            <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Card 1: Current Year */}
-              <div className="bg-white p-3.5 border border-slate-150 rounded-xl space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Academic Year</span>
-                <div className="divide-y divide-slate-100 text-xs text-slate-600 space-y-1">
-                  <div className="flex justify-between py-1">
-                    <span>Fee Products:</span>
-                    <strong className="text-slate-800 font-mono">₹{Number(selectedStudent.feeSummary.currentYear?.feeProductsAmount ?? 15000).toLocaleString()}</strong>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span>Paid Amount:</span>
-                    <strong className="text-emerald-600 font-mono">₹{Number(selectedStudent.feeSummary.currentYear?.paidAmount ?? 0).toLocaleString()}</strong>
-                  </div>
-                  <div className="flex justify-between py-1 pt-1.5">
-                    <span className="font-bold">Pending Amount:</span>
-                    <strong className="text-rose-600 font-bold font-mono">₹{Number(selectedStudent.feeSummary.currentYear?.pendingAmount ?? 15000).toLocaleString()}</strong>
-                  </div>
-                </div>
-              </div>
+          {(() => {
+            const previousYearDue = Number(selectedStudent.previousYearDue ?? selectedStudent.feeSummary?.overall?.totalPreviousYearDue ?? 0);
+            const currentYearDue = Number(selectedStudent.outstandingAmount ?? selectedStudent.totalPendingBalance ?? selectedStudent.feeSummary?.currentYear?.pendingAmount ?? 15000);
+            const totalDue = previousYearDue + currentYearDue;
 
-              {/* Card 2: Previous Year Outstanding */}
-              <div className="bg-white p-3.5 border border-slate-150 rounded-xl space-y-2 flex flex-col justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Previous Year Outstanding</span>
-                  <div className="max-h-20 overflow-y-auto divide-y divide-slate-100 text-xs text-slate-650 mt-1 font-semibold space-y-1">
-                    {selectedStudent.feeSummary.previousYears && selectedStudent.feeSummary.previousYears.length > 0 ? (
-                      selectedStudent.feeSummary.previousYears.map((py: any, idx: number) => (
-                        <div key={idx} className="flex justify-between py-1">
-                          <span className="text-slate-500 font-medium">Session {py.academicYearName || '2025-2026'}:</span>
-                          <strong className="text-rose-600 font-mono">₹{Number(py.outstandingBalance ?? 0).toLocaleString()}</strong>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-slate-400 py-3 text-center italic text-[11px] font-medium">
-                        No previous year outstanding dues
-                      </div>
-                    )}
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+                {/* Card 1: Previous Year Due */}
+                <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Previous Year Due</span>
+                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">Carried Over</span>
                   </div>
+                  <div className="text-2xl font-black font-mono text-amber-600">
+                    ₹{fmt(previousYearDue)}
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-medium">Unpaid balance from past academic sessions</span>
                 </div>
-              </div>
 
-              {/* Card 3: Overall Outstanding */}
-              <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-4 rounded-xl space-y-2 flex flex-col justify-between shadow-md">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Overall Outstanding</span>
-                <div className="text-xs text-slate-300 space-y-1.5">
-                  <div className="flex justify-between">
-                    <span>Current Year Due:</span>
-                    <strong className="text-slate-200 font-mono">₹{fmt(selectedStudent.feeSummary?.overall?.totalCurrentYearDue)}</strong>
+                {/* Card 2: Current Year Due */}
+                <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Current Year Due ({selectedYear || '2026-2027'})</span>
+                    <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">Pending</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Previous Year Due:</span>
-                    <strong className="text-amber-400 font-mono">₹{fmt(selectedStudent.feeSummary?.overall?.totalPreviousYearDue)}</strong>
+                  <div className="text-2xl font-black font-mono text-rose-600">
+                    ₹{fmt(currentYearDue)}
                   </div>
-                  <div className="border-t border-slate-700/50 my-1 pt-1.5 flex justify-between">
-                    <span className="font-bold text-slate-100">Grand Total Due:</span>
-                    <strong className="text-rose-400 text-sm font-black font-mono">₹{fmt(selectedStudent.feeSummary?.overall?.grandTotalBalanceDue)}</strong>
+                  <span className="text-[11px] text-slate-400 font-medium">Outstanding for current academic year</span>
+                </div>
+
+                {/* Card 3: Total Due */}
+                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-4 rounded-2xl shadow-md space-y-2 flex flex-col justify-between border border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Due</span>
+                    <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/50">Grand Total</span>
                   </div>
+                  <div className="text-2xl font-black font-mono text-white">
+                    ₹{fmt(totalDue)}
+                  </div>
+                  <span className="text-[11px] text-slate-300 font-medium">Combined total outstanding payable</span>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {isLoading ? (
             <div className="py-12 text-center text-slate-400 font-medium text-xs animate-pulse">
