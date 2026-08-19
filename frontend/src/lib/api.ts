@@ -3,9 +3,11 @@ import axios from 'axios';
 // In production (Vercel): use the Next.js API proxy route /api/* which forwards to the backend.
 // In local dev: use NEXT_PUBLIC_API_URL env var, or fall back to localhost:3001 directly.
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
-const BACKEND_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('/backend') && !envApiUrl.includes('[SENSITIVE]'))
-  ? envApiUrl
-  : 'https://api-edutrack.covenantsynergy.in';
+const BACKEND_URL = typeof window !== 'undefined'
+  ? '/api'
+  : (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('/backend')
+    ? envApiUrl
+    : 'https://edutrackapplication-api.vercel.app');
 
 export function getActiveRole(): 'TEACHER' | 'SCHOOL_ADMIN' | 'PARENT' | 'DRIVER' {
   if (typeof window === 'undefined') return 'SCHOOL_ADMIN';

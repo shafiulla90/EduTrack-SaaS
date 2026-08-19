@@ -45,7 +45,9 @@ async function bootstrap() {
         .build();
     const document = swagger_1.SwaggerModule.createDocument(app, config);
     swagger_1.SwaggerModule.setup('api', app, document);
-    await app.listen(process.env.PORT || 3000);
+    const port = process.env.PORT || 5000;
+    await app.listen(port);
+    console.log(`Backend server running on http://localhost:${port}`);
 }
 bootstrap();
 //# sourceMappingURL=main.js.map
