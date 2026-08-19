@@ -29,50 +29,87 @@ export class DashboardService {
     const classes = await this.academicRepo.findClasses(tid);
     const classesCount = classes.length;
 
-    // 4. Fetch Invoices / Revenue & Recent Payments
+    // 4. Fetch Payments / Revenue & Recent Transactions
     let totalRevenue = 0;
     let recentPayments: any[] = [];
 
     if (this.firebase) {
       const db = this.firebase.getFirestore();
       try {
-        const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
-        invSnap.docs.forEach((doc) => {
+        const paySnap = await db.collection('tenants').doc(tid).collection('payments').get();
+        paySnap.docs.forEach((doc) => {
           const d = doc.data();
-          const paid = Number(d.paidAmount || d.amountPaid || 0);
-          totalRevenue += paid;
-          if (paid > 0) {
+          if (d.status === 'SUCCESS' || !d.status) {
+            const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+            totalRevenue += amt;
             recentPayments.push({
               id: doc.id,
+              type: 'Fee Payment',
+              particulars: d.particulars || `${d.studentName || 'Student'} - Fee Payment`,
+              name: d.studentName || d.name || 'Student',
               studentName: d.studentName || d.name || 'Student',
               rollNo: d.rollNo || d.studentRollNo || 'N/A',
-              amount: paid,
+              amount: amt,
               date: d.paymentDate || d.createdAt || new Date().toISOString(),
               paymentMethod: d.paymentMethod || 'UPI / Cash',
               status: 'COMPLETED',
             });
           }
         });
+
+        if (recentPayments.length === 0) {
+          const invSnap = await db.collection('tenants').doc(tid).collection('invoices').get();
+          invSnap.docs.forEach((doc) => {
+            const d = doc.data();
+            const paid = Number(d.paidAmount || d.amountPaid || 0);
+            totalRevenue += paid;
+            if (paid > 0) {
+              recentPayments.push({
+                id: doc.id,
+                type: 'Fee Payment',
+                particulars: `${d.studentName || d.name || 'Student'} - Fee Collection`,
+                name: d.studentName || d.name || 'Student',
+                studentName: d.studentName || d.name || 'Student',
+                rollNo: d.rollNo || d.studentRollNo || 'N/A',
+                amount: paid,
+                date: d.paymentDate || d.createdAt || new Date().toISOString(),
+                paymentMethod: d.paymentMethod || 'UPI / Cash',
+                status: 'COMPLETED',
+              });
+            }
+          });
+        }
       } catch (err) {
-        console.warn('DashboardService invoice fetch warning:', err);
+        console.warn('DashboardService payments fetch warning:', err);
       }
     }
 
-    // Sort recent payments
+    // Sort recent payments descending by date
     recentPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     recentPayments = recentPayments.slice(0, 10);
 
     // 5. Recent Admissions
-    const recentAdmissions = students.slice(0, 10).map((s: any) => ({
-      id: s.id,
-      name: s.name || s.user?.name || 'Student',
-      rollNo: s.rollNo || 'N/A',
-      className: s.className || s.classSection?.class?.name || 'Grade 1',
-      sectionName: s.sectionName || s.classSection?.section?.name || 'Section A',
-      joiningDate: s.createdAt || new Date().toISOString().split('T')[0],
-      phone: s.user?.phone || s.phone || s.parentPhone || 'N/A',
-      status: s.status || 'Active',
-    }));
+    const recentAdmissions = students.slice(0, 10).map((s: any) => {
+      const sName = s.name || s.user?.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Student';
+      const cName = s.className || s.classSection?.class?.name || s.class || 'Grade 1';
+      const secName = s.sectionName || s.classSection?.section?.name || s.section || 'Section A';
+      const fullClass = cName.includes('-') ? cName : `${cName} - ${secName}`;
+
+      return {
+        id: s.id,
+        name: sName,
+        rollNo: s.rollNo || s.rollNumber || 'STU-1001',
+        class: fullClass,
+        className: cName,
+        sectionName: secName,
+        classSection: fullClass,
+        profilePhotoUrl: s.profilePhotoUrl || s.avatarUrl || s.photo || null,
+        avatar: sName.charAt(0).toUpperCase(),
+        joiningDate: s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        phone: s.user?.phone || s.phone || s.parentPhone || 'N/A',
+        status: s.status || 'Active',
+      };
+    });
 
     return {
       success: true,
