@@ -29,7 +29,17 @@ export class DashboardService {
     const classes = await this.academicRepo.findClasses(tid);
     const classesCount = classes.length;
 
-    // 4. Fetch Payments / Revenue & Recent Transactions
+    // 4. Build Student Name Map for Transaction Resolution
+    const studentMap = new Map<string, string>();
+    students.forEach((s: any) => {
+      const sName = s.name || s.user?.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`.trim();
+      if (sName && sName !== 'Student') {
+        studentMap.set(s.id, sName);
+        if (s.userId) studentMap.set(s.userId, sName);
+      }
+    });
+
+    // 5. Fetch Payments / Revenue & Recent Transactions
     let totalRevenue = 0;
     let recentPayments: any[] = [];
 
@@ -42,12 +52,16 @@ export class DashboardService {
           if (d.status === 'SUCCESS' || !d.status) {
             const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
             totalRevenue += amt;
+            const resolvedName = (d.studentName && d.studentName !== 'Student')
+              ? d.studentName
+              : (studentMap.get(d.studentId) || studentMap.get(d.userId) || d.name || d.payeeName || 'Fee Collection');
+
             recentPayments.push({
               id: doc.id,
               type: 'Fee Payment',
-              particulars: d.particulars || `${d.studentName || 'Student'} - Fee Payment`,
-              name: d.studentName || d.name || 'Student',
-              studentName: d.studentName || d.name || 'Student',
+              particulars: resolvedName,
+              name: resolvedName,
+              studentName: resolvedName,
               rollNo: d.rollNo || d.studentRollNo || 'N/A',
               amount: amt,
               date: d.paymentDate || d.createdAt || new Date().toISOString(),
@@ -64,12 +78,16 @@ export class DashboardService {
             const paid = Number(d.paidAmount || d.amountPaid || 0);
             totalRevenue += paid;
             if (paid > 0) {
+              const resolvedName = (d.studentName && d.studentName !== 'Student')
+                ? d.studentName
+                : (studentMap.get(d.studentId) || studentMap.get(d.userId) || d.name || d.payeeName || 'Fee Collection');
+
               recentPayments.push({
                 id: doc.id,
                 type: 'Fee Payment',
-                particulars: `${d.studentName || d.name || 'Student'} - Fee Collection`,
-                name: d.studentName || d.name || 'Student',
-                studentName: d.studentName || d.name || 'Student',
+                particulars: resolvedName,
+                name: resolvedName,
+                studentName: resolvedName,
                 rollNo: d.rollNo || d.studentRollNo || 'N/A',
                 amount: paid,
                 date: d.paymentDate || d.createdAt || new Date().toISOString(),
@@ -88,12 +106,13 @@ export class DashboardService {
     recentPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     recentPayments = recentPayments.slice(0, 10);
 
-    // 5. Recent Admissions
+    // 6. Recent Admissions
     const recentAdmissions = students.slice(0, 10).map((s: any) => {
       const sName = s.name || s.user?.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Student';
       const cName = s.className || s.classSection?.class?.name || s.class || 'Grade 1';
       const secName = s.sectionName || s.classSection?.section?.name || s.section || 'Section A';
       const fullClass = cName.includes('-') ? cName : `${cName} - ${secName}`;
+      const photoUrl = s.profilePhotoUrl || s.avatarUrl || s.photo || s.user?.profilePhotoUrl || s.user?.avatarUrl || null;
 
       return {
         id: s.id,
@@ -103,7 +122,7 @@ export class DashboardService {
         className: cName,
         sectionName: secName,
         classSection: fullClass,
-        profilePhotoUrl: s.profilePhotoUrl || s.avatarUrl || s.photo || null,
+        profilePhotoUrl: photoUrl,
         avatar: sName.charAt(0).toUpperCase(),
         joiningDate: s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         phone: s.user?.phone || s.phone || s.parentPhone || 'N/A',
