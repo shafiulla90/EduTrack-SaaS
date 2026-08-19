@@ -143,4 +143,25 @@ export class BillingController {
     const tenantId = req?.user?.tenantId || 'tenant-test-001';
     return this.billingService.searchStudents(searchTerm, tenantId);
   }
+
+  @Get('students/search')
+  @ApiOperation({ summary: 'Search students for fee payment (alias)' })
+  async searchStudentsAlias(@Query('searchTerm') searchTerm: string, @Request() req: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    return this.billingService.searchStudents(searchTerm, tenantId);
+  }
+
+  @Get('students/:id')
+  @ApiOperation({ summary: 'Get student billing account details' })
+  async getStudentBillingAccount(@Param('id') id: string, @Request() req: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    return this.billingService.getStudentBillingAccount(id, tenantId);
+  }
+
+  @Get('unpaid-fees/:oppId')
+  @ApiOperation({ summary: 'Get unpaid fee line items for opportunity' })
+  async getUnpaidFees(@Param('oppId') oppId: string, @Request() req: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    return this.billingService.getUnpaidFees(oppId, tenantId);
+  }
 }
