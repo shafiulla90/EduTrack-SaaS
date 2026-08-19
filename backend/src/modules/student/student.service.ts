@@ -46,4 +46,59 @@ export class StudentService {
     }
     return { success: true, id };
   }
+
+  async importStudentsBulk(studentsData: any[], tenantId: string) {
+    const tid = tenantId || 'tenant-test-001';
+    let importedCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < studentsData.length; i++) {
+      const row = studentsData[i];
+      try {
+        const studentName = (row.name || row.studentName || row.fullName || `${row.firstName || ''} ${row.lastName || ''}`).trim() || `Student ${i + 1}`;
+        const phone = (row.phone || row.mobileNumber || row.contact || '').replace(/\D/g, '');
+        const email = (row.email || `student_${Date.now()}_${i}@school.com`).trim();
+        const rollNo = (row.rollNo || row.rollNumber || `STU-${1000 + i}`).trim();
+        const fatherName = (row.fatherName || row.parentName || '').trim();
+        const motherName = (row.motherName || '').trim();
+
+        const userId = randomUUID();
+        const studentId = randomUUID();
+
+        await this.studentRepo.createProfile({
+          id: studentId,
+          userId,
+          tenantId: tid,
+          rollNo,
+          fatherName,
+          motherName,
+          user: {
+            id: userId,
+            name: studentName,
+            email,
+            phone,
+            role: 'STUDENT',
+            tenantId: tid,
+            isActive: true,
+          },
+          classSection: {
+            class: { name: row.className || row.class || 'Class 1' },
+            section: { name: row.sectionName || row.section || 'A' }
+          },
+          createdAt: new Date().toISOString(),
+        });
+
+        importedCount++;
+      } catch (err: any) {
+        errors.push(`Row ${i + 1}: ${err.message || 'Import failed'}`);
+      }
+    }
+
+    return {
+      success: true,
+      importedCount,
+      totalRecords: studentsData.length,
+      errors,
+    };
+  }
 }

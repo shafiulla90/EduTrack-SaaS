@@ -41,6 +41,14 @@ export class StudentController {
     return this.studentService.create(body, tenantId);
   }
 
+  @Post('import')
+  @ApiOperation({ summary: 'Bulk import student records' })
+  importStudents(@Body() body: any, @Request() req: any) {
+    const tenantId = req?.user?.tenantId || 'tenant-test-001';
+    const studentsData = Array.isArray(body) ? body : (body?.students || body?.studentDataList || []);
+    return this.studentService.importStudentsBulk(studentsData, tenantId);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update student profile' })
   updatePatch(@Param('id') id: string, @Body() body: any, @Request() req) {
