@@ -48,6 +48,22 @@ const fmt = (val: any) => {
   return Number(val).toLocaleString('en-IN');
 };
 
+const normalizePhoneNumber = (rawPhone?: string): string | null => {
+  if (!rawPhone || rawPhone === 'N/A') return null;
+  let cleaned = String(rawPhone).replace(/[\s\+\-\(\)\.]/g, '');
+  if (!cleaned) return null;
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1);
+  }
+  if (/^\d{10}$/.test(cleaned)) {
+    cleaned = `91${cleaned}`;
+  }
+  if (/^\d{11,15}$/.test(cleaned)) {
+    return cleaned;
+  }
+  return null;
+};
+
 export default function FeesBillingPage() {
   const { setupStats, currentUser } = useTenant();
   const [search, setSearch] = useState('');
@@ -376,22 +392,6 @@ export default function FeesBillingPage() {
     }
   };
 
-const normalizePhoneNumber = (rawPhone?: string): string | null => {
-  if (!rawPhone || rawPhone === 'N/A') return null;
-  let cleaned = String(rawPhone).replace(/[\s\+\-\(\)\.]/g, '');
-  if (!cleaned) return null;
-  if (cleaned.startsWith('0')) {
-    cleaned = cleaned.slice(1);
-  }
-  if (/^\d{10}$/.test(cleaned)) {
-    cleaned = `91${cleaned}`;
-  }
-  if (/^\d{11,15}$/.test(cleaned)) {
-    return cleaned;
-  }
-  return null;
-};
-
   const generateInvoicePDFFile = async (invoiceId: string): Promise<{ file: File; pdfData: InvoicePDFData; pdfBlob: Blob }> => {
     const res = await api.get(`/billing/invoices/${invoiceId}/pdf`);
     const data: InvoicePDFData = res.data;
@@ -567,7 +567,7 @@ const normalizePhoneNumber = (rawPhone?: string): string | null => {
     const fileName = `fee_receipt_${data.invoiceNo || invoiceId}.pdf`;
     const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
 
-    return { file: pdfFile, pdfBlob, pdfData };
+    return { file: pdfFile, pdfBlob, pdfData: data };
   };
 
   const downloadInvoicePDF = async (invoiceId: string) => {
