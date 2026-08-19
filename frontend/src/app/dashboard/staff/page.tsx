@@ -1,4 +1,5 @@
 'use client';
+// EduTrack Staff Directory & Payroll Management
 
 import React, { useState, useEffect } from 'react';
 import { 
