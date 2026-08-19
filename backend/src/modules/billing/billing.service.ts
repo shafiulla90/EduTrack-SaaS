@@ -293,7 +293,8 @@ export class BillingService {
 
   private formatStudentForBilling(s: any) {
     const name = s.User?.name || s.name || s.studentName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Student Record';
-    const phone = s.User?.phone || s.phone || s.mobileNumber || s.contact || 'N/A';
+    const parentPhone = s.parentPhone || s.fatherPhone || s.motherPhone || s.User?.phone || s.phone || s.mobileNumber || s.contact || 'N/A';
+    const phone = parentPhone;
     const email = s.User?.email || s.email || 'N/A';
     const className = s.classSection?.class?.name || s.className || s.class || 'Class 1';
     const sectionName = s.classSection?.section?.name || s.sectionName || s.section || 'A';
@@ -306,6 +307,9 @@ export class BillingService {
       studentName: name,
       rollNo: s.rollNo || 'STU-1001',
       phone,
+      parentPhone,
+      fatherPhone: s.fatherPhone || null,
+      motherPhone: s.motherPhone || null,
       email,
       fatherName: s.fatherName || 'N/A',
       motherName: s.motherName || 'N/A',
@@ -322,6 +326,9 @@ export class BillingService {
         name,
         rollNo: s.rollNo || 'STU-1001',
         phone,
+        parentPhone,
+        fatherPhone: s.fatherPhone || null,
+        motherPhone: s.motherPhone || null,
         fatherName: s.fatherName || 'N/A',
         motherName: s.motherName || 'N/A',
         className,

@@ -376,188 +376,281 @@ export default function FeesBillingPage() {
     }
   };
 
+const normalizePhoneNumber = (rawPhone?: string): string | null => {
+  if (!rawPhone || rawPhone === 'N/A') return null;
+  let cleaned = String(rawPhone).replace(/[\s\+\-\(\)\.]/g, '');
+  if (!cleaned) return null;
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1);
+  }
+  if (/^\d{10}$/.test(cleaned)) {
+    cleaned = `91${cleaned}`;
+  }
+  if (/^\d{11,15}$/.test(cleaned)) {
+    return cleaned;
+  }
+  return null;
+};
+
+  const generateInvoicePDFFile = async (invoiceId: string): Promise<{ file: File; pdfData: InvoicePDFData; pdfBlob: Blob }> => {
+    const res = await api.get(`/billing/invoices/${invoiceId}/pdf`);
+    const data: InvoicePDFData = res.data;
+
+    if (data.schoolLogo) {
+      await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = data.schoolLogo;
+      });
+    }
+
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '-9999px';
+    container.style.width = '800px';
+    container.style.backgroundColor = '#ffffff';
+    container.style.color = '#2d3748';
+    container.style.fontFamily = 'sans-serif';
+    container.style.padding = '40px';
+    
+    container.innerHTML = `
+      <div style="border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        <!-- Header -->
+        <div style="background-color: #1a365d; color: #ffffff; padding: 30px; border-bottom: 6px solid #ed8936; display: flex; align-items: center; gap: 20px;">
+          <div style="width: 80px; height: 80px; background-color: #ffffff; border-radius: 50%; padding: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; shrink: 0;">
+            ${data.schoolLogo ? `<img src="${data.schoolLogo}" style="width: 100%; height: 100%; object-fit: contain;" />` : `
+              <svg style="width: 50px; height: 50px; stroke: #1a365d; stroke-width: 2; fill: none;" viewBox="0 0 24 24">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+              </svg>
+            `}
+          </div>
+          <div>
+            <h1 style="margin: 0; font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px;">${data.schoolName}</h1>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #cbd5e1; font-style: italic; font-weight: 600;">${data.schoolSubtitle}</p>
+          </div>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 40px; min-height: 400px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h2 style="margin: 0; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #1a365d;">Fee Receipt</h2>
+          </div>
+
+          <!-- Metadata Table -->
+          <table style="width: 100%; font-size: 13px; margin-bottom: 25px; border-collapse: collapse; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;">
+            <tbody>
+              <tr>
+                <td style="padding: 6px 0;"><strong>Receipt No:</strong> <span style="font-family: monospace; font-weight: bold; color: #1e293b;">${data.invoiceNo}</span></td>
+                <td style="padding: 6px 0; text-align: right;"><strong>Academic Year:</strong> <span style="font-weight: bold; color: #1e293b;">${data.academicYear}</span></td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0;"><strong>Receipt Date:</strong> <span style="color: #1e293b;">${data.invoiceDate}</span></td>
+                <td style="padding: 6px 0; text-align: right;"><strong>Admission Ref:</strong> <span style="font-family: monospace; color: #1e293b;">${data.admissionRef}</span></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Student Card -->
+          <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-left: 5px solid #1a365d; padding: 20px; border-radius: 6px; margin-bottom: 30px;">
+            <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+              <tbody>
+                <tr>
+                  <td style="width: 35%; vertical-align: top;">
+                    <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Student Name</div>
+                    <div style="font-size: 15px; color: #1a365d; font-weight: bold; margin-top: 2px;">${data.studentName}</div>
+                    
+                    <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase; margin-top: 15px;">Parent Details</div>
+                    <div style="color: #4b5563; margin-top: 4px; line-height: 1.5;">
+                      Father: <span style="font-weight: 600; color: #1f2937;">${data.fatherName}</span><br/>
+                      Mother: <span style="font-weight: 600; color: #1f2937;">${data.motherName}</span>
+                    </div>
+                  </td>
+                  <td style="width: 30%; vertical-align: top; padding: 0 15px;">
+                    <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Class & Section</div>
+                    <div style="font-size: 14px; color: #1a365d; font-weight: bold; margin-top: 2px;">${data.className} - ${data.sectionName}</div>
+                    
+                    <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase; margin-top: 15px;">Date of Birth</div>
+                    <div style="font-size: 13px; color: #1f2937; font-weight: 500; margin-top: 2px;">${data.studentDob || '15 May 2012'}</div>
+                  </td>
+                  <td style="width: 35%; vertical-align: top;">
+                    <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Mailing Address</div>
+                    <div style="font-weight: 600; line-height: 1.5; margin-top: 4px; font-size: 12px; color: #1f2937;">
+                      ${data.addressVillage || 'Plot No. 12, Vikas Nagar,'}<br/>
+                      New Delhi - 110009,<br/>
+                      Delhi, India.
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Particulars Table -->
+          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+              <tr style="background-color: #ebf8ff; color: #1a365d; font-size: 11px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #cbd5e1;">
+                <th style="padding: 12px 16px; text-align: left; width: 15%;">Sl. No</th>
+                <th style="padding: 12px 16px; text-align: left; width: 55%;">Particulars Description</th>
+                <th style="padding: 12px 16px; text-align: right; width: 30%;">Amount Paid</th>
+              </tr>
+            </thead>
+            <tbody style="font-size: 13px;">
+              ${data.items.map((item, index) => `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 14px 16px; color: #64748b; font-weight: 500;">${index + 1}</td>
+                  <td style="padding: 14px 16px; font-weight: 600; color: #1e293b;">${item.particulars}</td>
+                  <td style="padding: 14px 16px; text-align: right; font-weight: bold; color: ${item.amount < 0 ? '#059669' : '#1e293b'};">
+                    ${item.amount < 0 ? '-' : ''}₹${Math.abs(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer Grand Total -->
+        <div style="background-color: #f8fafc; border-top: 1px solid #f1f5f9; padding: 30px 40px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 11px; color: #94a3b8; font-weight: 600; line-height: 1.5; max-width: 350px;">
+            This is a computer generated fee receipt. No physical signature is required. For verification query, contact the accounting department.
+          </div>
+          <div style="background-color: #1a365d; color: #ffffff; border-radius: 8px; padding: 15px 25px; display: flex; align-items: center; gap: 30px; shrink: 0;">
+            <span style="font-size: 12px; font-weight: 500; text-transform: uppercase; color: #cbd5e1;">Grand Total Paid</span>
+            <span style="font-size: 20px; font-weight: 900; font-family: monospace;">₹${data.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(container);
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    const html2canvas = (await import('html2canvas')).default;
+    const { jsPDF } = await import('jspdf');
+
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#ffffff'
+    });
+
+    document.body.removeChild(container);
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const imgWidth = 210;
+    const pageHeight = 297;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    const pdfBlob = pdf.output('blob');
+    const fileName = `fee_receipt_${data.invoiceNo || invoiceId}.pdf`;
+    const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+    return { file: pdfFile, pdfBlob, pdfData };
+  };
+
   const downloadInvoicePDF = async (invoiceId: string) => {
     try {
       setIsLoading(true);
-      const res = await api.get(`/billing/invoices/${invoiceId}/pdf`);
-      const data: InvoicePDFData = res.data;
-
-      // 1. Preload logo image (if exists) to ensure html2canvas can capture it successfully
-      if (data.schoolLogo) {
-        await new Promise((resolve) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = resolve;
-          img.onerror = resolve;
-          img.src = data.schoolLogo;
-        });
-      }
-
-      const container = document.createElement('div');
-      container.style.position = 'fixed';
-      container.style.left = '-9999px';
-      container.style.top = '-9999px';
-      container.style.width = '800px';
-      container.style.backgroundColor = '#ffffff';
-      container.style.color = '#2d3748';
-      container.style.fontFamily = 'sans-serif';
-      container.style.padding = '40px';
-      
-      container.innerHTML = `
-        <div style="border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-          <!-- Header -->
-          <div style="background-color: #1a365d; color: #ffffff; padding: 30px; border-bottom: 6px solid #ed8936; display: flex; align-items: center; gap: 20px;">
-            <div style="width: 80px; height: 80px; background-color: #ffffff; border-radius: 50%; padding: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; shrink: 0;">
-              ${data.schoolLogo ? `<img src="${data.schoolLogo}" style="width: 100%; height: 100%; object-fit: contain;" />` : `
-                <svg style="width: 50px; height: 50px; stroke: #1a365d; stroke-width: 2; fill: none;" viewBox="0 0 24 24">
-                  <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
-                  <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
-                </svg>
-              `}
-            </div>
-            <div>
-              <h1 style="margin: 0; font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px;">${data.schoolName}</h1>
-              <p style="margin: 5px 0 0 0; font-size: 12px; color: #cbd5e1; font-style: italic; font-weight: 600;">${data.schoolSubtitle}</p>
-            </div>
-          </div>
-
-          <!-- Body -->
-          <div style="padding: 40px; min-height: 400px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <h2 style="margin: 0; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #1a365d;">Fee Receipt</h2>
-            </div>
-
-            <!-- Metadata Table -->
-            <table style="width: 100%; font-size: 13px; margin-bottom: 25px; border-collapse: collapse; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;">
-              <tbody>
-                <tr>
-                  <td style="padding: 6px 0;"><strong>Receipt No:</strong> <span style="font-family: monospace; font-weight: bold; color: #1e293b;">${data.invoiceNo}</span></td>
-                  <td style="padding: 6px 0; text-align: right;"><strong>Academic Year:</strong> <span style="font-weight: bold; color: #1e293b;">${data.academicYear}</span></td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0;"><strong>Receipt Date:</strong> <span style="color: #1e293b;">${data.invoiceDate}</span></td>
-                  <td style="padding: 6px 0; text-align: right;"><strong>Admission Ref:</strong> <span style="font-family: monospace; color: #1e293b;">${data.admissionRef}</span></td>
-                </tr>
-              </tbody>
-            </table>
-
-            <!-- Student Card -->
-            <div style="background-color: #f7fafc; border: 1px solid #e2e8f0; border-left: 5px solid #1a365d; padding: 20px; border-radius: 6px; margin-bottom: 30px;">
-              <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
-                <tbody>
-                  <tr>
-                    <td style="width: 35%; vertical-align: top;">
-                      <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Student Name</div>
-                      <div style="font-size: 15px; color: #1a365d; font-weight: bold; margin-top: 2px;">${data.studentName}</div>
-                      
-                      <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase; margin-top: 15px;">Parent Details</div>
-                      <div style="color: #4b5563; margin-top: 4px; line-height: 1.5;">
-                        Father: <span style="font-weight: 600; color: #1f2937;">${data.fatherName}</span><br/>
-                        Mother: <span style="font-weight: 600; color: #1f2937;">${data.motherName}</span>
-                      </div>
-                    </td>
-                    <td style="width: 30%; vertical-align: top; padding: 0 15px;">
-                      <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Class & Section</div>
-                      <div style="font-size: 14px; color: #1a365d; font-weight: bold; margin-top: 2px;">${data.className} - ${data.sectionName}</div>
-                      
-                      <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase; margin-top: 15px;">Date of Birth</div>
-                      <div style="font-size: 13px; color: #1f2937; font-weight: 500; margin-top: 2px;">${data.studentDob || '15 May 2012'}</div>
-                    </td>
-                    <td style="width: 35%; vertical-align: top;">
-                      <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Mailing Address</div>
-                      <div style="font-weight: 600; line-height: 1.5; margin-top: 4px; font-size: 12px; color: #1f2937;">
-                        ${data.addressVillage || 'Plot No. 12, Vikas Nagar,'}<br/>
-                        New Delhi - 110009,<br/>
-                        Delhi, India.
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Particulars Table -->
-            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-              <thead>
-                <tr style="background-color: #ebf8ff; color: #1a365d; font-size: 11px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #cbd5e1;">
-                  <th style="padding: 12px 16px; text-align: left; width: 15%;">Sl. No</th>
-                  <th style="padding: 12px 16px; text-align: left; width: 55%;">Particulars Description</th>
-                  <th style="padding: 12px 16px; text-align: right; width: 30%;">Amount Paid</th>
-                </tr>
-              </thead>
-              <tbody style="font-size: 13px;">
-                ${data.items.map((item, index) => `
-                  <tr style="border-bottom: 1px solid #f1f5f9;">
-                    <td style="padding: 14px 16px; color: #64748b; font-weight: 500;">${index + 1}</td>
-                    <td style="padding: 14px 16px; font-weight: 600; color: #1e293b;">${item.particulars}</td>
-                    <td style="padding: 14px 16px; text-align: right; font-weight: bold; color: ${item.amount < 0 ? '#059669' : '#1e293b'};">
-                      ${item.amount < 0 ? '-' : ''}₹${Math.abs(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Footer Grand Total -->
-          <div style="background-color: #f8fafc; border-top: 1px solid #f1f5f9; padding: 30px 40px; display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-size: 11px; color: #94a3b8; font-weight: 600; line-height: 1.5; max-width: 350px;">
-              This is a computer generated fee receipt. No physical signature is required. For verification query, contact the accounting department.
-            </div>
-            <div style="background-color: #1a365d; color: #ffffff; border-radius: 8px; padding: 15px 25px; display: flex; align-items: center; gap: 30px; shrink: 0;">
-              <span style="font-size: 12px; font-weight: 500; text-transform: uppercase; color: #cbd5e1;">Grand Total Paid</span>
-              <span style="font-size: 20px; font-weight: 900; font-family: monospace;">₹${data.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(container);
-
-      // Wait 300ms for browser layout engine to render container contents
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Dynamically import html2canvas and jsPDF to keep initial load lightweight
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
-
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff'
-      });
-
-      document.body.removeChild(container);
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      pdf.save(`fee_receipt_${data.invoiceNo}.pdf`);
+      const { pdfBlob, pdfData } = await generateInvoicePDFFile(invoiceId);
+      const fileName = `fee_receipt_${pdfData.invoiceNo || invoiceId}.pdf`;
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Failed to generate PDF download:', err);
       alert('Failed to generate PDF. Opening print page instead.');
       window.open(`/dashboard/billing/invoices/${invoiceId}`, '_blank');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleWhatsAppShare = async (invoiceId: string) => {
+    if (!invoiceId) return;
+
+    const rawPhone = 
+      selectedStudent?.account?.parentPhone ||
+      selectedStudent?.account?.fatherPhone ||
+      selectedStudent?.account?.motherPhone ||
+      selectedStudent?.parentPhone ||
+      selectedStudent?.fatherPhone ||
+      selectedStudent?.motherPhone ||
+      selectedStudent?.account?.phone ||
+      selectedStudent?.phone;
+
+    const normalizedPhone = normalizePhoneNumber(rawPhone);
+
+    if (!normalizedPhone) {
+      alert('No valid parent WhatsApp number is available for this student.');
+      return;
+    }
+
+    const studentName = lastPaidStudentName || selectedStudent?.account?.name || selectedStudent?.name || 'Student';
+    const messageText = `Dear Parent, your fee payment receipt for ${studentName} has been generated successfully.\n\nReceipt Number: ${successInvoiceId || invoiceId}\nAmount Paid: ₹${fmt(lastPaidAmount)}\n\nPlease find the payment receipt attached.\n\nThank you.`;
+
+    try {
+      setIsLoading(true);
+      const { file, pdfBlob, pdfData } = await generateInvoicePDFFile(invoiceId);
+
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Fee Receipt - ${pdfData.invoiceNo}`,
+            text: messageText,
+            files: [file]
+          });
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') return;
+          console.warn('Web share failed, proceeding to WhatsApp web fallback:', shareErr);
+        }
+      }
+
+      // Desktop / fallback download
+      const fileName = `fee_receipt_${pdfData.invoiceNo || invoiceId}.pdf`;
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      const waUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(messageText)}`;
+      window.open(waUrl, '_blank');
+
+      alert(`PDF receipt "${fileName}" downloaded.\nOpening WhatsApp for +${normalizedPhone}... Please attach the downloaded PDF receipt to complete sharing.`);
+    } catch (err: any) {
+      console.error('Failed to process WhatsApp share', err);
+      alert(`Unable to share receipt via WhatsApp: ${err.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -1201,9 +1294,23 @@ export default function FeesBillingPage() {
                     downloadInvoicePDF(successInvoiceId);
                   }
                 }}
-                className="w-full sm:w-auto flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer border-none"
+                className="w-full sm:w-auto flex-1 px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer border-none"
               >
                 <Printer className="w-4 h-4" /> Save / Print PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (successInvoiceId) {
+                    handleWhatsAppShare(successInvoiceId);
+                  }
+                }}
+                className="w-full sm:w-auto flex-1 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/10 cursor-pointer border-none"
+              >
+                <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                </svg>
+                WhatsApp
               </button>
               <button
                 type="button"
