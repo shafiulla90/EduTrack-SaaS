@@ -486,18 +486,45 @@ export class BillingService {
 
     const enriched = await Promise.all(
       filtered.map(async (s) => {
-        let invs: any[] = [];
+        let totalPaidFromPayments = 0;
         try {
-          invs = await this.billingRepo.findInvoicesByStudent(s.id);
+          const snap = await (this.billingRepo as any).db
+            .collection('tenants')
+            .doc(tid)
+            .collection('payments')
+            .where('studentId', '==', s.id)
+            .get();
+
+          if (!snap.empty) {
+            totalPaidFromPayments = snap.docs.reduce((sum: number, doc: any) => {
+              const d = doc.data();
+              if (d.status === 'SUCCESS' || !d.status) {
+                const amt = d.amountCents !== undefined ? d.amountCents / 100 : Number(d.amount || 0);
+                return sum + amt;
+              }
+              return sum;
+            }, 0);
+          }
         } catch (e) {}
-        if (invs.length > 0 && invs[0].remainingBalance !== undefined) {
-          return this.formatStudentForBilling({
-            ...s,
-            outstandingAmount: invs[0].remainingBalance,
-            totalDue: invs[0].remainingBalance,
-          });
+
+        let outstanding = 15000;
+        if (totalPaidFromPayments > 0) {
+          outstanding = Math.max(0, 15000 - totalPaidFromPayments);
+        } else {
+          let invs: any[] = [];
+          try {
+            invs = await this.billingRepo.findInvoicesByStudent(s.id);
+          } catch (e) {}
+          if (invs.length > 0 && invs[0].remainingBalance !== undefined) {
+            outstanding = invs[0].remainingBalance;
+          }
         }
-        return this.formatStudentForBilling(s);
+
+        return this.formatStudentForBilling({
+          ...s,
+          outstandingAmount: outstanding,
+          totalDue: outstanding,
+        });
       }),
     );
 
