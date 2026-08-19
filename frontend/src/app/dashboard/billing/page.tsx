@@ -736,15 +736,15 @@ export default function FeesBillingPage() {
                 <div className="text-xs text-slate-300 space-y-1.5">
                   <div className="flex justify-between">
                     <span>Current Year Due:</span>
-                    <strong className="text-slate-200 font-mono">₹{selectedStudent.feeSummary.overall.totalCurrentYearDue.toLocaleString()}</strong>
+                    <strong className="text-slate-200 font-mono">₹{fmt(selectedStudent.feeSummary?.overall?.totalCurrentYearDue)}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span>Previous Year Due:</span>
-                    <strong className="text-amber-400 font-mono">₹{selectedStudent.feeSummary.overall.totalPreviousYearDue.toLocaleString()}</strong>
+                    <strong className="text-amber-400 font-mono">₹{fmt(selectedStudent.feeSummary?.overall?.totalPreviousYearDue)}</strong>
                   </div>
                   <div className="border-t border-slate-700/50 my-1 pt-1.5 flex justify-between">
                     <span className="font-bold text-slate-100">Grand Total Due:</span>
-                    <strong className="text-rose-400 text-sm font-black font-mono">₹{selectedStudent.feeSummary.overall.grandTotalBalanceDue.toLocaleString()}</strong>
+                    <strong className="text-rose-400 text-sm font-black font-mono">₹{fmt(selectedStudent.feeSummary?.overall?.grandTotalBalanceDue)}</strong>
                   </div>
                 </div>
               </div>
@@ -793,15 +793,15 @@ export default function FeesBillingPage() {
                               type="checkbox"
                               checked={fee.isSelected}
                               disabled={isPaid}
-                              onChange={() => handleCheckboxChange(fee.id)}
+                              onChange={() => handleCheckboxToggle(fee.id)}
                               className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                             />
                           </td>
                           <td className="px-4 py-3 font-bold text-slate-800">{fee.name}</td>
-                          <td className="px-4 py-3 text-right font-mono">₹{fee.total.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right font-mono text-slate-400">₹{fee.discount.toLocaleString()} ({fee.discountPercent}%)</td>
-                          <td className="px-4 py-3 text-right font-mono text-slate-500">₹{fee.paid.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-right font-mono text-rose-600 font-bold">₹{fee.balance.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right font-mono">₹{fmt(fee.total)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-slate-400">₹{fmt(fee.discount)} ({fee.discountPercent || 0}%)</td>
+                          <td className="px-4 py-3 text-right font-mono text-slate-500">₹{fmt(fee.paid)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-rose-600 font-bold">₹{fmt(fee.balance)}</td>
                           <td className="px-4 py-3 text-right">
                             <input
                               type="number"
@@ -837,7 +837,7 @@ export default function FeesBillingPage() {
                           type="checkbox"
                           checked={fee.isSelected}
                           disabled={isPaid}
-                          onChange={() => handleCheckboxChange(fee.id)}
+                          onChange={() => handleCheckboxToggle(fee.id)}
                           className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500 shrink-0"
                         />
                         <div className="flex-1 min-w-0">
@@ -849,7 +849,7 @@ export default function FeesBillingPage() {
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-[13px] font-bold text-slate-700 font-mono">₹{fee.total.toLocaleString()}</span>
+                          <span className="text-[13px] font-bold text-slate-700 font-mono">₹{fmt(fee.total)}</span>
                           <span className="text-[9px] text-slate-400 font-medium block">Total</span>
                         </div>
                       </div>
@@ -859,7 +859,7 @@ export default function FeesBillingPage() {
                         <div>
                           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide block">Balance Due</span>
                           <span className={`text-sm font-bold font-mono ${fee.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            ₹{fee.balance.toLocaleString()}
+                            ₹{fmt(fee.balance)}
                           </span>
                         </div>
                         <div className="flex flex-col items-end gap-0.5">
@@ -876,8 +876,8 @@ export default function FeesBillingPage() {
 
                       {/* Tertiary row: Discount + Paid (collapsed info) */}
                       <div className="flex gap-4 pl-8 text-[10px] text-slate-400 font-medium border-t border-slate-100 pt-2">
-                        <span>Disc: <span className="text-slate-600 font-semibold">₹{fee.discount.toLocaleString()} ({fee.discountPercent}%)</span></span>
-                        <span>Paid: <span className="text-slate-600 font-semibold">₹{fee.paid.toLocaleString()}</span></span>
+                        <span>Disc: <span className="text-slate-600 font-semibold">₹{fmt(fee.discount)} ({fee.discountPercent || 0}%)</span></span>
+                        <span>Paid: <span className="text-slate-600 font-semibold">₹{fmt(fee.paid)}</span></span>
                       </div>
                     </div>
                   );
@@ -888,7 +888,7 @@ export default function FeesBillingPage() {
               <div className="flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl px-4 py-3.5 shadow-md shadow-blue-500/20">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200 block">Total Settlement</span>
-                  <span className="text-2xl font-black font-mono">₹{billingTotal.toLocaleString()}</span>
+                  <span className="text-2xl font-black font-mono">₹{fmt(billingTotal)}</span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] font-semibold text-blue-200 block">{feeItems.filter(f => f.isSelected).length} fee(s) selected</span>
@@ -1053,7 +1053,7 @@ export default function FeesBillingPage() {
                           <div className="text-[10px] text-slate-400">Roll: {t.rollNo || 'N/A'}</div>
                         </td>
                         <td className="px-4 py-3 text-slate-450">{t.dateStr}</td>
-                        <td className="px-4 py-3 font-bold text-slate-800 font-mono">₹{t.totalAmount.toLocaleString()}</td>
+                        <td className="px-4 py-3 font-bold text-slate-800 font-mono">₹{fmt(t.totalAmount)}</td>
                         <td className="px-4 py-3 text-slate-500">{t.paymentMethod}</td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
@@ -1101,7 +1101,7 @@ export default function FeesBillingPage() {
                         <span className="font-bold text-slate-800 text-[13px] block truncate">{t.name}</span>
                         <span className="text-[10px] text-slate-400">Roll: {t.rollNo || 'N/A'}</span>
                       </div>
-                      <span className="font-bold text-slate-800 font-mono text-sm shrink-0">₹{t.totalAmount.toLocaleString()}</span>
+                      <span className="font-bold text-slate-800 font-mono text-sm shrink-0">₹{fmt(t.totalAmount)}</span>
                     </div>
 
                     {/* Row 2: Invoice ID, Date, Channel, Status */}
@@ -1175,7 +1175,7 @@ export default function FeesBillingPage() {
               </div>
               <div className="flex justify-between">
                 <span className="font-semibold text-slate-400">Amount Paid:</span>
-                <span className="font-extrabold text-slate-900">₹{lastPaidAmount.toLocaleString()}</span>
+                <span className="font-extrabold text-slate-900">₹{fmt(lastPaidAmount)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-semibold text-slate-400">Payment Method:</span>
@@ -1189,7 +1189,7 @@ export default function FeesBillingPage() {
               </div>
               <div className="flex justify-between border-t border-slate-200/60 pt-1.5">
                 <span className="font-bold text-slate-500">Remaining Balance:</span>
-                <span className="font-black text-rose-600 font-mono">₹{successRemainingBalance.toLocaleString()}</span>
+                <span className="font-black text-rose-600 font-mono">₹{fmt(successRemainingBalance)}</span>
               </div>
             </div>
 
@@ -1234,16 +1234,16 @@ export default function FeesBillingPage() {
             <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-650">
               <div>
                 <span className="text-slate-400 block mb-0.5">Student Name</span>
-                <span className="text-slate-800 font-bold block">{selectedStudent.account.name}</span>
+                <span className="text-slate-800 font-bold block">{selectedStudent.account?.name || selectedStudent.name}</span>
               </div>
               <div>
                 <span className="text-slate-400 block mb-0.5">Roll/Admission Number</span>
-                <span className="text-slate-800 font-bold block">{selectedStudent.account.rollNo || 'N/A'}</span>
+                <span className="text-slate-800 font-bold block">{selectedStudent.account?.rollNo || selectedStudent.rollNo || 'N/A'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block mb-0.5">Class &amp; Section</span>
                 <span className="text-slate-800 font-bold block">
-                  {selectedStudent.account.class} {selectedStudent.account.section}
+                  {selectedStudent.account?.className || selectedStudent.className || selectedStudent.account?.class || 'Class 1'} {selectedStudent.account?.sectionName || selectedStudent.sectionName || selectedStudent.account?.section || 'A'}
                 </span>
               </div>
               <div>
